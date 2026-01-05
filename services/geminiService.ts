@@ -19,12 +19,17 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a helpful smart assistant.
-Your creator is Januth Nimnal. You were built for Sri Lankans. 
-Greeting: "Ayubowan".
+  return `You are Orin AI, a world-class smart assistant built for Sri Lankans by Januth Nimnal.
+Greeting: Always start the conversation with "Ayubowan".
 Sri Lanka time: ${timeStr}.
-LANGUAGE: Respond in the user's preferred language (English or Sinhala).
-BE CONCISE AND HELPFUL. Do not use overly complex or technical words.`;
+
+LANGUAGE PROTOCOL:
+- You are natively bilingual in English and Sinhala.
+- If the user speaks Sinhala, respond in fluent, natural, and polite Sinhala.
+- If the user speaks English, respond in English.
+- If the user asks for a translation, provide an immediate and accurate translation between English and Sinhala.
+- Avoid technical jargon unless asked. Be concise and conversational.
+- For Voice sessions: Prioritize high-quality pronunciation and natural speech flow in Sinhala.`;
 };
 
 export class GeminiService {
@@ -126,12 +131,15 @@ export class GeminiService {
     grounding?: 'search' | 'maps'; 
     fileData?: { data: string; mimeType: string; name?: string };
     lang?: Language;
+    messageCount?: number;
   } = {}): Promise<{ text: string; links: GroundingLink[] }> {
     if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in for more.", "limit_reached");
     
-    const isBasicRequest = !options.useThinking && !options.grounding && !options.fileData;
-    
-    if (isBasicRequest && typeof puter !== 'undefined') {
+    const count = options.messageCount || 0;
+    const isUserLoggedIn = !!this.currentUser;
+    const usePuterAI = isUserLoggedIn || count >= 2;
+
+    if (usePuterAI && typeof puter !== 'undefined') {
       try {
         const response = await puter.ai.chat(prompt, {
            model: 'gemini-flash',
@@ -140,7 +148,7 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        console.warn("Switching to secondary system...");
+        if (isUserLoggedIn) throw new AppError("Puter Engine failed. Please retry.", 'generic');
       }
     }
 
@@ -171,7 +179,11 @@ export class GeminiService {
       this.incrementUsage();
       return { text: response.text || "I'm sorry, I couldn't understand that.", links };
     } catch (e: any) {
-      throw new AppError("Connection failed. Please check your internet.", 'generic');
+      const errorMsg = e.message || "";
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid")) {
+        throw new AppError(errorMsg, 'auth');
+      }
+      throw new AppError(errorMsg || "Connection failed. Please check your internet.", 'generic');
     }
   }
 
@@ -188,7 +200,11 @@ export class GeminiService {
       }
       throw new Error("Empty image returned.");
     } catch (e: any) {
-      throw new AppError("Image creation failed.", 'generic');
+      const errorMsg = e.message || "";
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid")) {
+        throw new AppError(errorMsg, 'auth');
+      }
+      throw new AppError(errorMsg || "Image creation failed.", 'generic');
     }
   }
 
@@ -218,7 +234,6 @@ export class GeminiService {
   }
 
   async connectLive(callbacks: any) {
-    // Always use a new GoogleGenAI instance right before connecting
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
