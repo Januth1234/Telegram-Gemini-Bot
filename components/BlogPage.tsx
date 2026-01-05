@@ -1,0 +1,1 @@
+// Deprecated - Integrated into LandingPage.tsx
