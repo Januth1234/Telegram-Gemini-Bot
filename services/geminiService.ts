@@ -218,13 +218,16 @@ export class GeminiService {
   }
 
   async connectLive(callbacks: any) {
+    // Always use a new GoogleGenAI instance right before connecting
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+        speechConfig: { 
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } 
+        },
         systemInstruction: getSystemInstruction(),
         outputAudioTranscription: {},
         inputAudioTranscription: {},
