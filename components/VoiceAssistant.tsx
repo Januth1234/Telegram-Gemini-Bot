@@ -18,8 +18,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Visualizer state: Reduced to 10 for "fatty" look
-  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(10).fill(10));
+  // Visualizer state: Reduced to 5 for "fatty" look
+  const BAR_COUNT = 5;
+  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(BAR_COUNT).fill(12));
   const analyserRef = useRef<AnalyserNode | null>(null);
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>(0);
@@ -34,9 +35,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
-  // Visualizer loop: Mapped to 10 bars
+  // Visualizer loop: Mapped to 5 fatty bars
   const updateVisualizer = useCallback(() => {
-    const dataArray = new Uint8Array(10);
+    const dataArray = new Uint8Array(BAR_COUNT);
     let activeLevel = false;
 
     if (isSpeaking && analyserRef.current) {
@@ -48,10 +49,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
 
     if (activeLevel) {
-      const levels = Array.from(dataArray).map(v => Math.max(10, (v / 255) * 100));
+      const levels = Array.from(dataArray).map(v => Math.max(12, (v / 255) * 100));
       setAudioLevels(levels);
     } else {
-      setAudioLevels(prev => prev.map(v => Math.max(10, v * 0.9))); 
+      // Idle "breathing" effect
+      setAudioLevels(prev => prev.map((v, i) => {
+        const time = Date.now() / 1000;
+        const idle = 15 + Math.sin(time * 3 + i) * 8;
+        return v * 0.8 + idle * 0.2; 
+      }));
     }
 
     animationFrameRef.current = requestAnimationFrame(updateVisualizer);
@@ -200,8 +206,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                 nextStartTimeRef.current = now + 0.1; 
             }
             
-            source.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += buffer.duration;
+            source.start(now > nextStartTimeRef.current ? now : nextStartTimeRef.current);
+            nextStartTimeRef.current = Math.max(now, nextStartTimeRef.current) + buffer.duration;
             sourcesRef.current.add(source);
             source.onended = () => {
               sourcesRef.current.delete(source);
@@ -224,7 +230,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsConnecting(false);
           setIsActive(false);
 
-          if (errorMsg.includes("Requested entity was not found") && (window as any).aistudio) {
+          if ((errorMsg.includes("Requested entity was not found") || errorMsg.includes("API Key must be set")) && (window as any).aistudio) {
             (window as any).aistudio.openSelectKey();
           }
         }
@@ -292,15 +298,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
       )}
 
-      {/* Reactive Fatty Bars */}
-      <div className="w-full h-24 flex items-end justify-center gap-2 md:gap-3 px-4 relative">
+      {/* Fatty Bars - Reduced Count & Ultra Wide */}
+      <div className="w-full h-24 flex items-end justify-center gap-4 md:gap-6 px-4 relative">
         {audioLevels.map((level, i) => (
           <div 
             key={i} 
-            className={`w-4 md:w-5 rounded-full transition-all duration-75 ${isActive ? 'bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-slate-300 dark:bg-slate-800 opacity-20'}`}
+            className={`w-12 md:w-16 rounded-full transition-all duration-150 ${isActive ? 'bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-[0_0_25px_rgba(6,182,212,0.5)]' : 'bg-slate-300 dark:bg-slate-800 opacity-20'}`}
             style={{ 
-              height: `${level}%`,
-              opacity: isActive ? 0.8 + (level/100)*0.2 : 0.2
+              height: `${Math.max(14, level)}%`,
+              opacity: isActive ? 0.7 + (level/100)*0.3 : 0.2
             }}
           ></div>
         ))}
