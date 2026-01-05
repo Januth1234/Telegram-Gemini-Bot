@@ -43,4 +43,4 @@ Since Orin AI is a client-side powerhouse, you can deploy it instantly:
 
 1. Clone the repo:
    ```bash
-   git clone https://github.com/nimnal-januth/orin-ai-workspace.git
+   git clone https://github.com/nimnal-januth/orin-ai.git
