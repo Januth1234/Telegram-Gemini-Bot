@@ -10,6 +10,7 @@ import LogicFlowPage from './components/LogicFlowPage';
 import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import AboutModal from './components/AboutModal';
+import VoiceAssistant from './components/VoiceAssistant';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation } from './types';
 import { geminiService } from './services/geminiService';
 import { translations } from './translations';
@@ -31,10 +32,7 @@ const App: React.FC = () => {
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => (localStorage.getItem('orin_active_module') as WorkspaceMode) || 'chat');
   
   useEffect(() => {
-    const handleHashChange = () => {
-      const newView = getInitialView();
-      setView(newView);
-    };
+    const handleHashChange = () => setView(getInitialView());
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
@@ -48,8 +46,8 @@ const App: React.FC = () => {
   const [showAbout, setShowAbout] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
 
-  // Persistence: Conversations list
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     const saved = localStorage.getItem('orin_history_v2');
     if (!saved) return [];
@@ -86,49 +84,28 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('orin_theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (theme === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [theme]);
-
-  const refreshUser = useCallback(() => {
-    setUser(geminiService.getCurrentUser());
-  }, []);
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
     setWorkspaceMode(mode);
     setShouldAutoSubmit(autoSubmit);
     
-    // Create new conversation on start if we are in landing
     if (view === 'landing') {
       const newId = Date.now().toString();
-      const newConv: Conversation = {
-        id: newId,
-        title: "New Conversation",
-        messages: [],
-        timestamp: new Date(),
-        mode: mode
-      };
+      const newConv: Conversation = { id: newId, title: "New Conversation", messages: [], timestamp: new Date(), mode: mode };
       setConversations(prev => [newConv, ...prev]);
       setActiveConversationId(newId);
     }
-
-    if (!geminiService.getCurrentUser() && geminiService.hasReachedLimit()) { 
-      navigate('account'); 
-    } else { 
-      navigate('workspace'); 
-    }
+    navigate('workspace');
   };
 
   const handleUpdateActiveConversation = (messages: ChatMessage[], title?: string) => {
     if (!activeConversationId) return;
     setConversations(prev => prev.map(c => 
-      c.id === activeConversationId 
-        ? { ...c, messages, title: title || c.title, timestamp: new Date() } 
-        : c
+      c.id === activeConversationId ? { ...c, messages, title: title || c.title, timestamp: new Date() } : c
     ));
   };
 
@@ -144,13 +121,7 @@ const App: React.FC = () => {
 
   const handleNewConversation = () => {
     const newId = Date.now().toString();
-    const newConv: Conversation = {
-      id: newId,
-      title: "New Conversation",
-      messages: [],
-      timestamp: new Date(),
-      mode: 'chat'
-    };
+    const newConv: Conversation = { id: newId, title: "New Conversation", messages: [], timestamp: new Date(), mode: 'chat' };
     setConversations(prev => [newConv, ...prev]);
     setActiveConversationId(newId);
     setWorkspaceMode('chat');
@@ -160,17 +131,16 @@ const App: React.FC = () => {
 
   const handleDeleteConversation = (id: string) => {
     setConversations(prev => {
-      const filtered = prev.filter(c => c.id !== id);
+      const updated = prev.filter(c => c.id !== id);
       if (activeConversationId === id) {
-        setActiveConversationId(filtered.length > 0 ? filtered[0].id : null);
-        if (filtered.length === 0) navigate('landing');
+        if (updated.length > 0) setActiveConversationId(updated[0].id);
+        else { setActiveConversationId(null); navigate('landing'); }
       }
-      return filtered;
+      return updated;
     });
   };
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
-
   const toggleLang = () => setLang(prev => prev === 'en' ? 'si' : 'en');
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
@@ -203,7 +173,7 @@ const App: React.FC = () => {
             }}
           />
         );
-      case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={refreshUser} />;
+      case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
       case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
       case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
       case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
@@ -233,22 +203,20 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          <button onClick={() => setIsVoiceOpen(true)} className="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 text-[9px] font-black uppercase tracking-widest border border-cyan-500/20 hover:bg-cyan-500/20 transition-all flex items-center gap-2">
+            <i className="fa-solid fa-microphone-lines"></i> {t.voiceBeta}
+          </button>
           <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
             <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} orin-icon`}></i>
           </button>
           <button onClick={toggleLang} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 px-2">
             {t.langToggle}
           </button>
-          <button 
-            onClick={() => navigate('account')}
-            className="flex items-center gap-3 px-4 h-10 rounded-xl bg-slate-200/50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all border border-black/5 dark:border-white/5"
-          >
+          <button onClick={() => navigate('account')} className="flex items-center gap-3 px-4 h-10 rounded-xl bg-slate-200/50 dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-black/5 dark:border-white/5">
             <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
-              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="User avatar" /> : <i className="fa-solid fa-user orin-icon text-[9px]"></i>}
+              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="P" /> : <i className="fa-solid fa-user orin-icon text-[9px]"></i>}
             </div>
-            <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">
-              {(user?.name || user?.email?.split('@')[0])?.split(' ')[0] || t.authenticate}
-            </span>
+            <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">{user?.name || t.authenticate}</span>
           </button>
         </div>
       </header>
@@ -257,6 +225,7 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
       
+      {isVoiceOpen && <VoiceAssistant onClose={() => setIsVoiceOpen(false)} lang={lang} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
     </div>
   );
