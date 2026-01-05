@@ -17,12 +17,17 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   
+  // Transcription state
+  const [transcription, setTranscription] = useState<{ role: 'user' | 'model', text: string }[]>([]);
+  const scrollTranscriptionRef = useRef<HTMLDivElement>(null);
+
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
+  // Fixed decoding and scheduling logic to prevent speed-ups or glitches
   async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
@@ -58,12 +63,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       try { s.stop(); } catch(e) {}
     });
     sourcesRef.current.clear();
-    nextStartTimeRef.current = 0;
+    // Reset nextStartTime strictly when interrupted to avoid massive gaps
+    nextStartTimeRef.current = audioContextRef.current?.currentTime || 0;
     setIsSpeaking(false);
   };
 
   const startSession = async () => {
     setIsConnecting(true);
+    setTranscription([]);
     try {
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -91,6 +98,28 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           processor.connect(inputAudioContextRef.current!.destination);
         },
         onmessage: async (msg: LiveServerMessage) => {
+          // Handle Transcriptions
+          if (msg.serverContent?.inputTranscription) {
+            const text = msg.serverContent.inputTranscription.text;
+            setTranscription(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'user') {
+                    return [...prev.slice(0, -1), { ...last, text: last.text + text }];
+                }
+                return [...prev, { role: 'user', text }];
+            });
+          } else if (msg.serverContent?.outputTranscription) {
+            const text = msg.serverContent.outputTranscription.text;
+             setTranscription(prev => {
+                const last = prev[prev.length - 1];
+                if (last && last.role === 'model') {
+                    return [...prev.slice(0, -1), { ...last, text: last.text + text }];
+                }
+                return [...prev, { role: 'model', text }];
+            });
+          }
+
+          // Handle Audio
           const audioData = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
           if (audioData && audioContextRef.current) {
             setIsSpeaking(true);
@@ -98,7 +127,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const source = audioContextRef.current.createBufferSource();
             source.buffer = buffer;
             source.connect(audioContextRef.current.destination);
-            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, audioContextRef.current.currentTime);
+            
+            // Critical fix for audio speed/glitch: Ensure scheduling is precise
+            const now = audioContextRef.current.currentTime;
+            if (nextStartTimeRef.current < now) {
+                nextStartTimeRef.current = now + 0.05; // Tiny buffer offset to prevent underrun
+            }
+            
             source.start(nextStartTimeRef.current);
             nextStartTimeRef.current += buffer.duration;
             sourcesRef.current.add(source);
@@ -151,8 +186,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     return () => stopSession();
   }, []);
 
+  useEffect(() => {
+    if (scrollTranscriptionRef.current) {
+        scrollTranscriptionRef.current.scrollTop = scrollTranscriptionRef.current.scrollHeight;
+    }
+  }, [transcription]);
+
   const content = (
-    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'animate-speaking-glow' : ''}`}>
+    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-8 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'animate-speaking-glow' : ''}`}>
       <div className="text-center space-y-4 relative w-full">
         {/* Speaker Stop Icon - Appears only when AI is talking */}
         {isActive && isSpeaking && (
@@ -171,7 +212,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             : 'bg-slate-200 dark:bg-white/10 text-slate-400'
           } ${isSpeaking ? 'ring-4 ring-cyan-500/20' : ''}`}>
           
-          {/* Subtle Outer Pulse when speaking */}
           {isSpeaking && (
             <div className="absolute inset-0 rounded-[40px] bg-cyan-400/20 animate-ping pointer-events-none"></div>
           )}
@@ -188,24 +228,41 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
       </div>
 
-      <div className="w-full h-24 flex items-center justify-center gap-1.5 px-4 relative">
-        {[...Array(12)].map((_, i) => (
-          <div 
-            key={i} 
-            className={`w-1.5 bg-cyan-500 rounded-full transition-all duration-300 ${isActive ? 'animate-bounce-subtle' : 'h-2 opacity-10'}`}
-            style={{ 
-              height: isActive ? (isSpeaking ? `${Math.random() * 80 + 20}%` : `${Math.random() * 40 + 20}%`) : '8px', 
-              animationDelay: `${i * 0.1}s`,
-              opacity: isActive ? (isSpeaking ? 1 : 0.5) : 0.1
-            }}
-          ></div>
-        ))}
-        {isSpeaking && (
-          <div className="absolute inset-x-0 bottom-[-20px] text-center">
-             <span className="text-[8px] font-black text-cyan-500 uppercase tracking-widest animate-pulse">Orin is speaking...</span>
-          </div>
-        )}
-      </div>
+      {/* Transcription Area */}
+      {isActive && (
+        <div 
+            ref={scrollTranscriptionRef}
+            className="w-full h-24 overflow-y-auto custom-scrollbar bg-black/5 dark:bg-white/5 rounded-2xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5"
+        >
+            {transcription.length === 0 ? (
+                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center my-auto italic">Waiting for input...</p>
+            ) : (
+                transcription.map((item, i) => (
+                    <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'}`}>
+                        <p className={`text-[11px] leading-relaxed max-w-[80%] ${item.role === 'user' ? 'text-slate-500 dark:text-slate-400 text-right' : 'text-cyan-600 dark:text-cyan-400'}`}>
+                            {item.text}
+                        </p>
+                    </div>
+                ))
+            )}
+        </div>
+      )}
+
+      {!isActive && (
+        <div className="w-full h-24 flex items-center justify-center gap-1.5 px-4 relative">
+            {[...Array(12)].map((_, i) => (
+            <div 
+                key={i} 
+                className={`w-1.5 bg-cyan-500 rounded-full transition-all duration-300 ${isActive ? 'animate-bounce-subtle' : 'h-2 opacity-10'}`}
+                style={{ 
+                height: isActive ? (isSpeaking ? `${Math.random() * 80 + 20}%` : `${Math.random() * 40 + 20}%`) : '8px', 
+                animationDelay: `${i * 0.1}s`,
+                opacity: isActive ? (isSpeaking ? 1 : 0.5) : 0.1
+                }}
+            ></div>
+            ))}
+        </div>
+      )}
 
       <div className="w-full space-y-4">
         {!isActive ? (

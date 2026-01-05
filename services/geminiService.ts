@@ -226,6 +226,8 @@ export class GeminiService {
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         systemInstruction: getSystemInstruction(),
+        outputAudioTranscription: {},
+        inputAudioTranscription: {},
       },
     });
   }
