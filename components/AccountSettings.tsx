@@ -182,9 +182,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                       </p>
                     </div>
                   </div>
-                  <button onClick={handleSelectKey} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all">
-                    {hasApiKey ? (isSi ? 'යතුර වෙනස් කරන්න' : 'Update Connection') : (isSi ? 'යතුර සම්බන්ධ කරන්න' : 'Connect Personal Key')}
-                  </button>
+                  <div className="space-y-3">
+                    <button onClick={handleSelectKey} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all">
+                      {hasApiKey ? (isSi ? 'යතුර වෙනස් කරන්න' : 'Update Connection') : (isSi ? 'යතුර සම්බන්ධ කරන්න' : 'Connect Personal Key')}
+                    </button>
+                    <p className="text-center">
+                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:underline">Billing Documentation</a>
+                    </p>
+                  </div>
                 </div>
 
                 {/* Puter Core */}

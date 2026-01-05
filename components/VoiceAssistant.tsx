@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
 import { Language } from '../types';
 import { translations } from '../translations';
@@ -16,6 +16,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   // Transcription state
   const [transcription, setTranscription] = useState<{ role: 'user' | 'model', text: string }[]>([]);
@@ -58,7 +59,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     return btoa(binary);
   }
 
-  const stopAiSpeaking = () => {
+  const stopAiSpeaking = useCallback(() => {
     sourcesRef.current.forEach(s => {
       try { s.stop(); } catch(e) {}
     });
@@ -66,12 +67,41 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     // Reset nextStartTime strictly when interrupted to avoid massive gaps
     nextStartTimeRef.current = audioContextRef.current?.currentTime || 0;
     setIsSpeaking(false);
-  };
+  }, []);
+
+  const stopSession = useCallback(() => {
+    if (sessionRef.current) {
+      try { sessionRef.current.close(); } catch(e) {}
+      sessionRef.current = null;
+    }
+    if (audioContextRef.current) {
+      try { audioContextRef.current.close(); } catch(e) {}
+      audioContextRef.current = null;
+    }
+    if (inputAudioContextRef.current) {
+      try { inputAudioContextRef.current.close(); } catch(e) {}
+      inputAudioContextRef.current = null;
+    }
+    setIsActive(false);
+    setIsConnecting(false);
+    setIsSpeaking(false);
+  }, []);
 
   const startSession = async () => {
+    setErrorMessage(null);
     setIsConnecting(true);
     setTranscription([]);
+    
     try {
+      // Check if API key selection is needed
+      if ((window as any).aistudio) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        if (!hasKey) {
+          await (window as any).aistudio.openSelectKey();
+          // Proceed after key selection attempt
+        }
+      }
+
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
@@ -120,7 +150,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           }
 
           // Handle Audio
-          const audioData = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+          const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
           if (audioData && audioContextRef.current) {
             setIsSpeaking(true);
             const buffer = await decodeAudioData(decodeBase64(audioData), audioContextRef.current, 24000, 1);
@@ -128,10 +158,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             source.buffer = buffer;
             source.connect(audioContextRef.current.destination);
             
-            // Critical fix for audio speed/glitch: Ensure scheduling is precise
+            // Scheduling fix: tiny offset to prevent crackling and ensure smooth sequence
             const now = audioContextRef.current.currentTime;
             if (nextStartTimeRef.current < now) {
-                nextStartTimeRef.current = now + 0.05; // Tiny buffer offset to prevent underrun
+                nextStartTimeRef.current = now + 0.1; 
             }
             
             source.start(nextStartTimeRef.current);
@@ -152,39 +182,29 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsSpeaking(false);
         },
         onerror: (e: any) => {
-          console.error("Voice Error", e);
+          console.error("Voice Error:", e);
+          const errorMsg = e.message || "Network error. Connection failed.";
+          setErrorMessage(errorMsg);
           setIsConnecting(false);
           setIsActive(false);
+
+          // Prompt key re-selection if model/entity not found
+          if (errorMsg.includes("Requested entity was not found") && (window as any).aistudio) {
+            (window as any).aistudio.openSelectKey();
+          }
         }
       });
       sessionRef.current = await sessionPromise;
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      console.error("Startup Error:", e);
+      setErrorMessage(e.message || "Could not initialize voice session.");
       setIsConnecting(false);
     }
   };
 
-  const stopSession = () => {
-    if (sessionRef.current) {
-      sessionRef.current.close();
-      sessionRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    if (inputAudioContextRef.current) {
-      inputAudioContextRef.current.close();
-      inputAudioContextRef.current = null;
-    }
-    setIsActive(false);
-    setIsConnecting(false);
-    setIsSpeaking(false);
-  };
-
   useEffect(() => {
     return () => stopSession();
-  }, []);
+  }, [stopSession]);
 
   useEffect(() => {
     if (scrollTranscriptionRef.current) {
@@ -228,27 +248,38 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
       </div>
 
+      {/* Error Feedback */}
+      {errorMessage && (
+        <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-reveal">
+           <p className="text-[10px] font-bold text-red-500 text-center uppercase tracking-widest leading-relaxed">
+             <i className="fa-solid fa-circle-exclamation mr-2"></i>
+             {errorMessage}
+           </p>
+           <button onClick={startSession} className="w-full mt-2 text-[8px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection</button>
+        </div>
+      )}
+
       {/* Transcription Area */}
       {isActive && (
         <div 
             ref={scrollTranscriptionRef}
-            className="w-full h-24 overflow-y-auto custom-scrollbar bg-black/5 dark:bg-white/5 rounded-2xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5"
+            className="w-full h-32 overflow-y-auto custom-scrollbar bg-black/5 dark:bg-white/5 rounded-2xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5 shadow-inner"
         >
             {transcription.length === 0 ? (
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center my-auto italic">Waiting for input...</p>
             ) : (
                 transcription.map((item, i) => (
                     <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        <p className={`text-[11px] leading-relaxed max-w-[80%] ${item.role === 'user' ? 'text-slate-500 dark:text-slate-400 text-right' : 'text-cyan-600 dark:text-cyan-400'}`}>
+                        <div className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed max-w-[85%] ${item.role === 'user' ? 'bg-white/50 dark:bg-white/10 text-slate-500 dark:text-slate-400 text-right' : 'text-cyan-600 dark:text-cyan-400'}`}>
                             {item.text}
-                        </p>
+                        </div>
                     </div>
                 ))
             )}
         </div>
       )}
 
-      {!isActive && (
+      {!isActive && !errorMessage && (
         <div className="w-full h-24 flex items-center justify-center gap-1.5 px-4 relative">
             {[...Array(12)].map((_, i) => (
             <div 
