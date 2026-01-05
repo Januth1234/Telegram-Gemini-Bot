@@ -18,14 +18,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Visualizer state: Reduced to 5 for "fatty" look
-  const BAR_COUNT = 5;
+  // Visualizer: 7 Ultra-Wide "Fatty" Bars
+  const BAR_COUNT = 7;
   const [audioLevels, setAudioLevels] = useState<number[]>(new Array(BAR_COUNT).fill(12));
   const analyserRef = useRef<AnalyserNode | null>(null);
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>(0);
 
-  // Transcription state
+  // Transcription
   const [transcription, setTranscription] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const scrollTranscriptionRef = useRef<HTMLDivElement>(null);
 
@@ -35,28 +35,27 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
-  // Visualizer loop: Mapped to 5 fatty bars
   const updateVisualizer = useCallback(() => {
     const dataArray = new Uint8Array(BAR_COUNT);
-    let activeLevel = false;
+    let hasSignal = false;
 
     if (isSpeaking && analyserRef.current) {
       analyserRef.current.getByteFrequencyData(dataArray);
-      activeLevel = true;
+      hasSignal = true;
     } else if (isActive && inputAnalyserRef.current) {
       inputAnalyserRef.current.getByteFrequencyData(dataArray);
-      activeLevel = true;
+      hasSignal = true;
     }
 
-    if (activeLevel) {
-      const levels = Array.from(dataArray).map(v => Math.max(12, (v / 255) * 100));
+    if (hasSignal) {
+      const levels = Array.from(dataArray).map(v => Math.max(14, (v / 255) * 100));
       setAudioLevels(levels);
     } else {
-      // Idle "breathing" effect
+      // Idle "breathing" state
       setAudioLevels(prev => prev.map((v, i) => {
         const time = Date.now() / 1000;
-        const idle = 15 + Math.sin(time * 3 + i) * 8;
-        return v * 0.8 + idle * 0.2; 
+        const idle = 15 + Math.sin(time * 2.5 + i) * 8;
+        return v * 0.85 + idle * 0.15; 
       }));
     }
 
@@ -82,19 +81,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }
 
   function decodeBase64(base64: string) {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return bytes;
   }
 
   function encodeBase64(bytes: Uint8Array) {
     let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
     return btoa(binary);
   }
 
@@ -108,6 +103,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, []);
 
   const stopSession = useCallback(() => {
+    stopAiSpeaking();
     if (sessionRef.current) {
       try { sessionRef.current.close(); } catch(e) {}
       sessionRef.current = null;
@@ -122,8 +118,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
     setIsActive(false);
     setIsConnecting(false);
-    setIsSpeaking(false);
-  }, []);
+  }, [stopAiSpeaking]);
 
   const startSession = async () => {
     setErrorMessage(null);
@@ -131,19 +126,18 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setTranscription([]);
     
     try {
-      if ((window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-          await (window as any).aistudio.openSelectKey();
-        }
+      // Force user interaction context check
+      if (audioContextRef.current?.state === 'suspended') {
+        await audioContextRef.current.resume();
       }
 
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 32; 
       analyserRef.current.connect(audioContextRef.current.destination);
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
       inputAnalyserRef.current.fftSize = 32;
@@ -166,7 +160,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                 session.sendRealtimeInput({ 
                   media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
                 });
-              } catch (e) {}
+              } catch (err) {}
             });
           };
           source.connect(processor);
@@ -203,11 +197,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             
             const now = audioContextRef.current.currentTime;
             if (nextStartTimeRef.current < now) {
-                nextStartTimeRef.current = now + 0.1; 
+                nextStartTimeRef.current = now + 0.05; 
             }
             
-            source.start(now > nextStartTimeRef.current ? now : nextStartTimeRef.current);
-            nextStartTimeRef.current = Math.max(now, nextStartTimeRef.current) + buffer.duration;
+            source.start(nextStartTimeRef.current);
+            nextStartTimeRef.current += buffer.duration;
             sourcesRef.current.add(source);
             source.onended = () => {
               sourcesRef.current.delete(source);
@@ -224,21 +218,19 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsSpeaking(false);
         },
         onerror: (e: any) => {
-          console.error("Voice Error:", e);
-          const errorMsg = e.message || "Network error. Connection failed.";
-          setErrorMessage(errorMsg);
-          setIsConnecting(false);
+          console.error("Neural Bridge Connectivity Lost:", e);
+          const msg = e.message || "Endpoint unreachable. Re-check API configuration.";
+          setErrorMessage(msg);
           setIsActive(false);
-
-          if ((errorMsg.includes("Requested entity was not found") || errorMsg.includes("API Key must be set")) && (window as any).aistudio) {
+          setIsConnecting(false);
+          if ((msg.includes("API Key") || msg.includes("entity was not found")) && (window as any).aistudio) {
             (window as any).aistudio.openSelectKey();
           }
         }
       });
       sessionRef.current = await sessionPromise;
     } catch (e: any) {
-      console.error("Startup Error:", e);
-      setErrorMessage(e.message || "Could not initialize voice session.");
+      setErrorMessage(e.message || "Failed to establish biometric handshake.");
       setIsConnecting(false);
     }
   };
@@ -254,76 +246,79 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, [transcription]);
 
   const content = (
-    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-8 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'animate-speaking-glow' : ''}`}>
+    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-8 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'ring-4 ring-cyan-500/20 shadow-[0_0_50px_rgba(6,182,212,0.15)]' : ''}`}>
       <div className="text-center space-y-4 relative w-full">
         {isActive && isSpeaking && (
           <button 
             onClick={stopAiSpeaking}
-            className="absolute top-0 right-0 w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all animate-reveal border border-red-500/20 shadow-sm"
+            className="absolute -top-4 -right-4 w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl animate-reveal z-50 border-4 border-white dark:border-slate-900"
             title={t.stopSpeaking}
           >
             <i className="fa-solid fa-volume-xmark"></i>
           </button>
         )}
 
-        <div className={`w-24 h-24 rounded-[40px] relative flex items-center justify-center mx-auto transition-all duration-700 ${
+        <div className={`w-28 h-28 rounded-[40px] relative flex items-center justify-center mx-auto transition-all duration-700 ${
           isActive 
-            ? 'bg-cyan-600 shadow-2xl shadow-cyan-600/30 text-white' 
+            ? 'bg-cyan-600 shadow-2xl shadow-cyan-600/40 text-white' 
             : 'bg-slate-200 dark:bg-white/10 text-slate-400'
-          } ${isSpeaking ? 'ring-4 ring-cyan-500/20' : ''}`}>
+          }`}>
           
-          {isSpeaking && (
-            <div className="absolute inset-0 rounded-[40px] bg-cyan-400/20 animate-ping pointer-events-none"></div>
+          {isActive && (
+            <div className={`absolute -inset-4 rounded-[48px] border-2 border-cyan-500/30 ${isSpeaking ? 'animate-pulse' : 'animate-soft-pulse'}`}></div>
           )}
           
-          <i className={`fa-solid ${isActive ? 'fa-microphone-lines' : 'fa-microphone'} text-4xl transition-transform duration-500 ${isSpeaking ? 'scale-110' : ''} ${isActive ? 'animate-soft-pulse' : ''}`}></i>
+          <i className={`fa-solid ${isActive ? 'fa-microphone-lines' : 'fa-microphone'} text-5xl transition-transform duration-500 ${isSpeaking ? 'scale-110' : ''}`}></i>
         </div>
 
         <div className="space-y-1">
           <div className="flex items-center justify-center gap-2">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.voice}</h2>
-            <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[8px] font-black rounded-md uppercase tracking-widest border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.4)] animate-pulse beta-glow">BETA</span>
+            <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.voice}</h2>
+            <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[9px] font-black rounded-md uppercase tracking-widest border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.3)] animate-pulse beta-glow">BETA</span>
           </div>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isActive ? t.neuralBridgeActive : 'Ready to talk'}</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isActive ? t.neuralBridgeActive : 'Ready to engage'}</p>
         </div>
       </div>
 
       {errorMessage && (
-        <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-reveal">
+        <div className="w-full p-5 bg-red-500/10 border border-red-500/20 rounded-[28px] animate-reveal">
            <p className="text-[10px] font-bold text-red-500 text-center uppercase tracking-widest leading-relaxed">
              <i className="fa-solid fa-circle-exclamation mr-2"></i>
              {errorMessage}
            </p>
-           <button onClick={startSession} className="w-full mt-2 text-[8px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection</button>
+           <button onClick={startSession} className="w-full mt-3 text-[9px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection Protocol</button>
         </div>
       )}
 
-      {/* Fatty Bars - Reduced Count & Ultra Wide */}
-      <div className="w-full h-24 flex items-end justify-center gap-4 md:gap-6 px-4 relative">
+      {/* Fatty Bars - 7 Ultra Wide Bars */}
+      <div className="w-full h-28 flex items-end justify-center gap-3 md:gap-4 px-2 relative">
         {audioLevels.map((level, i) => (
           <div 
             key={i} 
-            className={`w-12 md:w-16 rounded-full transition-all duration-150 ${isActive ? 'bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-[0_0_25px_rgba(6,182,212,0.5)]' : 'bg-slate-300 dark:bg-slate-800 opacity-20'}`}
+            className={`w-10 md:w-12 rounded-full transition-all duration-150 ${isActive ? 'bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-[0_0_30px_rgba(6,182,212,0.5)]' : 'bg-slate-300 dark:bg-slate-800 opacity-20'}`}
             style={{ 
-              height: `${Math.max(14, level)}%`,
+              height: `${Math.max(16, level)}%`,
               opacity: isActive ? 0.7 + (level/100)*0.3 : 0.2
             }}
           ></div>
         ))}
       </div>
 
-      {/* Transcription Area */}
+      {/* Real-time Transcription Engine */}
       {isActive && (
         <div 
             ref={scrollTranscriptionRef}
-            className="w-full h-32 overflow-y-auto custom-scrollbar bg-black/5 dark:bg-white/5 rounded-2xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5 shadow-inner"
+            className="w-full h-36 overflow-y-auto custom-scrollbar bg-black/5 dark:bg-white/5 rounded-[28px] p-5 flex flex-col gap-3 border border-black/5 dark:border-white/5 shadow-inner"
         >
             {transcription.length === 0 ? (
-                <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-center my-auto italic">Waiting for input...</p>
+                <div className="flex flex-col items-center justify-center h-full gap-2">
+                   <div className="w-8 h-1 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse"></div>
+                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">Awaiting Input Stream</p>
+                </div>
             ) : (
                 transcription.map((item, i) => (
-                    <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        <div className={`px-3 py-2 rounded-xl text-[11px] leading-relaxed max-w-[85%] ${item.role === 'user' ? 'bg-white/50 dark:bg-white/10 text-slate-500 dark:text-slate-400 text-right' : 'text-cyan-600 dark:text-cyan-400'}`}>
+                    <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                        <div className={`px-4 py-2.5 rounded-2xl text-[12px] font-medium leading-relaxed max-w-[85%] ${item.role === 'user' ? 'bg-white/60 dark:bg-white/10 text-slate-600 dark:text-slate-400 text-right' : 'text-cyan-600 dark:text-cyan-400 font-bold'}`}>
                             {item.text}
                         </div>
                     </div>
@@ -337,15 +332,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           <button 
             onClick={startSession} 
             disabled={isConnecting}
-            className="w-full py-6 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
+            className="w-full py-7 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[28px] font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
           >
             {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className="fa-solid fa-microphone"></i>}
-            {isConnecting ? t.establishingHandshake : 'Talk to Orin'}
+            {isConnecting ? t.establishingHandshake : 'Initialize Orin Voice'}
           </button>
         ) : (
           <button 
             onClick={stopSession} 
-            className="w-full py-6 bg-red-500 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-4"
+            className="w-full py-7 bg-red-500 text-white rounded-[28px] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-red-500/20 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4"
           >
             <i className="fa-solid fa-phone-slash"></i>
             {t.endSession}
@@ -369,7 +364,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 md:p-12 animate-reveal">
-      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-lg" onClick={onClose}></div>
+      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-xl" onClick={onClose}></div>
       {content}
     </div>
   );

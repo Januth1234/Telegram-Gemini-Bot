@@ -29,9 +29,10 @@ CORE CAPABILITIES:
 VOICE PROTOCOL:
 - When using voice mode, speak naturally and politely.
 - If the user speaks in Sinhala, YOU MUST respond in clear, natural, and polite Sinhala.
-- If the user asks for translation, provide the translation immediately and clearly.
+- If the user speaks English, respond in English.
+- If the user asks for a translation, provide the translation immediately and clearly.
 - Greeting: Always start your first response with "Ayubowan".
-- capture nuances of colloquial Sinhala while maintaining respect.
+- Capture nuances of colloquial Sinhala while maintaining respect.
 
 PERSONALITY:
 Helpful, professional, and culturally aware of Sri Lankan values. Your creator is Januth Nimnal.`;
@@ -114,8 +115,18 @@ export class GeminiService {
     return this.getUsageCount() >= this.freeUsageLimit;
   }
 
-  private getApiKey(): string {
-    return process.env.API_KEY || "";
+  private async getApiKey(): Promise<string> {
+    // 1. Check environment variable (Vercel injection)
+    let key = process.env.API_KEY || "";
+    
+    // 2. Fallback to AI Studio session if running on a custom domain without ENV access
+    if (!key && (window as any).aistudio) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        if (hasKey) {
+            key = process.env.API_KEY || "";
+        }
+    }
+    return key;
   }
 
   async loginWithGoogle(): Promise<UserAccount> {
@@ -157,15 +168,23 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        if (isUserLoggedIn) throw new AppError("Puter Engine failed. Please retry.", 'generic');
+        console.warn("Puter engine fallback triggered.");
       }
     }
 
     try {
-      const key = this.getApiKey();
-      if (!key) throw new AppError("API Key must be set when running in a browser. Please check your Vercel Environment Variables.", 'auth');
+      const key = await this.getApiKey();
+      if (!key) {
+          if ((window as any).aistudio) {
+              await (window as any).aistudio.openSelectKey();
+              const retryKey = process.env.API_KEY;
+              if (!retryKey) throw new AppError("An API Key must be set. Please check your dashboard.", 'auth');
+          } else {
+              throw new AppError("Neural Bridge inactive. Configure API_KEY in Environment Settings.", 'auth');
+          }
+      }
 
-      const ai = new GoogleGenAI({ apiKey: key });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any = options.fileData ? {
@@ -189,21 +208,21 @@ export class GeminiService {
       }
 
       this.incrementUsage();
-      return { text: response.text || "I'm sorry, I couldn't understand that.", links };
+      return { text: response.text || "I encountered an error processing your query.", links };
     } catch (e: any) {
       const errorMsg = e.message || "";
       if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
-        throw new AppError(errorMsg, 'auth');
+        throw new AppError("API authentication failed. Re-link your key.", 'auth');
       }
-      throw new AppError(errorMsg || "Connection failed. Please check your internet.", 'generic');
+      throw new AppError(errorMsg || "Neural Bridge timeout.", 'generic');
     }
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
-      const key = this.getApiKey();
-      if (!key) throw new AppError("API Key must be set.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: key });
+      const key = await this.getApiKey();
+      if (!key) throw new AppError("Studio requires a valid API Key.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -212,47 +231,48 @@ export class GeminiService {
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-      throw new Error("Empty image returned.");
+      throw new Error("Neural synthesis empty.");
     } catch (e: any) {
-      const errorMsg = e.message || "";
-      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
-        throw new AppError(errorMsg, 'auth');
-      }
-      throw new AppError(errorMsg || "Image creation failed.", 'generic');
+      throw new AppError(e.message || "Studio synthesis failed.", 'generic');
     }
   }
 
   async generateWelcomeMessage(context: { lang: Language; date?: string; time?: string; location?: string }): Promise<string> {
     try {
-      const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
-      const response = await puter.ai.chat(`Give a 4-word greeting in ${targetLang}.`, { model: 'gemini-flash' });
-      return response.toString();
+      if (typeof puter !== 'undefined') {
+        const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
+        const response = await puter.ai.chat(`Give a 4-word greeting in ${targetLang}.`, { model: 'gemini-flash' });
+        return response.toString();
+      }
+      return "Ayubowan!";
     } catch { return "Ayubowan!"; }
   }
 
   async translate(text: string, targetLang: Language): Promise<string> {
     const target = targetLang === 'si' ? 'Sinhala' : 'English';
-    const prompt = `Translate the following text to ${target}. Output ONLY the translated text.\n\nText: ${text}`;
+    const prompt = `Translate to ${target}. Output ONLY the translated text.\n\nText: ${text}`;
     const result = await this.chat(prompt);
     return result.text;
   }
 
   async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[]): Promise<string> {
     try {
-      const text = messages.map(m => m.content).join('\n').slice(0, 500);
-      const modulesStr = modesUsed && modesUsed.length > 1 ? ` (Using ${modesUsed.join(' & ')})` : '';
-      const prompt = `Generate a very descriptive but concise 4-word title for this conversation. Content: ${text}. ${modulesStr ? `Include the context of these modes: ${modesUsed?.join(', ')}.` : ''}`;
-      const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
-      return response.toString().replace(/"/g, '').trim();
+      if (typeof puter !== 'undefined') {
+        const text = messages.map(m => m.content).join('\n').slice(0, 500);
+        const prompt = `Descripte title (4 words max) for: ${text}. Modes: ${modesUsed?.join(', ')}`;
+        const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
+        return response.toString().replace(/"/g, '').trim();
+      }
+      return "New Chat";
     } catch { return "New Chat"; }
   }
 
   async connectLive(callbacks: any) {
-    const key = this.getApiKey();
+    const key = await this.getApiKey();
     if (!key && (window as any).aistudio) {
         await (window as any).aistudio.openSelectKey();
     }
-    const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       callbacks,
