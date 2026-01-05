@@ -1,63 +1,20 @@
-# ⚡ Orin AI | Neural Workspace
+<div align="center">
+<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+</div>
 
-![Orin AI Banner](https://img.shields.io/badge/Release-v4.1.0-cyan?style=for-the-badge)
-![License-MIT](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)
-![Built-For-Sri-Lanka](https://img.shields.io/badge/Origin-Sri_Lanka-orange?style=for-the-badge)
+# Run and deploy your AI Studio app
 
-> **"From a Sri Lankan to Sri Lankans, Ayubowan!"**
+This contains everything you need to run your app locally.
 
-Orin AI is a high-performance, bilingual smart workspace designed to bridge the gap between state-of-the-art Artificial Intelligence and native Sri Lankan workflows. Developed by **Januth Nimnal**, Orin integrates advanced reasoning, creative synthesis, and visual intelligence into a single, unified environment.
+View your app in AI Studio: https://ai.studio/apps/drive/1LGGd0PXbbxiPMubWdNtKSQJFWeqaHpa9
 
----
+## Run Locally
 
-## 🚀 Core Intelligence Modules
+**Prerequisites:**  Node.js
 
-- **🧠 Reasoning Hub**: High-speed, chain-of-thought chat processing in both English and Sinhala.
-- **🎨 Creative Studio**: Native image synthesis (up to 4K) for professional asset creation.
-- **👁️ Vision & OCR**: Advanced visual recognition and text extraction (OCR) from documents and images.
-- **🎙️ Voice Protocol (Beta)**: Real-time audio interaction with low-latency response cycles.
-- **🌐 Web Grounding**: Real-time factual verification using Google Search and Maps integration.
 
----
-
-## 🛠️ Technical Architecture
-
-Orin AI is engineered for speed, privacy, and bilingual accuracy.
-
-- **Frontend**: React 19 + Tailwind CSS (Optimized for `100dvh` mobile responsiveness).
-- **Neural Engine**: Google Gemini 3 Pro & 2.5 Flash.
-- **Infrastructure**: Powered by **Puter.js** for secure cloud synchronization and managed AI core logic.
-- **Privacy**: Local-first philosophy. Your conversations stay in your browser unless you choose to sync with your Puter cloud.
-
----
-
-## 🇱🇰 The Bilingual Advantage
-
-Unlike generic AI platforms, Orin AI uses a sophisticated **Translation Relay System**. This allows users to input queries in Sinhala, process them through high-intensity English reasoning models, and receive culturally and grammatically accurate Sinhala responses instantly.
-
----
-
-## 📦 Installation & Deployment
-
-Since Orin AI is a client-side powerhouse, you can deploy it instantly:
-
-1. Clone the repo:
-   ```bash
-   git clone https://github.com/nimnal-januth/orin-ai-workspace.git
-2. Set up your environment variables:
-   API_KEY: Your Google Gemini API Key.
-   Deploy to Vercel or Netlify with a single click.
-
-🛡️ Security & Terms
-
-Zero-Logging: We do not store your prompts or images on our servers.
-Data Sovereignty: You own 100% of the assets generated in this workspace.
-Encrypted Handshakes: All neural traffic is protected via TLS 1.3.
-
-👨‍💻 Creator
-Developed with passion by Januth Nimnal (JN Productions Global).
-© 2026 JN Productions Global • Orin AI Protocol v4.1.0
-
-### Recommended Tags (Topics)
-Add these to your GitHub repo to help people find it:
-`ai-workspace` `gemini-api` `sinhala-ai` `sri-lanka` `react` `puter-js` `multimodal-ai` `ocr` `image-generation` `bilingual-ai
+1. Install dependencies:
+   `npm install`
+2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
+3. Run the app:
+   `npm run dev`

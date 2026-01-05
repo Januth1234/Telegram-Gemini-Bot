@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { geminiService } from '../services/geminiService';
-import { GroundingLink } from '../types';
+import { GroundingLink, Language } from '../types';
 
 const FeatureVision: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [image, setImage] = useState<string | null>(null);
@@ -28,8 +28,10 @@ const FeatureVision: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const base64 = image.split(',')[1];
       const mimeType = image.split(';')[0].split(':')[1];
       
-      // Fix: Use the generic chat method which handles multimodal inputs via the options object
+      // Fix: Added lang property from document attribute to satisfy geminiService.chat requirements.
+      const lang = document.documentElement.lang as Language || 'en';
       const res = await geminiService.chat(prompt || "Analyze this image and extract any text.", {
+        lang,
         fileData: { data: base64, mimeType: mimeType || 'image/jpeg' }
       });
       setResult(res);

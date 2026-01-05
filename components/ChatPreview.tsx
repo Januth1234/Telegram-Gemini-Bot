@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
-import { ChatMessage } from '../types';
+import { ChatMessage, Language } from '../types';
 
 interface ChatPreviewProps {
   initialPrompt: string;
@@ -37,8 +37,9 @@ const ChatPreview: React.FC<ChatPreviewProps> = ({ initialPrompt, onClose }) => 
     setIsTyping(true);
 
     try {
-      // Pass the thinking configuration as part of the options object
-      const response = await geminiService.chat(text, { useThinking: true }); // Always use thinking for preview
+      // Fix: Added lang property from document attribute to satisfy geminiService.chat requirements.
+      const lang = document.documentElement.lang as Language || 'en';
+      const response = await geminiService.chat(text, { lang, useThinking: true }); // Always use thinking for preview
       const botMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

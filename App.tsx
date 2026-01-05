@@ -159,11 +159,14 @@ const App: React.FC = () => {
   };
 
   const handleDeleteConversation = (id: string) => {
-    setConversations(prev => prev.filter(c => c.id !== id));
-    if (activeConversationId === id) {
-      setActiveConversationId(null);
-      navigate('landing');
-    }
+    setConversations(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      if (activeConversationId === id) {
+        setActiveConversationId(filtered.length > 0 ? filtered[0].id : null);
+        if (filtered.length === 0) navigate('landing');
+      }
+      return filtered;
+    });
   };
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
