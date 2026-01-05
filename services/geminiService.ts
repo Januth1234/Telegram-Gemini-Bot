@@ -11,7 +11,7 @@ export class AppError extends Error {
   }
 }
 
-const getSystemInstruction = () => {
+const getSystemInstruction = (lang: Language) => {
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', { 
     timeZone: 'Asia/Colombo',
@@ -19,15 +19,21 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
+  const languageDirective = lang === 'si' 
+    ? "STRICT: You must answer ONLY in Sinhala. Do not use English unless it is a technical term that has no Sinhala equivalent."
+    : "STRICT: You must answer ONLY in English. Do not use Sinhala.";
+
   return `You are Orin AI, a sophisticated smart workspace by Januth Nimnal.
 IDENTITY: Built by Januth Nimnal for Sri Lankans. Greeting: "Ayubowan".
 CONTEXT: Current Sri Lanka time is ${timeStr}.
-BEHAVIOR: Concise, professional, bilingual (English/Sinhala).
+${languageDirective}
+BEHAVIOR: Concise, professional, and strictly adherent to the selected language.
 ENGINE: Running on Puter Neural Core.`;
 };
 
 export class GeminiService {
   private currentUser: UserAccount | null = null;
+  private isPuterReady: boolean = false;
 
   constructor() {
     this.initPuter();
@@ -36,6 +42,8 @@ export class GeminiService {
   private async initPuter() {
     try {
       if (typeof puter !== 'undefined') {
+        await puter.ready();
+        this.isPuterReady = true;
         const signedIn = await puter.auth.isSignedIn();
         if (signedIn) {
           const user = await puter.auth.getUser();
@@ -64,7 +72,7 @@ export class GeminiService {
   }
 
   hasReachedLimit(): boolean {
-    return false; // Managed by Puter
+    return false;
   }
 
   getCurrentUser() {
@@ -84,70 +92,79 @@ export class GeminiService {
     if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
-  // HYBRID ROUTING: Use Puter by default to avoid API KEY errors in browser
   async chat(prompt: string, options: { 
+    lang: Language;
     useThinking?: boolean; 
     grounding?: 'search' | 'maps' | 'none';
     fileData?: { data: string; mimeType: string; name?: string };
-  } = {}): Promise<{ text: string; links: GroundingLink[] }> {
+  }): Promise<{ text: string; links: GroundingLink[] }> {
     
-    // Check if we have an API Key. If not, we MUST use Puter to avoid crashes.
-    const hasApiKey = !!process.env.API_KEY && process.env.API_KEY !== "undefined";
+    const apiKey = process.env.API_KEY;
+    const hasApiKey = !!apiKey && apiKey !== "undefined" && apiKey.length > 10;
 
-    if (!hasApiKey || (!options.useThinking && !options.grounding && !options.fileData)) {
+    // Preference: Use SDK if API Key is valid and special features are requested
+    if (hasApiKey && (options.useThinking || options.grounding || options.fileData)) {
       try {
-        // PUTER NATIVE ROUTE (Safe from API Key errors)
-        const response = await puter.ai.chat(prompt, {
-          model: options.useThinking ? 'gemini-pro' : 'gemini-flash',
-          system_prompt: getSystemInstruction()
+        const ai = new GoogleGenAI({ apiKey });
+        const model = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+        const contents: any = options.fileData ? {
+          parts: [
+            { inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } },
+            { text: prompt }
+          ]
+        } : { parts: [{ text: prompt }] };
+
+        const response = await ai.models.generateContent({
+          model,
+          contents,
+          config: { systemInstruction: getSystemInstruction(options.lang) }
         });
-        return { text: response.toString(), links: [] };
-      } catch (e) {
-        if (!hasApiKey) throw new AppError("Neural Bridge Offline. Please check Puter connection.");
-        // Fallback to SDK if Puter fails and key exists
+
+        return { text: response.text || '', links: [] };
+      } catch (e: any) {
+        console.warn("SDK Path failed, falling back to Puter:", e);
       }
     }
 
-    // SDK ROUTE (Requires API Key)
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const model = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-      const contents: any = options.fileData ? {
-        parts: [
-          { inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } },
-          { text: prompt }
-        ]
-      } : { parts: [{ text: prompt }] };
-
-      const response = await ai.models.generateContent({
-        model,
-        contents,
-        config: { systemInstruction: getSystemInstruction() }
-      });
-
-      return { text: response.text || '', links: [] };
-    } catch (e: any) {
-      throw new AppError(e.message, 'generic');
+    // Default Route: Puter AI (Robust & Managed)
+    if (typeof puter !== 'undefined') {
+      try {
+        if (!this.isPuterReady) await puter.ready();
+        
+        const response = await puter.ai.chat(prompt, {
+          model: options.useThinking ? 'gemini-pro' : 'gemini-flash',
+          system_prompt: getSystemInstruction(options.lang)
+        });
+        return { text: response.toString(), links: [] };
+      } catch (e: any) {
+        throw new AppError("Neural Bridge Timeout. Please check your internet connection and try again.", 'generic');
+      }
     }
+
+    throw new AppError("Neural Core Unreachable. Please refresh the page.", 'generic');
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
-      // Use Puter's high-speed image generation
-      const image = await puter.ai.txt2img(prompt);
-      return image.src;
+      if (typeof puter !== 'undefined') {
+        const image = await puter.ai.txt2img(prompt);
+        return image.src;
+      }
+      throw new Error("Puter offline");
     } catch (e: any) {
-      // Fallback to Nano Banana if Puter synthesis fails
-      try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: { parts: [{ text: prompt }] },
-          config: { imageConfig: { aspectRatio: aspectRatio as any } }
-        });
-        const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
-        if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-      } catch {}
+      const apiKey = process.env.API_KEY;
+      if (apiKey && apiKey !== "undefined") {
+        try {
+          const ai = new GoogleGenAI({ apiKey });
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: { parts: [{ text: prompt }] },
+            config: { imageConfig: { aspectRatio: aspectRatio as any } }
+          });
+          const part = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+          if (part?.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+        } catch {}
+      }
       throw new AppError("Synthesis engine timed out.", 'limit_reached');
     }
   }

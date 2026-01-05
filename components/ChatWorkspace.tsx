@@ -86,7 +86,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     onInputChange('');
 
     try {
-      const res = await geminiService.chat(text);
+      // STRICT: Passing current language to enforce correct output
+      const res = await geminiService.chat(text, { lang });
       setMessages(prev => [...prev, { 
         id: (Date.now() + 1).toString(), 
         role: 'assistant', 
@@ -114,14 +115,32 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const isSinhala = (text: string) => /[^\u0000-\u007F]/.test(text);
 
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    onDeleteConv(id);
+  };
+
+  const handleSwitch = (id: string) => {
+    onSwitchConv(id);
+    setIsHistoryOpen(false); // Close sidebar on mobile after switching
+  };
+
   return (
     <div className="flex h-[100dvh] bg-white dark:bg-slate-950 overflow-hidden relative">
-      {/* Mobile History Drawer */}
-      <div className={`fixed inset-y-0 left-0 z-[150] w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transform transition-transform duration-300 md:translate-x-0 ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Sidebar Overlay */}
+      {isHistoryOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[145] md:hidden animate-fade"
+          onClick={() => setIsHistoryOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-[150] w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transform transition-transform duration-300 md:relative md:translate-x-0 ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           <div className="p-6 border-b border-slate-200 dark:border-white/5 flex items-center justify-between">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t.memoryHistory}</h3>
-            <button onClick={() => setIsHistoryOpen(false)} className="md:hidden text-slate-400"><i className="fa-solid fa-xmark"></i></button>
+            <button onClick={() => setIsHistoryOpen(false)} className="md:hidden text-slate-400 p-2"><i className="fa-solid fa-xmark text-lg"></i></button>
           </div>
           <div className="p-4">
             <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
@@ -130,30 +149,37 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </div>
           <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar">
             {conversations.map(conv => (
-              <button 
-                key={conv.id}
-                onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }}
-                className={`w-full text-left p-4 rounded-2xl transition-all ${activeConvId === conv.id ? 'bg-cyan-500/10 text-cyan-600' : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
-              >
-                <p className="text-[11px] font-black truncate">{conv.title}</p>
-                <p className="text-[8px] opacity-40 uppercase mt-1">{conv.timestamp.toLocaleDateString()}</p>
-              </button>
+              <div key={conv.id} className="relative group">
+                <button 
+                  onClick={() => handleSwitch(conv.id)}
+                  className={`w-full text-left p-4 pr-12 rounded-2xl transition-all ${activeConvId === conv.id ? 'bg-cyan-500/10 text-cyan-600' : 'text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5'}`}
+                >
+                  <p className="text-[11px] font-black truncate">{conv.title}</p>
+                  <p className="text-[8px] opacity-40 uppercase mt-1">{conv.timestamp.toLocaleDateString()}</p>
+                </button>
+                <button 
+                  onClick={(e) => handleDelete(e, conv.id)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
+                >
+                  <i className="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
             ))}
           </div>
         </div>
       </div>
 
       {/* Main Container */}
-      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950 md:ml-0">
+      <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-slate-950">
         <header className="h-16 md:h-20 flex items-center justify-between px-4 border-b border-slate-200 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl shrink-0 z-40">
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsHistoryOpen(true)} className="md:hidden w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center"><i className="fa-solid fa-bars-staggered"></i></button>
+            <button onClick={() => setIsHistoryOpen(true)} className="md:hidden w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center shadow-sm"><i className="fa-solid fa-bars-staggered"></i></button>
             <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
               {(['chat', 'studio', 'vision'] as WorkspaceMode[]).map(tab => (
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
+                  className={`px-3 md:px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${
                     activeTab === tab ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500'
                   }`}
                 >
@@ -168,7 +194,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <main className="flex-1 overflow-y-auto px-4 md:px-12 py-8 overscroll-contain custom-scrollbar">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center opacity-30">
-               <div className="w-20 h-20 rounded-[32px] border-2 border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center text-3xl mb-6">
+               <div className="w-16 h-16 md:w-20 md:h-20 rounded-[32px] border-2 border-dashed border-slate-300 dark:border-white/10 flex items-center justify-center text-3xl mb-6">
                 <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : 'fa-camera'}`}></i>
               </div>
               <p className="text-[10px] font-black uppercase tracking-[0.5em] text-center">{t.howHelp}</p>
@@ -180,7 +206,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <div className={`max-w-[85%] md:max-w-[70%] p-5 md:p-7 rounded-[32px] ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none shadow-xl' : 'bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border border-black/5 dark:border-white/5'}`}>
                     <p className={`text-sm md:text-lg leading-relaxed ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</p>
                     {msg.imageUrl && (
-                      <div className="mt-5 rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                      <div className="mt-5 rounded-2xl overflow-hidden shadow-2xl border border-white/10 bg-black/5">
                         <img src={msg.imageUrl} className="w-full h-auto object-contain" alt="Generated" />
                       </div>
                     )}
@@ -201,17 +227,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </main>
 
         <div className="p-4 md:p-8 shrink-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl border-t border-slate-200 dark:border-white/5 z-40">
-          <div className="max-w-4xl mx-auto flex items-center gap-3 bg-slate-100 dark:bg-white/5 p-2 rounded-[28px] md:rounded-[36px] shadow-inner focus-within:ring-2 ring-cyan-500/50 transition-all border border-transparent">
+          <div className="max-w-4xl mx-auto flex items-center gap-2 md:gap-3 bg-slate-100 dark:bg-white/5 p-1.5 md:p-2 rounded-[24px] md:rounded-[36px] shadow-inner focus-within:ring-2 ring-cyan-500/50 transition-all border border-transparent">
             <input 
               ref={inputRef}
               value={localInput}
               onChange={e => setLocalInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSend()}
-              placeholder={t.inputPrompt}
-              className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl py-4 px-6 dark:text-white"
+              placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt}
+              className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl py-3 md:py-4 px-4 md:px-6 dark:text-white"
             />
-            <button onClick={() => handleSend()} className="w-14 h-14 md:w-20 md:h-20 rounded-[22px] md:rounded-[28px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all">
-              <i className="fa-solid fa-paper-plane text-xl"></i>
+            <button 
+              onClick={() => handleSend()} 
+              disabled={isTyping || (!localInput.trim() && activeTab !== 'studio')}
+              className="w-12 h-12 md:w-20 md:h-20 rounded-[18px] md:rounded-[28px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <i className="fa-solid fa-paper-plane md:text-xl"></i>
             </button>
           </div>
         </div>

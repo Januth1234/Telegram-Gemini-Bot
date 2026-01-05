@@ -67,8 +67,8 @@ export class CodeTrackerService {
     Log: ${snapshot.body}`;
 
     try {
-      // Fix: The 'useLite' property was replaced with 'useThinking: false' because it is not defined in the chat options type.
-      const response = await geminiService.chat(prompt, { useThinking: false });
+      // Fix: Added lang: 'en' to satisfy the GeminiService.chat interface requirement.
+      const response = await geminiService.chat(prompt, { lang: 'en', useThinking: false });
       return response.text || "Summary generation protocol failed.";
     } catch (e) {
       return `Build ${version} focuses on critical path stability and synchronized neural workspace logic.`;

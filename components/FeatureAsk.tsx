@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
-import { GroundingLink } from '../types';
+import { GroundingLink, Language } from '../types';
 
 const FeatureAsk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [input, setInput] = useState('');
@@ -13,7 +14,9 @@ const FeatureAsk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await geminiService.chat(input, { useThinking: true, grounding: 'search' });
+      // Fix: Added lang property from document attribute to satisfy geminiService.chat requirements.
+      const lang = document.documentElement.lang as Language || 'en';
+      const res = await geminiService.chat(input, { lang, useThinking: true, grounding: 'search' });
       setResult(res);
     } catch (e: any) {
       setError(e.message);
