@@ -152,22 +152,33 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, []);
 
   const content = (
-    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl`}>
+    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'animate-speaking-glow' : ''}`}>
       <div className="text-center space-y-4 relative w-full">
         {/* Speaker Stop Icon - Appears only when AI is talking */}
         {isActive && isSpeaking && (
           <button 
             onClick={stopAiSpeaking}
-            className="absolute top-0 right-0 w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all animate-reveal border border-red-500/20"
+            className="absolute top-0 right-0 w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all animate-reveal border border-red-500/20 shadow-sm"
             title={t.stopSpeaking}
           >
             <i className="fa-solid fa-volume-xmark"></i>
           </button>
         )}
 
-        <div className={`w-24 h-24 rounded-[40px] ${isActive ? 'bg-cyan-600 shadow-2xl shadow-cyan-600/30 text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'} flex items-center justify-center mx-auto transition-all duration-500`}>
-          <i className={`fa-solid ${isActive ? 'fa-microphone-lines' : 'fa-microphone'} text-4xl ${isActive ? 'animate-soft-pulse' : ''}`}></i>
+        <div className={`w-24 h-24 rounded-[40px] relative flex items-center justify-center mx-auto transition-all duration-700 ${
+          isActive 
+            ? 'bg-cyan-600 shadow-2xl shadow-cyan-600/30 text-white' 
+            : 'bg-slate-200 dark:bg-white/10 text-slate-400'
+          } ${isSpeaking ? 'ring-4 ring-cyan-500/20' : ''}`}>
+          
+          {/* Subtle Outer Pulse when speaking */}
+          {isSpeaking && (
+            <div className="absolute inset-0 rounded-[40px] bg-cyan-400/20 animate-ping pointer-events-none"></div>
+          )}
+          
+          <i className={`fa-solid ${isActive ? 'fa-microphone-lines' : 'fa-microphone'} text-4xl transition-transform duration-500 ${isSpeaking ? 'scale-110' : ''} ${isActive ? 'animate-soft-pulse' : ''}`}></i>
         </div>
+
         <div className="space-y-1">
           <div className="flex items-center justify-center gap-2">
             <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.voice}</h2>
@@ -183,7 +194,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             key={i} 
             className={`w-1.5 bg-cyan-500 rounded-full transition-all duration-300 ${isActive ? 'animate-bounce-subtle' : 'h-2 opacity-10'}`}
             style={{ 
-              height: isActive ? `${Math.random() * 60 + 20}%` : '8px', 
+              height: isActive ? (isSpeaking ? `${Math.random() * 80 + 20}%` : `${Math.random() * 40 + 20}%`) : '8px', 
               animationDelay: `${i * 0.1}s`,
               opacity: isActive ? (isSpeaking ? 1 : 0.5) : 0.1
             }}
