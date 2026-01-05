@@ -1,0 +1,156 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Orin AI - Smart Workspace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://js.puter.com/v2/"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script>
+      (function() {
+        const theme = localStorage.getItem('orin_theme') || 'dark';
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      })();
+
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: { 
+              sans: ['Plus Jakarta Sans', 'Noto Sans Sinhala', 'sans-serif'],
+            },
+            colors: {
+              slate: {
+                950: '#020617',
+                900: '#0f172a',
+              }
+            },
+            animation: {
+              'reveal': 'reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'fade': 'fade 0.5s ease-out forwards',
+              'scale-in': 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'soft-pulse': 'softPulse 3s ease-in-out infinite',
+              'beta-pulse': 'betaPulse 4s ease-in-out infinite',
+              'bounce-subtle': 'bounceSubtle 2s ease-in-out infinite',
+              'spin-reverse': 'spinReverse 3s linear infinite',
+              'slide-in-right': 'slideInRight 0.6s ease-out forwards',
+            },
+            keyframes: {
+              reveal: {
+                '0%': { transform: 'scale(0.98)', opacity: '0', filter: 'blur(4px)' },
+                '100%': { transform: 'scale(1)', opacity: '1', filter: 'blur(0)' },
+              },
+              fade: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+              scaleIn: {
+                '0%': { transform: 'scale(0.9)', opacity: '0' },
+                '100%': { transform: 'scale(1)', opacity: '1' },
+              },
+              softPulse: {
+                '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
+                '50%': { opacity: '0.6', transform: 'scale(1.05)' },
+              },
+              betaPulse: {
+                '0%, 100%': { opacity: '0.8', transform: 'scale(1)' },
+                '50%': { opacity: '1', transform: 'scale(1.02)' },
+              },
+              bounceSubtle: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-5px)' },
+              },
+              spinReverse: {
+                'from': { transform: 'rotate(360deg)' },
+                'to': { transform: 'rotate(0deg)' },
+              },
+              slideInRight: {
+                '0%': { transform: 'translateX(-20px)', opacity: '0' },
+                '100%': { transform: 'translateX(0)', opacity: '1' },
+              }
+            }
+          },
+        },
+      };
+    </script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;700&display=swap');
+      
+      html, body, #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      body {
+        font-family: 'Plus Jakarta Sans', 'Noto Sans Sinhala', sans-serif;
+        background-color: #f8fafc;
+        color: #0f172a;
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+
+      .dark body {
+        background-color: #020617;
+        color: #f8fafc;
+      }
+
+      .no-scrollbar::-webkit-scrollbar { display: none !important; }
+      .no-scrollbar { 
+        -ms-overflow-style: none !important; 
+        scrollbar-width: none !important; 
+      }
+
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+
+      .dark .glass-panel {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
+      .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+      
+      .sinhala-text { font-family: 'Noto Sans Sinhala', sans-serif; }
+      
+      .beta-glow {
+        text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
+      }
+      .dark .beta-glow {
+        text-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
+      }
+
+      /* Utility for animations triggered by viewport or immediate render */
+      .animate-reveal { animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      .animate-fade { animation: fade 0.5s ease-out forwards; }
+      .animate-scale-in { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+  }
+}
+</script>
+</head>
+  <body class="transition-colors duration-300">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
