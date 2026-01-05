@@ -154,12 +154,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">{t.memoryHistory}</h3>
           <button onClick={() => setIsHistoryOpen(false)} className="md:hidden text-slate-400 p-2"><i className="fa-solid fa-xmark"></i></button>
         </div>
-        <div className="p-4">
+        <div className="p-4 space-y-2">
           <button 
             onClick={() => { onNewConv(); setIsHistoryOpen(false); }}
             className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center justify-center gap-2"
           >
             <i className="fa-solid fa-plus text-[10px]"></i> {t.newNeuralChat}
+          </button>
+          
+          {/* Internal close button for mobile History sidebar */}
+          <button 
+            onClick={() => setIsHistoryOpen(false)}
+            className="md:hidden w-full py-2 border border-slate-200 dark:border-white/10 rounded-xl text-[8px] font-black text-slate-400 uppercase tracking-widest"
+          >
+            Close History
           </button>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1 overscroll-contain">
@@ -209,12 +217,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}
-                  className={`px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 ${
+                  className={`px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-1.5 relative ${
                     activeTab === tab ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-md' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                   }`}
                 >
                   <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : 'fa-microphone-lines'} text-[8px] md:text-[9px]`}></i>
                   <span>{tab === 'chat' ? t.reasoning : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : t.voice}</span>
+                  {tab === 'voice' && (
+                    <span className="absolute -top-1 -right-1 px-1 bg-cyan-600 text-white text-[5px] font-black rounded-sm border border-white/20 scale-75 md:scale-100">BETA</span>
+                  )}
                 </button>
               ))}
             </div>
