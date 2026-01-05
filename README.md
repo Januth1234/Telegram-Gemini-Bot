@@ -44,3 +44,19 @@ Since Orin AI is a client-side powerhouse, you can deploy it instantly:
 1. Clone the repo:
    ```bash
    git clone https://github.com/nimnal-januth/orin-ai.git
+2. Set up your environment variables:
+   API_KEY: Your Google Gemini API Key.
+   Deploy to Vercel or Netlify with a single click.
+
+🛡️ Security & Terms
+Zero-Logging: We do not store your prompts or images on our servers.
+Data Sovereignty: You own 100% of the assets generated in this workspace.
+Encrypted Handshakes: All neural traffic is protected via TLS 1.3.
+
+👨‍💻 Creator
+Developed with passion by Januth Nimnal (JN Productions Global).
+© 2026 JN Productions Global • Orin AI Protocol v4.1.0
+
+### Recommended Tags (Topics)
+Add these to your GitHub repo to help people find it:
+`ai-workspace` `gemini-api` `sinhala-ai` `sri-lanka` `react` `puter-js` `multimodal-ai` `ocr` `image-generation` `bilingual-ai
