@@ -1,38 +1,29 @@
 
-import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
 import React, { useEffect, useRef, useState } from 'react';
-import { translations } from '../translations';
+import { geminiService } from '../services/geminiService';
 import { Language } from '../types';
+import { translations } from '../translations';
+import { LiveServerMessage, Modality } from '@google/genai';
 
 interface VoiceAssistantProps {
   onClose: () => void;
   lang: Language;
+  inline?: boolean;
 }
 
-export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang }) => {
+const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline = false }) => {
   const t = translations[lang];
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   
   const audioContextRef = useRef<AudioContext | null>(null);
-  const outputAudioContextRef = useRef<AudioContext | null>(null);
+  const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  const streamRef = useRef<MediaStream | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationFrameRef = useRef<number | null>(null);
 
-  const decode = (base64: string) => {
-    const binaryString = atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  };
-
-  const decodeAudioData = async (data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> => {
+  async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
     const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
@@ -43,198 +34,207 @@ export const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang })
       }
     }
     return buffer;
-  };
+  }
 
-  const encode = (bytes: Uint8Array) => {
+  function decodeBase64(base64: string) {
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  function encodeBase64(bytes: Uint8Array) {
     let binary = '';
     for (let i = 0; i < bytes.byteLength; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
     return btoa(binary);
-  };
+  }
 
-  const createBlob = (data: Float32Array) => {
-    const int16 = new Int16Array(data.length);
-    for (let i = 0; i < data.length; i++) {
-      int16[i] = data[i] * 32768;
-    }
-    return {
-      data: encode(new Uint8Array(int16.buffer)),
-      mimeType: 'audio/pcm;rate=16000',
-    };
+  const stopAiSpeaking = () => {
+    sourcesRef.current.forEach(s => {
+      try { s.stop(); } catch(e) {}
+    });
+    sourcesRef.current.clear();
+    nextStartTimeRef.current = 0;
+    setIsSpeaking(false);
   };
 
   const startSession = async () => {
-    if (isConnecting || isActive) return;
     setIsConnecting(true);
-    
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      streamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      outputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
 
-      const sessionPromise = ai.live.connect({
-        model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-        callbacks: {
-          onopen: () => {
-            setIsConnecting(false);
-            setIsActive(true);
-            const source = audioContextRef.current!.createMediaStreamSource(streamRef.current!);
-            const scriptProcessor = audioContextRef.current!.createScriptProcessor(4096, 1, 1);
-            
-            scriptProcessor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcmBlob = createBlob(inputData);
-              sessionPromise.then(s => {
-                try { s.sendRealtimeInput({ media: pcmBlob }); } catch {}
-              });
-            };
-
-            source.connect(scriptProcessor);
-            scriptProcessor.connect(audioContextRef.current!.destination);
-          },
-          onmessage: async (message: LiveServerMessage) => {
-            const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio && outputAudioContextRef.current) {
-              nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputAudioContextRef.current.currentTime);
-              const buffer = await decodeAudioData(decode(base64Audio), outputAudioContextRef.current, 24000, 1);
-              const source = outputAudioContextRef.current.createBufferSource();
-              source.buffer = buffer;
-              source.connect(outputAudioContextRef.current.destination);
-              source.onended = () => sourcesRef.current.delete(source);
-              source.start(nextStartTimeRef.current);
-              nextStartTimeRef.current += buffer.duration;
-              sourcesRef.current.add(source);
-            }
-
-            if (message.serverContent?.interrupted) {
-              sourcesRef.current.forEach(s => { try { s.stop(); } catch {} });
-              sourcesRef.current.clear();
-              nextStartTimeRef.current = 0;
-            }
-          },
-          onclose: () => stopSession(),
-          onerror: (e) => { console.error("Voice Sync Error", e); stopSession(); },
+      const sessionPromise = geminiService.connectLive({
+        onopen: () => {
+          setIsConnecting(false);
+          setIsActive(true);
+          const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
+          const processor = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
+          processor.onaudioprocess = (e) => {
+            const inputData = e.inputBuffer.getChannelData(0);
+            const int16 = new Int16Array(inputData.length);
+            for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
+            sessionPromise.then(session => {
+              try {
+                session.sendRealtimeInput({ 
+                  media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
+                });
+              } catch (e) {}
+            });
+          };
+          source.connect(processor);
+          processor.connect(inputAudioContextRef.current!.destination);
         },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
-          },
-          systemInstruction: `You are Orin AI, a helpful voice assistant. Answer strictly in ${lang === 'si' ? 'Sinhala' : 'English'}. Keep responses short and conversational. Never mix languages.`
+        onmessage: async (msg: LiveServerMessage) => {
+          const audioData = msg.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
+          if (audioData && audioContextRef.current) {
+            setIsSpeaking(true);
+            const buffer = await decodeAudioData(decodeBase64(audioData), audioContextRef.current, 24000, 1);
+            const source = audioContextRef.current.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContextRef.current.destination);
+            nextStartTimeRef.current = Math.max(nextStartTimeRef.current, audioContextRef.current.currentTime);
+            source.start(nextStartTimeRef.current);
+            nextStartTimeRef.current += buffer.duration;
+            sourcesRef.current.add(source);
+            source.onended = () => {
+              sourcesRef.current.delete(source);
+              if (sourcesRef.current.size === 0) setIsSpeaking(false);
+            };
+          }
+          if (msg.serverContent?.interrupted) {
+            stopAiSpeaking();
+          }
+        },
+        onclose: () => {
+          setIsActive(false);
+          setIsConnecting(false);
+          setIsSpeaking(false);
+        },
+        onerror: (e: any) => {
+          console.error("Voice Error", e);
+          setIsConnecting(false);
+          setIsActive(false);
         }
       });
-
       sessionRef.current = await sessionPromise;
-      drawWave();
     } catch (e) {
       console.error(e);
-      stopSession();
+      setIsConnecting(false);
     }
   };
 
   const stopSession = () => {
-    setIsActive(false);
-    setIsConnecting(false);
-    streamRef.current?.getTracks().forEach(t => t.stop());
     if (sessionRef.current) {
-      try { sessionRef.current.close(); } catch {}
+      sessionRef.current.close();
       sessionRef.current = null;
     }
     if (audioContextRef.current) {
-      try { audioContextRef.current.close(); } catch {}
+      audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    if (outputAudioContextRef.current) {
-      try { outputAudioContextRef.current.close(); } catch {}
-      outputAudioContextRef.current = null;
+    if (inputAudioContextRef.current) {
+      inputAudioContextRef.current.close();
+      inputAudioContextRef.current = null;
     }
-    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-  };
-
-  const drawWave = () => {
-    if (!canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d')!;
-    const width = canvasRef.current.width;
-    const height = canvasRef.current.height;
-    
-    const render = () => {
-      ctx.clearRect(0, 0, width, height);
-      ctx.beginPath();
-      ctx.strokeStyle = isActive ? '#06b6d4' : '#334155';
-      ctx.lineWidth = 2;
-      
-      const time = Date.now() / 200;
-      for (let x = 0; x < width; x++) {
-        const amplitude = isActive ? (Math.sin(x * 0.05 + time) * 15) : 2;
-        const y = height / 2 + amplitude;
-        if (x === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-      animationFrameRef.current = requestAnimationFrame(render);
-    };
-    render();
+    setIsActive(false);
+    setIsConnecting(false);
+    setIsSpeaking(false);
   };
 
   useEffect(() => {
     return () => stopSession();
   }, []);
 
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-950/90 backdrop-blur-2xl animate-fade">
-      <div className="max-w-md w-full glass-panel rounded-[60px] p-12 flex flex-col items-center gap-12 text-center border border-white/5 shadow-[0_0_100px_rgba(6,182,212,0.1)]">
-        
-        <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 text-cyan-500 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">
-            <span className={`w-2 h-2 rounded-full ${isActive ? 'bg-cyan-500 animate-pulse' : 'bg-slate-500'}`}></span>
-            {t.voiceBeta}
-          </div>
-          <h2 className="text-3xl font-black text-white tracking-tighter uppercase">{isActive ? t.neuralBridgeActive : t.voice}</h2>
-          <p className="text-xs font-bold text-slate-400 px-6">{isActive ? t.listeningFrequency : t.placeholderVoice}</p>
-        </div>
-
-        <div className="relative w-full h-32 flex items-center justify-center">
-          <canvas ref={canvasRef} width={300} height={100} className="w-full h-full opacity-60" />
-          {isConnecting && (
-             <div className="absolute inset-0 flex items-center justify-center">
-                <i className="fa-solid fa-circle-notch animate-spin text-cyan-500 text-3xl"></i>
-             </div>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-6 w-full">
-          {!isActive ? (
-            <button 
-              onClick={startSession}
-              disabled={isConnecting}
-              className="w-full py-6 bg-white text-slate-950 rounded-[32px] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all flex items-center justify-center gap-4"
-            >
-              <i className="fa-solid fa-microphone"></i>
-              {isConnecting ? t.establishingHandshake : 'Initialize Neural Voice'}
-            </button>
-          ) : (
-            <button 
-              onClick={stopSession}
-              className="w-full py-6 bg-red-500/10 text-red-500 border border-red-500/20 rounded-[32px] font-black text-xs uppercase tracking-widest shadow-xl hover:bg-red-500/20 active:scale-95 transition-all"
-            >
-              {t.endSession}
-            </button>
-          )}
-          
-          <button onClick={onClose} className="text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-white transition-colors">
-            {t.back}
+  const content = (
+    <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-10 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl`}>
+      <div className="text-center space-y-4 relative w-full">
+        {/* Speaker Stop Icon - Appears only when AI is talking */}
+        {isActive && isSpeaking && (
+          <button 
+            onClick={stopAiSpeaking}
+            className="absolute top-0 right-0 w-10 h-10 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all animate-reveal border border-red-500/20"
+            title={t.stopSpeaking}
+          >
+            <i className="fa-solid fa-volume-xmark"></i>
           </button>
-        </div>
+        )}
 
-        <div className="pt-8 border-t border-white/5 w-full flex justify-center gap-8 opacity-40">
-           <i className="fa-solid fa-shield-halved text-white text-sm"></i>
-           <i className="fa-solid fa-bolt text-cyan-500 text-sm"></i>
-           <i className="fa-solid fa-wifi text-white text-sm"></i>
+        <div className={`w-24 h-24 rounded-[40px] ${isActive ? 'bg-cyan-600 shadow-2xl shadow-cyan-600/30 text-white' : 'bg-slate-200 dark:bg-white/10 text-slate-400'} flex items-center justify-center mx-auto transition-all duration-500`}>
+          <i className={`fa-solid ${isActive ? 'fa-microphone-lines' : 'fa-microphone'} text-4xl ${isActive ? 'animate-soft-pulse' : ''}`}></i>
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-center gap-2">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.voice}</h2>
+            <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[8px] font-black rounded-md uppercase tracking-widest border border-cyan-500/20 shadow-[0_0_15px_rgba(6,182,212,0.4)] animate-pulse beta-glow">BETA</span>
+          </div>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isActive ? t.neuralBridgeActive : 'Ready to talk'}</p>
         </div>
       </div>
+
+      <div className="w-full h-24 flex items-center justify-center gap-1.5 px-4 relative">
+        {[...Array(12)].map((_, i) => (
+          <div 
+            key={i} 
+            className={`w-1.5 bg-cyan-500 rounded-full transition-all duration-300 ${isActive ? 'animate-bounce-subtle' : 'h-2 opacity-10'}`}
+            style={{ 
+              height: isActive ? `${Math.random() * 60 + 20}%` : '8px', 
+              animationDelay: `${i * 0.1}s`,
+              opacity: isActive ? (isSpeaking ? 1 : 0.5) : 0.1
+            }}
+          ></div>
+        ))}
+        {isSpeaking && (
+          <div className="absolute inset-x-0 bottom-[-20px] text-center">
+             <span className="text-[8px] font-black text-cyan-500 uppercase tracking-widest animate-pulse">Orin is speaking...</span>
+          </div>
+        )}
+      </div>
+
+      <div className="w-full space-y-4">
+        {!isActive ? (
+          <button 
+            onClick={startSession} 
+            disabled={isConnecting}
+            className="w-full py-6 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
+          >
+            {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className="fa-solid fa-microphone"></i>}
+            {isConnecting ? t.establishingHandshake : 'Talk to Orin'}
+          </button>
+        ) : (
+          <button 
+            onClick={stopSession} 
+            className="w-full py-6 bg-red-500 text-white rounded-[24px] font-black text-xs uppercase tracking-widest shadow-xl shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-4"
+          >
+            <i className="fa-solid fa-phone-slash"></i>
+            {t.endSession}
+          </button>
+        )}
+        
+        {!inline && (
+          <button onClick={onClose} className="w-full text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-slate-900 dark:hover:text-white transition-colors">{t.back}</button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (inline) {
+    return (
+      <div className="h-full flex items-center justify-center p-6 animate-reveal">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 md:p-12 animate-reveal">
+      <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-lg" onClick={onClose}></div>
+      {content}
     </div>
   );
 };

@@ -1,7 +1,6 @@
 
 export type Language = 'en' | 'si';
-// Fix: Added 'Pro (Puter Managed)' to UserTier to allow matching the assignment in geminiService.ts
-export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Pro (Puter Managed)';
+export type UserTier = 'Basic' | 'Pro (BYO-Google)';
 
 export interface UserAccount {
   id: string;
@@ -40,6 +39,7 @@ export interface Conversation {
   messages: ChatMessage[];
   timestamp: Date;
   mode: WorkspaceMode;
+  modesUsed?: WorkspaceMode[];
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";

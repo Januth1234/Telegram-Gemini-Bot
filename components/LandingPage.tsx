@@ -8,10 +8,11 @@ interface LandingPageProps {
   prompt: string;
   onPromptChange: (val: string) => void;
   onStartChat: (prompt: string, mode: WorkspaceMode) => void;
+  onVoiceOpen: () => void;
   lang: Language;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, lang }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang }) => {
   const t = translations[lang];
   const [contextGreeting, setContextGreeting] = useState("");
 
@@ -23,10 +24,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
     try {
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(async (pos) => {
-          // Fix: Removed 'location' property from the context object as it is not defined in the generateWelcomeMessage method's type signature.
           const msg = await geminiService.generateWelcomeMessage({ 
             date, 
             time, 
+            location: `Lat: ${pos.coords.latitude.toFixed(2)}, Lng: ${pos.coords.longitude.toFixed(2)}`,
             lang
           });
           setContextGreeting(msg);
@@ -106,11 +107,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Features Grid */}
-        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
+        {/* Features Grid - Reordered: Chat, Creator, Camera, Voice */}
+        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
           <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Advanced chat logic" onClick={() => onStartChat(prompt, 'chat')} />
           <FeatureCard index={1} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
           <FeatureCard index={2} icon="fa-camera" title={t.vision} desc="Visual recognition" onClick={() => onStartChat(prompt, 'vision')} />
+          <FeatureCard index={3} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} />
         </section>
 
         {/* Navigation Cards */}
@@ -126,7 +128,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Simple Footer */}
         <footer className="w-full pt-16 md:pt-32 pb-16 md:pb-24 text-center space-y-4 md:space-y-6 opacity-30">
           <div className="w-8 md:w-12 h-1 bg-slate-300 dark:bg-slate-800 mx-auto rounded-full"></div>
-          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • Powered by Puter</p>
+          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • Powered by Puter & Januth's Neural Bridge</p>
         </footer>
       </div>
     </div>
@@ -157,7 +159,7 @@ const NavCard: React.FC<{ href: string; icon: string; title: string; desc: strin
       <i className={`fa-solid ${icon} text-sm md:text-xl`}></i>
     </div>
     <h3 className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white leading-tight">{title}</h3>
-    <p className="text-[7px] md:text({9px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 hidden md:block">{desc}</p>
+    <p className="text-[7px] md:text-[9px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 hidden md:block">{desc}</p>
   </a>
 );
 
