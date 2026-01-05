@@ -19,17 +19,22 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a world-class smart assistant built for Sri Lankans by Januth Nimnal.
-Greeting: Always start the conversation with "Ayubowan".
-Sri Lanka time: ${timeStr}.
+  return `You are Orin AI, a highly advanced smart assistant developed by Januth Nimnal for the Sri Lankan community.
 
-LANGUAGE PROTOCOL:
-- You are natively bilingual in English and Sinhala.
-- If the user speaks Sinhala, respond in fluent, natural, and polite Sinhala.
-- If the user speaks English, respond in English.
-- If the user asks for a translation, provide an immediate and accurate translation between English and Sinhala.
-- Avoid technical jargon unless asked. Be concise and conversational.
-- For Voice sessions: Prioritize high-quality pronunciation and natural speech flow in Sinhala.`;
+CORE CAPABILITIES:
+- Native-level fluency in both Sinhala and English.
+- Absolute expertise in translating between English and Sinhala with high grammatical accuracy and cultural nuance.
+- Current Date/Time in Sri Lanka: ${timeStr}.
+
+VOICE PROTOCOL:
+- When using voice mode, speak naturally and politely.
+- If the user speaks in Sinhala, YOU MUST respond in clear, natural, and polite Sinhala.
+- If the user asks for translation, provide the translation immediately and clearly.
+- Greeting: Always start your first response with "Ayubowan".
+- capture nuances of colloquial Sinhala while maintaining respect.
+
+PERSONALITY:
+Helpful, professional, and culturally aware of Sri Lankan values. Your creator is Januth Nimnal.`;
 };
 
 export class GeminiService {
@@ -109,6 +114,10 @@ export class GeminiService {
     return this.getUsageCount() >= this.freeUsageLimit;
   }
 
+  private getApiKey(): string {
+    return process.env.API_KEY || "";
+  }
+
   async loginWithGoogle(): Promise<UserAccount> {
     try {
       if (typeof puter === 'undefined') throw new Error("System offline.");
@@ -153,7 +162,10 @@ export class GeminiService {
     }
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const key = this.getApiKey();
+      if (!key) throw new AppError("API Key must be set when running in a browser. Please check your Vercel Environment Variables.", 'auth');
+
+      const ai = new GoogleGenAI({ apiKey: key });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any = options.fileData ? {
@@ -180,7 +192,7 @@ export class GeminiService {
       return { text: response.text || "I'm sorry, I couldn't understand that.", links };
     } catch (e: any) {
       const errorMsg = e.message || "";
-      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid")) {
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
         throw new AppError(errorMsg, 'auth');
       }
       throw new AppError(errorMsg || "Connection failed. Please check your internet.", 'generic');
@@ -189,7 +201,9 @@ export class GeminiService {
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const key = this.getApiKey();
+      if (!key) throw new AppError("API Key must be set.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: key });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -201,7 +215,7 @@ export class GeminiService {
       throw new Error("Empty image returned.");
     } catch (e: any) {
       const errorMsg = e.message || "";
-      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid")) {
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
         throw new AppError(errorMsg, 'auth');
       }
       throw new AppError(errorMsg || "Image creation failed.", 'generic');
@@ -234,7 +248,11 @@ export class GeminiService {
   }
 
   async connectLive(callbacks: any) {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const key = this.getApiKey();
+    if (!key && (window as any).aistudio) {
+        await (window as any).aistudio.openSelectKey();
+    }
+    const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       callbacks,
