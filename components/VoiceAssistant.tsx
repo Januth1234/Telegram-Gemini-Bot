@@ -18,6 +18,12 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
+  // Visualizer state: Reduced to 10 for "fatty" look
+  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(10).fill(10));
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const inputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number>(0);
+
   // Transcription state
   const [transcription, setTranscription] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const scrollTranscriptionRef = useRef<HTMLDivElement>(null);
@@ -28,7 +34,34 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
-  // Fixed decoding and scheduling logic to prevent speed-ups or glitches
+  // Visualizer loop: Mapped to 10 bars
+  const updateVisualizer = useCallback(() => {
+    const dataArray = new Uint8Array(10);
+    let activeLevel = false;
+
+    if (isSpeaking && analyserRef.current) {
+      analyserRef.current.getByteFrequencyData(dataArray);
+      activeLevel = true;
+    } else if (isActive && inputAnalyserRef.current) {
+      inputAnalyserRef.current.getByteFrequencyData(dataArray);
+      activeLevel = true;
+    }
+
+    if (activeLevel) {
+      const levels = Array.from(dataArray).map(v => Math.max(10, (v / 255) * 100));
+      setAudioLevels(levels);
+    } else {
+      setAudioLevels(prev => prev.map(v => Math.max(10, v * 0.9))); 
+    }
+
+    animationFrameRef.current = requestAnimationFrame(updateVisualizer);
+  }, [isActive, isSpeaking]);
+
+  useEffect(() => {
+    animationFrameRef.current = requestAnimationFrame(updateVisualizer);
+    return () => cancelAnimationFrame(animationFrameRef.current);
+  }, [updateVisualizer]);
+
   async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length / numChannels;
@@ -64,7 +97,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       try { s.stop(); } catch(e) {}
     });
     sourcesRef.current.clear();
-    // Reset nextStartTime strictly when interrupted to avoid massive gaps
     nextStartTimeRef.current = audioContextRef.current?.currentTime || 0;
     setIsSpeaking(false);
   }, []);
@@ -93,18 +125,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setTranscription([]);
     
     try {
-      // Check if API key selection is needed
       if ((window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (!hasKey) {
           await (window as any).aistudio.openSelectKey();
-          // Proceed after key selection attempt
         }
       }
 
       audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      analyserRef.current = audioContextRef.current.createAnalyser();
+      analyserRef.current.fftSize = 32; 
+      analyserRef.current.connect(audioContextRef.current.destination);
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
+      inputAnalyserRef.current.fftSize = 32;
 
       const sessionPromise = geminiService.connectLive({
         onopen: () => {
@@ -112,6 +148,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsActive(true);
           const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
           const processor = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
+          
+          source.connect(inputAnalyserRef.current!);
+          
           processor.onaudioprocess = (e) => {
             const inputData = e.inputBuffer.getChannelData(0);
             const int16 = new Int16Array(inputData.length);
@@ -128,7 +167,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           processor.connect(inputAudioContextRef.current!.destination);
         },
         onmessage: async (msg: LiveServerMessage) => {
-          // Handle Transcriptions
           if (msg.serverContent?.inputTranscription) {
             const text = msg.serverContent.inputTranscription.text;
             setTranscription(prev => {
@@ -149,16 +187,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             });
           }
 
-          // Handle Audio
           const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-          if (audioData && audioContextRef.current) {
+          if (audioData && audioContextRef.current && analyserRef.current) {
             setIsSpeaking(true);
             const buffer = await decodeAudioData(decodeBase64(audioData), audioContextRef.current, 24000, 1);
             const source = audioContextRef.current.createBufferSource();
             source.buffer = buffer;
-            source.connect(audioContextRef.current.destination);
+            source.connect(analyserRef.current);
             
-            // Scheduling fix: tiny offset to prevent crackling and ensure smooth sequence
             const now = audioContextRef.current.currentTime;
             if (nextStartTimeRef.current < now) {
                 nextStartTimeRef.current = now + 0.1; 
@@ -188,7 +224,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsConnecting(false);
           setIsActive(false);
 
-          // Prompt key re-selection if model/entity not found
           if (errorMsg.includes("Requested entity was not found") && (window as any).aistudio) {
             (window as any).aistudio.openSelectKey();
           }
@@ -215,7 +250,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const content = (
     <div className={`max-w-md w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-8 bg-white/50 dark:bg-slate-900/50 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'animate-speaking-glow' : ''}`}>
       <div className="text-center space-y-4 relative w-full">
-        {/* Speaker Stop Icon - Appears only when AI is talking */}
         {isActive && isSpeaking && (
           <button 
             onClick={stopAiSpeaking}
@@ -248,7 +282,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
       </div>
 
-      {/* Error Feedback */}
       {errorMessage && (
         <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-reveal">
            <p className="text-[10px] font-bold text-red-500 text-center uppercase tracking-widest leading-relaxed">
@@ -258,6 +291,20 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
            <button onClick={startSession} className="w-full mt-2 text-[8px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection</button>
         </div>
       )}
+
+      {/* Reactive Fatty Bars */}
+      <div className="w-full h-24 flex items-end justify-center gap-2 md:gap-3 px-4 relative">
+        {audioLevels.map((level, i) => (
+          <div 
+            key={i} 
+            className={`w-4 md:w-5 rounded-full transition-all duration-75 ${isActive ? 'bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-[0_0_15px_rgba(6,182,212,0.4)]' : 'bg-slate-300 dark:bg-slate-800 opacity-20'}`}
+            style={{ 
+              height: `${level}%`,
+              opacity: isActive ? 0.8 + (level/100)*0.2 : 0.2
+            }}
+          ></div>
+        ))}
+      </div>
 
       {/* Transcription Area */}
       {isActive && (
@@ -276,22 +323,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                     </div>
                 ))
             )}
-        </div>
-      )}
-
-      {!isActive && !errorMessage && (
-        <div className="w-full h-24 flex items-center justify-center gap-1.5 px-4 relative">
-            {[...Array(12)].map((_, i) => (
-            <div 
-                key={i} 
-                className={`w-1.5 bg-cyan-500 rounded-full transition-all duration-300 ${isActive ? 'animate-bounce-subtle' : 'h-2 opacity-10'}`}
-                style={{ 
-                height: isActive ? (isSpeaking ? `${Math.random() * 80 + 20}%` : `${Math.random() * 40 + 20}%`) : '8px', 
-                animationDelay: `${i * 0.1}s`,
-                opacity: isActive ? (isSpeaking ? 1 : 0.5) : 0.1
-                }}
-            ></div>
-            ))}
         </div>
       )}
 

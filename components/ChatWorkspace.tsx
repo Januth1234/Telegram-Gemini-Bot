@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { geminiService } from '../services/geminiService';
+import { geminiService, AppError } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
 import VoiceAssistant from './VoiceAssistant';
@@ -37,7 +37,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [localInput, setLocalInput] = useState(initialPrompt);
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(ITEMS_PER_PAGE);
 
-  // Track modes used in the current conversation
   const [modesUsed, setModesUsed] = useState<Set<WorkspaceMode>>(new Set([initialMode]));
 
   const hasReachedLimit = geminiService.hasReachedLimit();
@@ -46,14 +45,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Focus input on load and tab change
   useEffect(() => {
     if (activeTab !== 'voice') {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [activeTab]);
 
-  // Sync internal input with global prompt for continuity
   useEffect(() => {
     if (initialPrompt && initialPrompt !== localInput) {
       setLocalInput(initialPrompt);
@@ -62,7 +59,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const handleInputChange = (val: string) => {
     setLocalInput(val);
-    onInputChange(val); // Sync to storage via App component
+    onInputChange(val);
   };
 
   const handleClose = useCallback(() => {
@@ -88,7 +85,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (!text.trim() && !selectedFile && activeTab !== 'studio') return;
     if (hasReachedLimit) return;
 
-    // Track active mode for complexity titling
     const currentModes = new Set([...Array.from(modesUsed), activeTab]);
     setModesUsed(currentModes);
 
@@ -99,11 +95,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         const studioMsg: ChatMessage = { id: Date.now().toString(), role: 'assistant', content: lang === 'si' ? "නිර්මාණය අවසන්." : "Synthesis complete.", imageUrl: url, timestamp: new Date(), type: 'image' };
         setMessages(prev => [...prev, studioMsg]);
         handleInputChange('');
-        
-        // Always attempt to refresh title if complexity changes or its the first message
         const title = await geminiService.generateTitle([studioMsg], Array.from(currentModes));
         onUpdateTitle(title, Array.from(currentModes));
       } catch (e: any) {
+        if (e instanceof AppError && e.type === 'auth') {
+           if ((window as any).aistudio) (window as any).aistudio.openSelectKey();
+        }
         setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
       } finally { setIsTyping(false); }
       return;
@@ -115,16 +112,23 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     handleInputChange('');
 
     try {
-      const res = await geminiService.chat(text || "Explain.", { fileData: selectedFile || undefined, grounding: 'search' });
+      const messageCount = messages.filter(m => m.role === 'user').length;
+      const res = await geminiService.chat(text || "Explain.", { 
+        fileData: selectedFile || undefined, 
+        grounding: 'search',
+        messageCount: messageCount 
+      });
       const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.text, timestamp: new Date(), type: 'text', links: res.links };
       setMessages(prev => [...prev, assistantMsg]);
       
-      // Update title with more context
       if (messages.length < 4) {
         const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], Array.from(currentModes));
         onUpdateTitle(title, Array.from(currentModes));
       }
     } catch (e: any) {
+      if (e instanceof AppError && e.type === 'auth') {
+        if ((window as any).aistudio) (window as any).aistudio.openSelectKey();
+      }
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
     } finally {
       setIsTyping(false);
@@ -141,7 +145,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   return (
     <div className="flex flex-row h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
-      {/* Sidebar - Mobile Drawer with Overlay */}
       {isHistoryOpen && (
         <div 
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[45] md:hidden" 
@@ -162,7 +165,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <i className="fa-solid fa-plus text-[10px]"></i> {t.newNeuralChat}
           </button>
           
-          {/* Internal close button for mobile History sidebar */}
           <button 
             onClick={() => setIsHistoryOpen(false)}
             className="md:hidden w-full py-2 border border-slate-200 dark:border-white/10 rounded-xl text-[8px] font-black text-slate-400 uppercase tracking-widest"
@@ -202,7 +204,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
       </div>
 
-      {/* Main Workspace Area */}
       <div className="flex-1 flex flex-col min-w-0 h-full relative">
         <div className="shrink-0 h-16 md:h-20 glass-panel p-3 md:p-4 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm">
           <div className="flex items-center gap-2 md:gap-4 flex-1">
@@ -241,7 +242,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center animate-reveal px-4">
               <div className="w-16 h-16 md:w-20 md:h-20 rounded-[28px] glass-panel flex items-center justify-center text-slate-400 dark:text-slate-600 mb-6 md:mb-8 animate-soft-pulse border-slate-200 dark:border-white/10">
-                <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : 'fa-camera'} text-3xl md:text-4xl`}></i>
+                <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : activeTab === 'vision' ? 'fa-camera' : 'fa-camera'} text-3xl md:text-4xl`}></i>
               </div>
               <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 mb-8">{activeTab === 'chat' ? t.reasoning : activeTab === 'studio' ? t.creative : t.vision}</p>
               <div className="flex flex-wrap justify-center gap-2 max-w-md">
@@ -284,7 +285,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
         </div>
 
-        {/* Dynamic Input Bar - Only for Chat, Studio, Vision */}
         {activeTab !== 'voice' && (
           <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent z-40">
             <div className="max-w-4xl mx-auto">
