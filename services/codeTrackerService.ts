@@ -67,8 +67,8 @@ export class CodeTrackerService {
     Log: ${snapshot.body}`;
 
     try {
-      // Fix: Added lang: 'en' to satisfy the GeminiService.chat interface requirement.
-      const response = await geminiService.chat(prompt, { lang: 'en', useThinking: false });
+      // Fix: Removed 'useLite' which is not supported in the chat options type
+      const response = await geminiService.chat(prompt);
       return response.text || "Summary generation protocol failed.";
     } catch (e) {
       return `Build ${version} focuses on critical path stability and synchronized neural workspace logic.`;

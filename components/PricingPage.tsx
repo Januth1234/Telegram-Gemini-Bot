@@ -22,7 +22,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       icon: "fa-seedling",
       color: "blue",
       features: [
-        "100 Daily Neural Prompts",
+        "200 Daily Neural Prompts", // Updated from 100 to 200
         "Basic Reasoning Core",
         "Bilingual Support (SI/EN)",
         "Standard Web Grounding",
@@ -154,7 +154,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                    <ComparisonRow label="Daily Processing Limit" s="100 Commands" p="500 Commands" e="Infinite" />
+                    <ComparisonRow label="Daily Processing Limit" s="200 Commands" p="500 Commands" e="Infinite" />
                     <ComparisonRow label="Deep Reasoning Engine" s="Standard" p="Advanced" e="Neural Research" />
                     <ComparisonRow label="Vision & OCR" s="No" p="Yes" e="Advanced" />
                     <ComparisonRow label="Creative Synthesis" s="Text Only" p="1K Assets" e="4K Production" />
