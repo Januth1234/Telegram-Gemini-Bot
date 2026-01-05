@@ -116,10 +116,10 @@ export class GeminiService {
   }
 
   private async getApiKey(): Promise<string> {
-    // 1. Check environment variable (Vercel injection)
+    // Priority 1: Check standard env variable
     let key = process.env.API_KEY || "";
     
-    // 2. Fallback to AI Studio session if running on a custom domain without ENV access
+    // Priority 2: Check AI Studio specific environment if available
     if (!key && (window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (hasKey) {
@@ -168,7 +168,7 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        console.warn("Puter engine fallback triggered.");
+        console.warn("Puter engine fallback.");
       }
     }
 
@@ -178,9 +178,9 @@ export class GeminiService {
           if ((window as any).aistudio) {
               await (window as any).aistudio.openSelectKey();
               const retryKey = process.env.API_KEY;
-              if (!retryKey) throw new AppError("An API Key must be set. Please check your dashboard.", 'auth');
+              if (!retryKey) throw new AppError("API Key required. Please configure it in your environment.", 'auth');
           } else {
-              throw new AppError("Neural Bridge inactive. Configure API_KEY in Environment Settings.", 'auth');
+              throw new AppError("Neural Bridge inactive. Ensure API_KEY is set in your domain's environment variables.", 'auth');
           }
       }
 
@@ -208,20 +208,20 @@ export class GeminiService {
       }
 
       this.incrementUsage();
-      return { text: response.text || "I encountered an error processing your query.", links };
+      return { text: response.text || "I'm sorry, I couldn't process that.", links };
     } catch (e: any) {
       const errorMsg = e.message || "";
       if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
-        throw new AppError("API authentication failed. Re-link your key.", 'auth');
+        throw new AppError("Neural Bridge connection failed. Verify your API Key.", 'auth');
       }
-      throw new AppError(errorMsg || "Neural Bridge timeout.", 'generic');
+      throw new AppError(errorMsg || "Connection failed.", 'generic');
     }
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
       const key = await this.getApiKey();
-      if (!key) throw new AppError("Studio requires a valid API Key.", 'auth');
+      if (!key) throw new AppError("API Key required for Studio mode.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
@@ -231,9 +231,9 @@ export class GeminiService {
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-      throw new Error("Neural synthesis empty.");
+      throw new Error("Empty image returned.");
     } catch (e: any) {
-      throw new AppError(e.message || "Studio synthesis failed.", 'generic');
+      throw new AppError(e.message || "Image creation failed.", 'generic');
     }
   }
 
@@ -250,7 +250,7 @@ export class GeminiService {
 
   async translate(text: string, targetLang: Language): Promise<string> {
     const target = targetLang === 'si' ? 'Sinhala' : 'English';
-    const prompt = `Translate to ${target}. Output ONLY the translated text.\n\nText: ${text}`;
+    const prompt = `Translate to ${target}. Output ONLY translated text.\n\nText: ${text}`;
     const result = await this.chat(prompt);
     return result.text;
   }
@@ -259,7 +259,7 @@ export class GeminiService {
     try {
       if (typeof puter !== 'undefined') {
         const text = messages.map(m => m.content).join('\n').slice(0, 500);
-        const prompt = `Descripte title (4 words max) for: ${text}. Modes: ${modesUsed?.join(', ')}`;
+        const prompt = `Title (4 words) for: ${text}. Modes: ${modesUsed?.join(', ')}`;
         const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
         return response.toString().replace(/"/g, '').trim();
       }

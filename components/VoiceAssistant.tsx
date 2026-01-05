@@ -48,10 +48,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
 
     if (hasSignal) {
-      const levels = Array.from(dataArray).map(v => Math.max(14, (v / 255) * 100));
+      const levels = Array.from(dataArray).map(v => Math.max(16, (v / 255) * 100));
       setAudioLevels(levels);
     } else {
-      // Idle "breathing" state
       setAudioLevels(prev => prev.map((v, i) => {
         const time = Date.now() / 1000;
         const idle = 15 + Math.sin(time * 2.5 + i) * 8;
@@ -126,14 +125,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setTranscription([]);
     
     try {
-      // Force user interaction context check
-      if (audioContextRef.current?.state === 'suspended') {
-        await audioContextRef.current.resume();
-      }
+      // Ensure user interaction rules are satisfied
+      const context = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      if (context.state === 'suspended') await context.resume();
+      audioContextRef.current = context;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
-      audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 32; 
       analyserRef.current.connect(audioContextRef.current.destination);
@@ -171,18 +169,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const text = msg.serverContent.inputTranscription.text;
             setTranscription(prev => {
                 const last = prev[prev.length - 1];
-                if (last && last.role === 'user') {
-                    return [...prev.slice(0, -1), { ...last, text: last.text + text }];
-                }
+                if (last && last.role === 'user') return [...prev.slice(0, -1), { ...last, text: last.text + text }];
                 return [...prev, { role: 'user', text }];
             });
           } else if (msg.serverContent?.outputTranscription) {
             const text = msg.serverContent.outputTranscription.text;
              setTranscription(prev => {
                 const last = prev[prev.length - 1];
-                if (last && last.role === 'model') {
-                    return [...prev.slice(0, -1), { ...last, text: last.text + text }];
-                }
+                if (last && last.role === 'model') return [...prev.slice(0, -1), { ...last, text: last.text + text }];
                 return [...prev, { role: 'model', text }];
             });
           }
@@ -196,9 +190,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             source.connect(analyserRef.current);
             
             const now = audioContextRef.current.currentTime;
-            if (nextStartTimeRef.current < now) {
-                nextStartTimeRef.current = now + 0.05; 
-            }
+            if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05; 
             
             source.start(nextStartTimeRef.current);
             nextStartTimeRef.current += buffer.duration;
@@ -208,9 +200,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               if (sourcesRef.current.size === 0) setIsSpeaking(false);
             };
           }
-          if (msg.serverContent?.interrupted) {
-            stopAiSpeaking();
-          }
+          if (msg.serverContent?.interrupted) stopAiSpeaking();
         },
         onclose: () => {
           setIsActive(false);
@@ -218,19 +208,17 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsSpeaking(false);
         },
         onerror: (e: any) => {
-          console.error("Neural Bridge Connectivity Lost:", e);
-          const msg = e.message || "Endpoint unreachable. Re-check API configuration.";
+          console.error("Voice Error:", e);
+          const msg = e.message || "Endpoint unreachable. Check your API Key.";
           setErrorMessage(msg);
           setIsActive(false);
           setIsConnecting(false);
-          if ((msg.includes("API Key") || msg.includes("entity was not found")) && (window as any).aistudio) {
-            (window as any).aistudio.openSelectKey();
-          }
+          if (msg.includes("API Key") && (window as any).aistudio) (window as any).aistudio.openSelectKey();
         }
       });
       sessionRef.current = await sessionPromise;
     } catch (e: any) {
-      setErrorMessage(e.message || "Failed to establish biometric handshake.");
+      setErrorMessage(e.message || "Handshake failed.");
       setIsConnecting(false);
     }
   };
@@ -286,7 +274,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
              <i className="fa-solid fa-circle-exclamation mr-2"></i>
              {errorMessage}
            </p>
-           <button onClick={startSession} className="w-full mt-3 text-[9px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection Protocol</button>
+           <button onClick={startSession} className="w-full mt-3 text-[9px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection</button>
         </div>
       )}
 
@@ -304,7 +292,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         ))}
       </div>
 
-      {/* Real-time Transcription Engine */}
+      {/* Transcription Area */}
       {isActive && (
         <div 
             ref={scrollTranscriptionRef}
@@ -313,7 +301,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             {transcription.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2">
                    <div className="w-8 h-1 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse"></div>
-                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">Awaiting Input Stream</p>
+                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic text-center">Awaiting Input Stream</p>
                 </div>
             ) : (
                 transcription.map((item, i) => (
