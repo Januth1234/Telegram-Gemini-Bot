@@ -10,8 +10,9 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     define: {
-      // This explicitly exposes process.env.API_KEY to the browser code
+      // Expose API Keys
       'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
+      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY),
     },
   };
 });
