@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -270,6 +271,7 @@ const App: React.FC = () => {
       
       {isVoiceOpen && <VoiceAssistant onClose={() => setIsVoiceOpen(false)} lang={lang} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
+      <SpeedInsights />
     </div>
   );
 };
