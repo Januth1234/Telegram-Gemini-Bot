@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { UserAccount, Language } from '../types';
@@ -110,14 +109,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   ) : (
                     <>
                       <i className="fa-brands fa-google text-xl"></i>
-                      <span>{isSi ? 'Google සමඟ සම්බන්ධ වන්න' : 'Secure Google Login'}</span>
+                      <span>{isSi ? 'Google සමඟ සම්බන්ධ වන්න' : 'Sign in with Google'}</span>
                     </>
                   )}
                 </button>
 
                 <div className="text-center space-y-6">
                   <p className="text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em]">
-                    {isSi ? 'ඔබේ දත්ත ඔබ සතුව පමණි' : 'Privacy secured. Local-only.'}
+                    {isSi ? 'ඔබේ දත්ත ඔබ සතුව පමණි' : 'Secure & Private'}
                   </p>
                   <div className="flex justify-center gap-6 opacity-20">
                     <i className="fa-solid fa-shield-halved text-2xl"></i>
@@ -161,9 +160,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               </div>
 
               {/* Setting Modules */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 gap-8 justify-center">
                 {/* Personal Bridge */}
-                <div className="glass-panel p-8 md:p-10 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 space-y-8 flex flex-col justify-between hover-lift transition-all">
+                <div className="glass-panel p-8 md:p-10 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 space-y-8 flex flex-col justify-between hover-lift transition-all max-w-2xl mx-auto w-full">
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
@@ -189,32 +188,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                     <p className="text-center">
                       <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:underline">Billing Documentation</a>
                     </p>
-                  </div>
-                </div>
-
-                {/* Puter Core */}
-                <div className="glass-panel p-8 md:p-10 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 space-y-8 flex flex-col justify-between hover-lift transition-all">
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-600 animate-soft-pulse">
-                        <i className="fa-solid fa-bolt text-xl"></i>
-                      </div>
-                      <div className="px-4 py-1 bg-cyan-500/10 text-cyan-600 border border-cyan-500/20 rounded-full text-[8px] font-black uppercase tracking-widest">Puter Core Active</div>
-                    </div>
-                    <div className="space-y-3">
-                      <h4 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Puter Core (Free)</h4>
-                      <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
-                        {isSi 
-                          ? 'සාමාන්‍ය පණිවිඩ සඳහා Puter Core ස්වයංක්‍රීයව භාවිතා වේ. මේ සඳහා ඔබට මුදලක් වැය නොවේ.' 
-                          : 'Standard chat reasoning uses Puter’s managed AI core by default, preserving your personal quota.'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-5 bg-black/5 dark:bg-white/5 rounded-2xl flex items-center justify-between border border-black/5 dark:border-white/5">
-                    <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping"></div>
-                      <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest">Secure Sync Active</span>
-                    </div>
                   </div>
                 </div>
               </div>

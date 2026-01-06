@@ -113,12 +113,24 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     try {
       const messageCount = messages.filter(m => m.role === 'user').length;
+      
       const res = await geminiService.chat(text || "Explain.", { 
         fileData: selectedFile || undefined, 
         grounding: 'search',
-        messageCount: messageCount 
+        messageCount: messageCount,
+        useThinking: activeTab === 'chat', // Use thinking model for Chat tab
+        history: messages // Pass full message history to service
       });
-      const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.text, timestamp: new Date(), type: 'text', links: res.links };
+      
+      const assistantMsg: ChatMessage = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant', 
+        content: res.text, 
+        timestamp: new Date(), 
+        type: 'text', 
+        links: res.links,
+        reasoning_details: res.reasoning_details // Store reasoning details
+      };
       setMessages(prev => [...prev, assistantMsg]);
       
       if (messages.length < 4) {

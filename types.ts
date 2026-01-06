@@ -1,6 +1,6 @@
 
 export type Language = 'en' | 'si';
-export type UserTier = 'Basic' | 'Pro (BYO-Google)';
+export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
 
 export interface UserAccount {
   id: string;
@@ -31,6 +31,7 @@ export interface ChatMessage {
   imageUrl?: string;
   videoUrl?: string;
   fileName?: string;
+  reasoning_details?: any; // To support OpenRouter reasoning models
 }
 
 export interface Conversation {

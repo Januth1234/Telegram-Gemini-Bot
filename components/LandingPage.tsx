@@ -128,7 +128,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Simple Footer */}
         <footer className="w-full pt-16 md:pt-32 pb-16 md:pb-24 text-center space-y-4 md:space-y-6 opacity-30">
           <div className="w-8 md:w-12 h-1 bg-slate-300 dark:bg-slate-800 mx-auto rounded-full"></div>
-          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • Powered by Puter & Januth's Neural Bridge</p>
+          <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • Powered by Januth's Neural Bridge</p>
         </footer>
       </div>
     </div>
