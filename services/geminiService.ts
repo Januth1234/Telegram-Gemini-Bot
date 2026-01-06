@@ -115,18 +115,35 @@ export class GeminiService {
     return this.getUsageCount() >= this.freeUsageLimit;
   }
 
-  private async getApiKey(): Promise<string> {
-    // Priority 1: Check standard env variable
-    let key = process.env.API_KEY || "";
-    
-    // Priority 2: Check AI Studio specific environment if available
-    if (!key && (window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (hasKey) {
-            key = process.env.API_KEY || "";
-        }
+  /**
+   * Retrieves the API key from supported environment locations.
+   * Priority: standard process.env (injected via vite config) -> VITE_ prefixed (fallback).
+   */
+  private getApiKey(): string | undefined {
+    // Note: The vite.config.ts ensures env.API_KEY is mapped to process.env.API_KEY
+    return process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+  }
+
+  /**
+   * Ensures the API key is available via environment or selection bridge.
+   * If missing in a browser/bridge context, it triggers the selection dialog.
+   */
+  private async ensureApiKeyReady() {
+    // 1. Check for AI Studio Bridge first
+    const studio = (window as any).aistudio;
+    if (studio) {
+      const hasKey = await studio.hasSelectedApiKey();
+      if (!hasKey) {
+        await studio.openSelectKey();
+        return; // Assume studio injected the key into the environment after selection
+      }
     }
-    return key;
+
+    // 2. If not in studio (or studio is done), strictly check for the key
+    const key = this.getApiKey();
+    if (!key) {
+      throw new AppError("Neural Bridge configuration missing. Please set API_KEY in your Vercel/Environment settings.", 'auth');
+    }
   }
 
   async loginWithGoogle(): Promise<UserAccount> {
@@ -168,23 +185,17 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        console.warn("Puter engine fallback.");
+        console.warn("Puter fallback triggered.");
       }
     }
 
     try {
-      const key = await this.getApiKey();
-      if (!key) {
-          if ((window as any).aistudio) {
-              await (window as any).aistudio.openSelectKey();
-              const retryKey = process.env.API_KEY;
-              if (!retryKey) throw new AppError("API Key required. Please configure it in your environment.", 'auth');
-          } else {
-              throw new AppError("Neural Bridge inactive. Ensure API_KEY is set in your domain's environment variables.", 'auth');
-          }
-      }
+      await this.ensureApiKeyReady();
+      
+      // Use helper to get key safely
+      const apiKey = this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
 
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any = options.fileData ? {
@@ -212,7 +223,10 @@ export class GeminiService {
     } catch (e: any) {
       const errorMsg = e.message || "";
       if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
-        throw new AppError("Neural Bridge connection failed. Verify your API Key.", 'auth');
+        if ((window as any).aistudio) {
+            await (window as any).aistudio.openSelectKey();
+        }
+        throw new AppError("Neural Bridge connection failed. Verify your API Key configuration.", 'auth');
       }
       throw new AppError(errorMsg || "Connection failed.", 'generic');
     }
@@ -220,9 +234,10 @@ export class GeminiService {
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
-      const key = await this.getApiKey();
-      if (!key) throw new AppError("API Key required for Studio mode.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      await this.ensureApiKeyReady();
+      const apiKey = this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+      
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -233,6 +248,10 @@ export class GeminiService {
       }
       throw new Error("Empty image returned.");
     } catch (e: any) {
+      const errorMsg = e.message || "";
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid")) {
+        if ((window as any).aistudio) await (window as any).aistudio.openSelectKey();
+      }
       throw new AppError(e.message || "Image creation failed.", 'generic');
     }
   }
@@ -268,11 +287,10 @@ export class GeminiService {
   }
 
   async connectLive(callbacks: any) {
-    const key = await this.getApiKey();
-    if (!key && (window as any).aistudio) {
-        await (window as any).aistudio.openSelectKey();
-    }
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    await this.ensureApiKeyReady();
+    const apiKey = this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+    
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-09-2025',
       callbacks,
