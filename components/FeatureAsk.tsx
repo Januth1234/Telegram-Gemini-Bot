@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { GroundingLink } from '../types';
@@ -86,7 +87,7 @@ const FeatureAsk: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                Verified Analysis
              </div>
              <div className="prose prose-slate dark:prose-invert max-w-none">
-                <div className="sinhala-text leading-relaxed whitespace-pre-wrap text-base md:text-lg text-slate-800 dark:text-slate-200">
+                <div className="sinhala-text leading-relaxed whitespace-pre-wrap indent-10 text-base md:text-lg text-slate-800 dark:text-slate-200">
                   {result.text}
                 </div>
              </div>

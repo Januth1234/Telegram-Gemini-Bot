@@ -88,7 +88,7 @@ const ChatPreview: React.FC<ChatPreviewProps> = ({ initialPrompt, onClose }) => 
                 ? 'bg-blue-600 text-white rounded-tr-none' 
                 : 'bg-slate-50 dark:bg-slate-900/50 text-slate-800 dark:text-slate-200 rounded-tl-none border border-slate-100 dark:border-slate-800'
             }`}>
-              <div className={`text-sm leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text text-base' : ''}`}>
+              <div className={`text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'assistant' ? 'indent-10' : ''} ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text text-base' : ''}`}>
                 {msg.content}
               </div>
               {msg.links && msg.links.length > 0 && (

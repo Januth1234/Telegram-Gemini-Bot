@@ -274,7 +274,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         <span className="text-[8px] font-black uppercase tracking-widest text-cyan-600">{lang === 'si' ? 'සිංහල' : 'Sinhala'}</span>
                       </div>
                     )}
-                    <p className={`text-[13px] md:text-base leading-relaxed ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</p>
+                    <div className={`text-[13px] md:text-base leading-relaxed whitespace-pre-wrap ${msg.role === 'assistant' ? 'indent-10' : ''} ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
                     {msg.links && msg.links.length > 0 && (
                       <div className="mt-4 pt-4 border-t border-black/5 dark:border-white/5 flex flex-wrap gap-2">
                         {msg.links.map((link, idx) => (
