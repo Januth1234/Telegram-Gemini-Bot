@@ -99,6 +99,15 @@ const App: React.FC = () => {
     setUser(geminiService.getCurrentUser());
   }, []);
 
+  const handleLogin = async () => {
+    try {
+      await geminiService.loginWithGoogle();
+      refreshUser();
+    } catch (e) {
+      console.error("Login failed", e);
+    }
+  };
+
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
     setWorkspaceMode(mode);
@@ -228,6 +237,8 @@ const App: React.FC = () => {
             onStartChat={(p, m) => handleStartWorkspace(p, m, !!p)} 
             onVoiceOpen={() => handleStartWorkspace('', 'voice', false)}
             lang={lang}
+            user={user}
+            onLogin={handleLogin}
           />
         );
     }
