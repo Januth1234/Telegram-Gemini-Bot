@@ -17,17 +17,16 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const [isInitializing, setIsInitializing] = useState(true);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Note: Using the provided client ID from the environment/existing setup
   const GOOGLE_CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
 
   const handleCredentialResponse = (response: any) => {
     try {
       const payload = decodeJwt(response.credential);
-      if (!payload.sub) throw new Error("Verification failed: Missing ID.");
+      if (!payload.sub) throw new Error("Verification failed: Missing user identification.");
 
       const googleUser: UserAccount = {
         id: payload.sub,
-        name: payload.name || "Orin User",
+        name: payload.name || "Aura User",
         email: payload.email || "",
         avatar: payload.picture || "",
         tier: 'Verified Member',
@@ -40,7 +39,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
       setError(null);
     } catch (err) {
       console.error("Auth Exception:", err);
-      setError("Handshake failure. Please check your connection.");
+      setError("Authentication failed. Please try again.");
     }
   };
 
@@ -62,13 +61,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     
     const initializeGSI = () => {
       const google = (window as any).google;
-      if (google && google.accounts && google.accounts.id) {
+      if (google?.accounts?.id) {
         try {
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse,
             auto_select: false,
-            cancel_on_tap_outside: true,
             context: 'signin'
           });
 
@@ -80,14 +78,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               shape: "pill",
               logo_alignment: "left"
             });
-            // Also show the one-tap dialog if not logged in
-            google.accounts.id.prompt();
           }
           setIsInitializing(false);
           if (checkInterval) clearInterval(checkInterval);
         } catch (e) {
           console.error("GSI Initialization Error:", e);
-          setError("Identity services temporarily unavailable.");
+          setError("Failed to initialize Google Sign-In.");
           setIsInitializing(false);
         }
       }
@@ -96,16 +92,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     if (user) {
       setIsInitializing(false);
     } else {
-      // Check every 500ms for the Google script to be ready
+      // Check if the script is loaded every 500ms
       checkInterval = setInterval(() => {
-        const google = (window as any).google;
-        if (google && google.accounts && google.accounts.id) {
+        if ((window as any).google?.accounts?.id) {
           initializeGSI();
-          clearInterval(checkInterval);
         }
       }, 500);
 
-      // Immediate check
+      // Initial check
       initializeGSI();
     }
 
@@ -139,7 +133,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
           </div>
           <div>
             <h2 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.profile}</h2>
-            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Neural Workspace Identity</p>
+            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Personal Identity Node</p>
           </div>
         </div>
         <button 
@@ -165,22 +159,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                     Sign In
                   </h3>
                   <p className="text-sm md:text-xl font-bold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                    Connect your Google Account to unlock high-performance neural modules and cloud memory.
+                    Access your cloud workspace and unlock premium neural modules.
                   </p>
                 </div>
               </div>
 
-              <div className="glass-panel p-10 md:p-14 rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-3xl min-h-[300px] flex flex-col justify-center">
+              <div className="glass-panel p-10 md:p-14 rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-3xl min-h-[300px] flex flex-col justify-center items-center">
                 {isInitializing ? (
                   <div className="flex flex-col items-center gap-6 py-8">
                     <div className="w-10 h-10 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Establishing Neural Handshake...</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Initializing Identity Portal...</span>
                   </div>
                 ) : (
-                  <div className="space-y-8 animate-reveal flex flex-col items-center">
+                  <div className="space-y-8 animate-reveal w-full flex flex-col items-center">
                     <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl w-full justify-center">
                       <i className="fa-solid fa-shield-check text-emerald-500"></i>
-                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Encrypted OAuth Connection</span>
+                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Secure OAuth Tunnel</span>
                     </div>
 
                     <div className="w-full flex justify-center py-4">
@@ -188,7 +182,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                     </div>
                     
                     <p className="text-[10px] text-center font-bold text-slate-400 leading-relaxed max-w-[280px] mx-auto">
-                      By proceeding, you agree to the Orin AI Privacy Protocol and Terms of Neural Compliance.
+                      Join the Orin network. Your data is handled according to the Neural Privacy Protocol.
                     </p>
                   </div>
                 )}
@@ -238,7 +232,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   <i className="fa-solid fa-power-off"></i>
                   {t.disconnect}
                 </button>
-                <p className="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Orin Identity Node: {user.id}</p>
+                <p className="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Aura ID: {user.id}</p>
               </div>
             </div>
           )}
