@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
 import { UserAccount, Language } from '../types';
 import { translations } from '../translations';
@@ -19,11 +18,25 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
 
   const GOOGLE_CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
 
-  const handleCredentialResponse = (response: any) => {
+  const decodeJwt = (token: string) => {
+    try {
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+      return JSON.parse(jsonPayload);
+    } catch (e) {
+      console.error("JWT Decode Error:", e);
+      return null;
+    }
+  };
+
+  const handleCredentialResponse = useCallback((response: any) => {
     try {
       const payload = decodeJwt(response.credential);
       if (!payload || !payload.sub) {
-        throw new Error("Identity handshake failed: Invalid payload.");
+        throw new Error("Identity handshake failed: Invalid response payload.");
       }
 
       const googleUser: UserAccount = {
@@ -41,23 +54,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
       setError(null);
     } catch (err: any) {
       console.error("Auth Exception:", err);
-      setError("Handshake failure. Please ensure your browser supports the Google Identity Protocol.");
+      setError("Authentication failed. Please check your network and try again.");
     }
-  };
-
-  function decodeJwt(token: string) {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-      return JSON.parse(jsonPayload);
-    } catch (e) {
-      console.error("JWT Decode Error:", e);
-      return null;
-    }
-  }
+  }, [onUserUpdate]);
 
   useEffect(() => {
     let checkInterval: any;
@@ -74,7 +73,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
           });
 
           if (googleBtnRef.current) {
-            // Clear previous content to avoid duplicate buttons on re-renders
             googleBtnRef.current.innerHTML = "";
             google.accounts.id.renderButton(googleBtnRef.current, {
               theme: "filled_blue",
@@ -83,7 +81,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               shape: "pill",
               logo_alignment: "left"
             });
-            // Show One Tap prompt
+            // Try to show one-tap prompt for convenience
             google.accounts.id.prompt();
           }
           setIsInitializing(false);
@@ -99,21 +97,18 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     if (user) {
       setIsInitializing(false);
     } else {
-      // Periodically check for Google GSI script readiness if not already active
       checkInterval = setInterval(() => {
         if ((window as any).google?.accounts?.id) {
           initializeGSI();
         }
       }, 500);
-
-      // Immediate attempt in case it's already loaded
       initializeGSI();
     }
 
     return () => {
       if (checkInterval) clearInterval(checkInterval);
     };
-  }, [user]);
+  }, [user, handleCredentialResponse]);
 
   const handleLogout = () => {
     const google = (window as any).google;
@@ -140,7 +135,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
           </div>
           <div>
             <h2 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.profile}</h2>
-            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Sign In to Neural Workspace</p>
+            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Personal Identity Node</p>
           </div>
         </div>
         <button 
@@ -157,7 +152,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
           {!user ? (
             <div className="w-full space-y-12 animate-scale-in">
               <div className="text-center space-y-8">
-                <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-[40px] mx-auto flex items-center justify-center shadow-2xl animate-neural border border-black/5 dark:border-white/10 relative">
+                <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-[40px] mx-auto flex items-center justify-center shadow-2xl border border-black/5 dark:border-white/10 relative">
                   <div className="absolute inset-0 bg-cyan-500/5 rounded-[40px] blur-2xl"></div>
                   <img src="https://www.google.com/favicon.ico" alt="Google" className="w-12 h-12 relative z-10" />
                 </div>
@@ -165,8 +160,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   <h3 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
                     Sign In
                   </h3>
-                  <p className="text-sm md:text-xl font-bold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
-                    Connect your Google Identity to access persistent neural memory and higher workspace limits.
+                  <p className="text-sm md:text-xl font-bold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed text-center">
+                    Link your Google account to unlock advanced persistent memory and high-performance neural synthesis.
                   </p>
                 </div>
               </div>
@@ -175,22 +170,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                 {isInitializing ? (
                   <div className="flex flex-col items-center gap-6">
                     <div className="w-10 h-10 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Establishing Identity Tunnel...</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Syncing Auth Protocols...</span>
                   </div>
                 ) : (
                   <div className="space-y-8 animate-reveal w-full flex flex-col items-center">
                     <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl w-full justify-center">
                       <i className="fa-solid fa-shield-check text-emerald-500"></i>
-                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">End-to-End Encrypted Auth</span>
+                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Encrypted OAuth Connection</span>
                     </div>
 
                     <div className="w-full flex justify-center py-4 min-h-[50px]">
-                      {/* GSI Button Injection Target */}
                       <div ref={googleBtnRef} className="flex justify-center w-full"></div>
                     </div>
                     
                     <p className="text-[10px] text-center font-bold text-slate-400 leading-relaxed max-w-[280px] mx-auto">
-                      Privacy Note: We only access your basic public profile to personalize your experience.
+                      By proceeding, you agree to the Orin AI Privacy Protocol and Terms of Neural Compliance.
                     </p>
                   </div>
                 )}
@@ -229,8 +223,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <StatCard label="Neural Queries" value={user.dailyUsage.text} icon="fa-message" />
-                <StatCard label="Creative Syntheses" value={user.dailyUsage.images} icon="fa-wand-magic-sparkles" />
-                <StatCard label="Cloud Archiving" value="Active" icon="fa-cloud-arrow-up" isText />
+                <StatCard label="Creative Assets" value={user.dailyUsage.images} icon="fa-palette" />
+                <StatCard label="Workspace Sync" value="Active" icon="fa-cloud-arrow-up" isText />
               </div>
 
               <div className="pt-12 space-y-4">
@@ -239,9 +233,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   className="w-full py-6 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-[32px] font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-4"
                 >
                   <i className="fa-solid fa-right-from-bracket"></i>
-                  {t.disconnect}
+                  Sign Out
                 </button>
-                <p className="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Digital ID Node: {user.id}</p>
+                <p className="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Orin Identity Node: {user.id}</p>
               </div>
             </div>
           )}
