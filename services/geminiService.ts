@@ -39,6 +39,7 @@ Helpful, professional, and culturally aware of Sri Lankan values. Your creator i
 export class GeminiService {
   private currentUser: UserAccount | null = null;
   private freeUsageLimit = 200;
+  // Fallback key kept, but logic will now prioritize user input
   private staticFallbackKey = "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";
 
   constructor() {
@@ -102,21 +103,32 @@ export class GeminiService {
 
   /**
    * Retrieves the Google Native API key.
+   * Priority: Local Storage (User Input) -> Env Vars
    */
   private getGoogleApiKey(): string | undefined {
+    const local = localStorage.getItem('orin_google_key');
+    if (local && local.trim().length > 0) return local;
     return process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
   }
 
   /**
    * Retrieves the OpenRouter API Key.
+   * Priority: Local Storage (User Input) -> Env Vars -> Fallback
    */
   private getOpenRouterApiKey(): string {
+    const local = localStorage.getItem('orin_openrouter_key');
+    if (local && local.trim().length > 0) return local;
+
     return process.env.OPENROUTER_API_KEY || 
            (import.meta as any).env?.VITE_OPENROUTER_API_KEY || 
            this.staticFallbackKey;
   }
 
   private async ensureGoogleKeyReady() {
+    // If we have a key in local storage or env, we are good
+    if (this.getGoogleApiKey()) return;
+
+    // Otherwise check AI Studio
     const studio = (window as any).aistudio;
     if (studio) {
       const hasKey = await studio.hasSelectedApiKey();
@@ -125,9 +137,11 @@ export class GeminiService {
         return;
       }
     }
+    
+    // Final check
     const key = this.getGoogleApiKey();
     if (!key) {
-      throw new AppError("This feature requires a Google Native API Key.", 'auth');
+      throw new AppError("This feature requires a Google Native API Key. Please add it in Settings.", 'auth');
     }
   }
 
@@ -189,14 +203,18 @@ export class GeminiService {
       // payload.reasoning = { enabled: true }; // Not standard in all OR models, mostly for DeepSeek
     }
 
+    // Retrieve custom headers or defaults
+    const siteUrl = localStorage.getItem('orin_site_url') || window.location.origin;
+    const siteName = localStorage.getItem('orin_site_name') || "Orin AI";
+
     try {
       const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${openRouterKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": window.location.origin,
-          "X-Title": "Orin AI"
+          "HTTP-Referer": siteUrl,
+          "X-Title": siteName
         },
         body: JSON.stringify(payload),
         signal: controller.signal
@@ -206,7 +224,14 @@ export class GeminiService {
 
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData.error?.message || `OpenRouter Error: ${response.status}`);
+        const msg = errData.error?.message || `OpenRouter Error: ${response.status}`;
+        
+        // Handle "User not found" explicitly
+        if (msg.includes("User not found")) {
+            throw new Error("Invalid OpenRouter Key. Please update it in Settings > Identity Hub.");
+        }
+
+        throw new Error(msg);
       }
 
       return await response.json();
