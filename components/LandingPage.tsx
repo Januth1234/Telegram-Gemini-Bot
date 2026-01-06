@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
 import { translations } from '../translations';
-import { Language, WorkspaceMode } from '../types';
+import { Language, WorkspaceMode, UserAccount } from '../types';
 
 interface LandingPageProps {
   prompt: string;
@@ -10,11 +10,25 @@ interface LandingPageProps {
   onStartChat: (prompt: string, mode: WorkspaceMode) => void;
   onVoiceOpen: () => void;
   lang: Language;
+  user: UserAccount | null;
+  onLogin: () => Promise<void>;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin }) => {
   const t = translations[lang];
   const [contextGreeting, setContextGreeting] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleLoginClick = async () => {
+    setIsLoggingIn(true);
+    try {
+      await onLogin();
+    } catch (e) {
+      console.error("Login failed", e);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   const fetchGreeting = useCallback(async () => {
     const now = new Date();
@@ -87,23 +101,42 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
             </div>
           </div>
 
-          <div className="w-full max-w-3xl relative group px-2">
-            <div className="glass-panel p-1 md:p-2 rounded-[28px] md:rounded-[36px] flex items-center shadow-2xl border border-slate-300 dark:border-slate-800 focus-within:ring-4 md:focus-within:ring-8 focus-within:ring-cyan-500/10 transition-all duration-500">
-              <input 
-                type="text" 
-                value={prompt}
-                onChange={(e) => onPromptChange(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
-                placeholder={t.howHelp}
-                className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-4 md:px-8 py-4 md:py-5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 font-medium"
-              />
-              <button 
-                onClick={() => onStartChat(prompt, 'chat')}
-                className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl ml-1 md:ml-2"
-              >
-                {t.go}
-              </button>
+          <div className="w-full max-w-3xl flex flex-col items-center gap-6">
+            <div className="w-full relative group px-2">
+              <div className="glass-panel p-1 md:p-2 rounded-[28px] md:rounded-[36px] flex items-center shadow-2xl border border-slate-300 dark:border-slate-800 focus-within:ring-4 md:focus-within:ring-8 focus-within:ring-cyan-500/10 transition-all duration-500">
+                <input 
+                  type="text" 
+                  value={prompt}
+                  onChange={(e) => onPromptChange(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
+                  placeholder={t.howHelp}
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-4 md:px-8 py-4 md:py-5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 font-medium"
+                />
+                <button 
+                  onClick={() => onStartChat(prompt, 'chat')}
+                  className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl ml-1 md:ml-2"
+                >
+                  {t.go}
+                </button>
+              </div>
             </div>
+
+            {!user && (
+               <button 
+                 onClick={handleLoginClick}
+                 disabled={isLoggingIn}
+                 className="flex items-center gap-3 px-6 py-3 rounded-full glass-panel border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all group"
+               >
+                 {isLoggingIn ? (
+                    <i className="fa-solid fa-circle-notch animate-spin text-slate-500"></i>
+                 ) : (
+                    <i className="fa-brands fa-google text-slate-900 dark:text-white text-lg"></i>
+                 )}
+                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white">
+                    {lang === 'si' ? 'Google සමඟ සම්බන්ධ වන්න' : 'Sign in with Google'}
+                 </span>
+               </button>
+            )}
           </div>
         </section>
 

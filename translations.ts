@@ -2,7 +2,7 @@
 export const translations = {
   en: {
     appName: "Orin AI",
-    slogan: "From a Sri Lankan to Sri Lankans, Ayubowan!",
+    slogan: "From a Sri Lankan to Sri Lankans. Orin AI at your service.",
     welcome: "Ayubowan!",
     howHelp: "How can I help you?",
     go: "Start",
@@ -82,7 +82,7 @@ export const translations = {
   },
   si: {
     appName: "ඔරින් AI",
-    slogan: "ශ්‍රී ලාංකිකයෙකුගෙන් ශ්‍රී ලාංකිකයන්ට, ආයුබෝවන්!",
+    slogan: "ශ්‍රී ලාංකිකයෙකුගෙන් ශ්‍රී ලාංකිකයන්ට. ඔරින් AI ඔබගේ සේවයට.",
     welcome: "ආයුබෝවන්!",
     howHelp: "මම ඔබට උදව් කරන්නේ කොහොමද?",
     go: "අරඹන්න",

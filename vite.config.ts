@@ -12,7 +12,12 @@ export default defineConfig(({ mode }) => {
     define: {
       // Expose API Keys
       'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
-      'process.env.OPENROUTER_API_KEY': JSON.stringify(env.OPENROUTER_API_KEY || env.VITE_OPENROUTER_API_KEY),
+      // Automatically use the provided key if no environment variable is set in Vercel
+      'process.env.OPENROUTER_API_KEY': JSON.stringify(
+        env.OPENROUTER_API_KEY || 
+        env.VITE_OPENROUTER_API_KEY || 
+        "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"
+      ),
     },
   };
 });
