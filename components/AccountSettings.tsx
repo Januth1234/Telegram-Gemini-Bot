@@ -1,5 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
+/* Fix: Added missing closing tags and default export for AccountSettings component */
+import React, { useState, useEffect, useRef } from 'react';
 import { geminiService } from '../services/geminiService';
 import { UserAccount, Language } from '../types';
 import { translations } from '../translations';
@@ -13,31 +14,22 @@ interface AccountSettingsProps {
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUserUpdate }) => {
   const t = translations[lang];
   const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
-  const [authError, setAuthError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Google Sign-In Button
-  useEffect(() => {
-    if (!user && (window as any).google) {
-      (window as any).google.accounts.id.initialize({
-        client_id: "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com",
-        callback: handleGoogleCredentialResponse,
-        auto_select: false
-      });
-      (window as any).google.accounts.id.renderButton(
-        document.getElementById("googleSignInDiv"),
-        { theme: "outline", size: "large", width: "100%", shape: "pill", type: "standard" }
-      );
-    }
-  }, [user]);
+  const GOOGLE_CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
 
-  const handleGoogleCredentialResponse = (response: any) => {
+  const handleCredentialResponse = (response: any) => {
     try {
       const payload = decodeJwt(response.credential);
+      if (!payload.sub) throw new Error("Verification failed: Missing ID.");
+
       const googleUser: UserAccount = {
         id: payload.sub,
-        name: payload.name,
-        email: payload.email,
-        avatar: payload.picture,
+        name: payload.name || "Orin User",
+        email: payload.email || "",
+        avatar: payload.picture || "",
         tier: 'Verified Member',
         dailyUsage: { text: 0, images: 0, videos: 0 }
       };
@@ -45,9 +37,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
       geminiService.setSessionUser(googleUser);
       setUser(googleUser);
       onUserUpdate();
-    } catch (error) {
-      console.error("Error parsing Google token", error);
-      setAuthError("Failed to verify Google credentials.");
+      setError(null);
+    } catch (err) {
+      console.error("Auth Exception:", err);
+      setError("Handshake failure. Please check your connection.");
     }
   };
 
@@ -64,9 +57,63 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     }
   }
 
+  useEffect(() => {
+    let checkInterval: any;
+    
+    const initializeGSI = () => {
+      const google = (window as any).google;
+      if (google?.accounts?.id) {
+        try {
+          google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: handleCredentialResponse,
+            auto_select: false,
+            context: 'signin'
+          });
+
+          if (googleBtnRef.current) {
+            google.accounts.id.renderButton(googleBtnRef.current, {
+              theme: "filled_blue",
+              size: "large",
+              width: "100%",
+              shape: "pill",
+              logo_alignment: "left"
+            });
+          }
+          setIsInitializing(false);
+          if (checkInterval) clearInterval(checkInterval);
+        } catch (e) {
+          console.error("GSI Initialization Error:", e);
+          setError("Identity services temporarily unavailable.");
+          setIsInitializing(false);
+        }
+      }
+    };
+
+    if (user) {
+      setIsInitializing(false);
+    } else {
+      // Robust script check with retry
+      if (!(window as any).google) {
+        checkInterval = setInterval(() => {
+          if ((window as any).google) {
+            initializeGSI();
+          }
+        }, 300);
+      } else {
+        initializeGSI();
+      }
+    }
+
+    return () => {
+      if (checkInterval) clearInterval(checkInterval);
+    };
+  }, [user]);
+
   const handleLogout = () => {
-    if ((window as any).google) {
-       (window as any).google.accounts.id.disableAutoSelect();
+    const google = (window as any).google;
+    if (google?.accounts?.id) {
+      google.accounts.id.disableAutoSelect();
     }
     geminiService.logout();
     setUser(null);
@@ -75,93 +122,117 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal h-[100dvh]">
-      {/* Immersive Background Decor */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-5%] left-[-5%] w-[60%] h-[60%] bg-cyan-500/10 blur-[140px] rounded-full animate-soft-pulse"></div>
-        <div className="absolute bottom-[-5%] right-[-5%] w-[60%] h-[60%] bg-indigo-500/10 blur-[140px] rounded-full animate-soft-pulse" style={{ animationDelay: '1s' }}></div>
+      {/* Background Decor */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-cyan-500/10 blur-[150px] rounded-full animate-soft-pulse"></div>
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-indigo-500/10 blur-[150px] rounded-full animate-soft-pulse" style={{ animationDelay: '3s' }}></div>
       </div>
 
-      <header className="shrink-0 h-16 md:h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 z-50">
-        <div className="flex items-center gap-3 md:gap-4">
-          <div className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900 shadow-lg">
-            <i className="fa-solid fa-user-shield text-sm md:text-base"></i>
+      <header className="shrink-0 h-16 md:h-24 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 z-50">
+        <div className="flex items-center gap-4">
+          <div className="w-10 h-10 md:w-14 md:h-14 rounded-2xl bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900 shadow-2xl">
+            <i className="fa-solid fa-user-shield text-xl"></i>
           </div>
           <div>
-            <h2 className="text-base md:text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.profile}</h2>
-            <p className="text-[7px] md:text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] mt-1">Google Account</p>
+            <h2 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.profile}</h2>
+            <p className="text-[8px] md:text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">Neural Workspace Identity</p>
           </div>
         </div>
-        <button onClick={onClose} className="w-8 h-8 md:w-10 md:h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all">
-          <i className="fa-solid fa-xmark text-lg"></i>
+        <button 
+          onClick={onClose} 
+          className="w-10 h-10 md:w-14 md:h-14 rounded-2xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 transition-all active:scale-95"
+        >
+          <i className="fa-solid fa-xmark text-xl"></i>
         </button>
       </header>
 
-      {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 overscroll-contain px-6">
-        <div className="w-full max-w-4xl mx-auto py-12 md:py-24 flex flex-col items-center">
+      <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 px-6 overscroll-contain">
+        <div className="w-full max-w-xl mx-auto py-12 md:py-32 flex flex-col items-center">
           
           {!user ? (
-            <div className="w-full max-w-md space-y-12 animate-scale-in">
+            <div className="w-full space-y-12 animate-scale-in">
               <div className="text-center space-y-8">
-                <div className="w-20 h-20 md:w-24 md:h-24 bg-white dark:bg-white/10 rounded-full mx-auto flex items-center justify-center shadow-2xl animate-neural border border-black/5 dark:border-white/10">
-                  <img src="https://www.google.com/favicon.ico" alt="Google" className="w-10 h-10 md:w-12 md:h-12" />
+                <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-[40px] mx-auto flex items-center justify-center shadow-2xl animate-neural border border-black/5 dark:border-white/10 relative">
+                  <div className="absolute inset-0 bg-cyan-500/5 rounded-[40px] blur-2xl"></div>
+                  <img src="https://www.google.com/favicon.ico" alt="Google" className="w-12 h-12 relative z-10" />
                 </div>
                 <div className="space-y-4">
-                  <h3 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-tight">
-                    Sign In
+                  <h3 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
+                    Nexus Link
                   </h3>
-                  <p className="text-sm md:text-lg font-bold text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                    Access your secure workspace using your Google Account.
+                  <p className="text-sm md:text-xl font-bold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
+                    Connect your Google Account to unlock high-performance neural modules and cloud memory.
                   </p>
                 </div>
               </div>
 
-              <div className="glass-panel p-8 md:p-14 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/50 dark:bg-slate-900/50">
-                {/* Google Sign-In Button Container */}
-                <div className="w-full flex justify-center min-h-[44px]">
-                   <div id="googleSignInDiv" className="w-full flex justify-center"></div>
-                </div>
+              <div className="glass-panel p-10 md:p-14 rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-3xl">
+                {isInitializing ? (
+                  <div className="flex flex-col items-center gap-6 py-8">
+                    <div className="w-10 h-10 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Establishing Neural Handshake...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-8 animate-reveal">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                      <i className="fa-solid fa-shield-check text-emerald-500"></i>
+                      <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Encrypted OAuth Connection</span>
+                    </div>
+
+                    <div ref={googleBtnRef} className="w-full flex justify-center min-h-[50px]"></div>
+                    
+                    <p className="text-[10px] text-center font-bold text-slate-400 leading-relaxed max-w-[280px] mx-auto">
+                      By proceeding, you agree to the Orin AI Privacy Protocol and Terms of Neural Compliance.
+                    </p>
+                  </div>
+                )}
                 
-                {authError && (
-                   <p className="text-red-500 text-xs text-center font-bold animate-pulse">{authError}</p>
+                {error && (
+                  <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl animate-reveal">
+                    <p className="text-[10px] font-black text-red-500 text-center uppercase tracking-[0.2em] leading-relaxed">
+                      <i className="fa-solid fa-circle-exclamation mr-2"></i>
+                      {error}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
           ) : (
-            <div className="w-full space-y-10 animate-fade pb-20">
-              {/* Profile Card */}
-              <div className="glass-panel p-8 md:p-16 rounded-[48px] md:rounded-[64px] border border-black/5 dark:border-white/5 shadow-2xl flex flex-col md:flex-row items-center gap-8 md:gap-12 bg-white/40 dark:bg-slate-900/40 relative overflow-hidden max-w-2xl mx-auto">
-                <div className="relative">
-                  <div className="absolute -inset-6 bg-cyan-500/20 rounded-full blur-3xl animate-soft-pulse"></div>
+            <div className="w-full space-y-10 animate-reveal">
+              <div className="flex flex-col items-center gap-6">
+                <div className="w-32 h-32 rounded-[48px] bg-slate-200 dark:bg-white/10 overflow-hidden border-4 border-white dark:border-slate-800 shadow-2xl relative group">
                   {user.avatar ? (
-                    <img src={user.avatar} className="w-24 h-24 md:w-44 md:h-44 rounded-full border-4 border-white dark:border-slate-800 shadow-2xl relative z-10" alt="Avatar" />
+                    <img src={user.avatar} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={user.name} />
                   ) : (
-                    <div className="w-24 h-24 md:w-44 md:h-44 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500 text-4xl md:text-6xl font-black shadow-2xl relative z-10">
-                      {user.name[0]}
+                    <div className="w-full h-full flex items-center justify-center text-slate-400 dark:text-slate-600 text-4xl font-black">
+                      {user.name.charAt(0)}
                     </div>
                   )}
                 </div>
-                <div className="text-center md:text-left space-y-5 flex-1 relative z-10">
-                  <div className="space-y-2">
-                    <h3 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">
-                      {user.name}
-                    </h3>
-                    <p className="text-sm md:text-lg font-bold text-slate-500 dark:text-slate-400 break-all">
-                      {user.email}
-                    </p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                    <i className="fa-solid fa-circle-check text-[10px]"></i>
-                    <span className="text-[10px] font-black uppercase tracking-widest">Verified Account</span>
+                <div className="text-center space-y-2">
+                  <h3 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{user.name}</h3>
+                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400">{user.email}</p>
+                  <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-cyan-600/10 border border-cyan-600/20 rounded-full text-[9px] font-black text-cyan-600 uppercase tracking-widest mt-2">
+                    <i className="fa-solid fa-crown text-[8px]"></i> {user.tier}
                   </div>
                 </div>
               </div>
 
-              {/* Action Footer */}
-              <div className="pt-10 flex flex-col gap-6 items-center">
-                <button onClick={handleLogout} className="px-16 py-5 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white rounded-[24px] text-[10px] font-black uppercase tracking-widest transition-all shadow-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <StatCard label="Text Usage" value={user.dailyUsage.text} icon="fa-message" />
+                <StatCard label="Image Assets" value={user.dailyUsage.images} icon="fa-palette" />
+                <StatCard label="Video Logic" value={user.dailyUsage.videos} icon="fa-video" />
+              </div>
+
+              <div className="pt-10 space-y-4">
+                <button 
+                  onClick={handleLogout}
+                  className="w-full py-5 bg-red-500/10 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/20 rounded-[28px] font-black text-xs uppercase tracking-[0.2em] transition-all active:scale-95 flex items-center justify-center gap-4"
+                >
+                  <i className="fa-solid fa-power-off"></i>
                   {t.disconnect}
                 </button>
+                <p className="text-[9px] text-center font-bold text-slate-400 uppercase tracking-widest">Orin Identity Node: {user.id}</p>
               </div>
             </div>
           )}
@@ -170,5 +241,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     </div>
   );
 };
+
+const StatCard: React.FC<{ label: string; value: number; icon: string }> = ({ label, value, icon }) => (
+  <div className="glass-panel p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col gap-3">
+    <div className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500">
+      <i className={`fa-solid ${icon} text-sm`}></i>
+    </div>
+    <div>
+      <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{label}</p>
+      <p className="text-xl font-black text-slate-900 dark:text-white">{value}</p>
+    </div>
+  </div>
+);
 
 export default AccountSettings;
