@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
@@ -118,8 +118,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         fileData: selectedFile || undefined, 
         grounding: 'search',
         messageCount: messageCount,
-        useThinking: activeTab === 'chat', // Use thinking model for Chat tab
-        history: messages // Pass full message history to service
+        useThinking: activeTab === 'chat', 
+        history: messages 
       });
       
       const assistantMsg: ChatMessage = { 
@@ -129,7 +129,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         timestamp: new Date(), 
         type: 'text', 
         links: res.links,
-        reasoning_details: res.reasoning_details // Store reasoning details
+        reasoning_details: res.reasoning_details 
       };
       setMessages(prev => [...prev, assistantMsg]);
       
@@ -154,6 +154,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setActiveTab(tab);
     setModesUsed(prev => new Set([...Array.from(prev), tab]));
   };
+
+  const currentSuggestions = useMemo(() => {
+    const key = activeTab === 'chat' ? 'chat' : activeTab === 'studio' ? 'studio' : 'vision';
+    return t.prompts[key as keyof typeof t.prompts] || [];
+  }, [activeTab, t.prompts]);
 
   return (
     <div className="flex flex-row h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
@@ -258,7 +263,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </div>
               <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 mb-8">{activeTab === 'chat' ? t.reasoning : activeTab === 'studio' ? t.creative : t.vision}</p>
               <div className="flex flex-wrap justify-center gap-2 max-w-md">
-                 {t.prompts[activeTab === 'chat' ? 'chat' : activeTab === 'studio' ? 'studio' : 'vision' as keyof typeof t.prompts]?.map(p => (
+                 {currentSuggestions.map(p => (
                    <button key={p} onClick={() => { handleInputChange(p); }} className="px-3 py-1.5 bg-slate-200/50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg text-[9px] font-bold text-slate-500 hover:text-cyan-600 transition-all">{p}</button>
                  ))}
               </div>
@@ -299,7 +304,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {activeTab !== 'voice' && (
           <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent z-40">
-            <div className="max-w-4xl mx-auto">
+            <div className="max-w-4xl mx-auto space-y-3">
+              {/* Dynamic Context-Aware Prompt Suggestions */}
+              {!isTyping && messages.length > 0 && (
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1 px-2 animate-fade">
+                  {currentSuggestions.map((suggestion, idx) => (
+                    <button
+                      key={`${activeTab}-${idx}`}
+                      onClick={() => handleInputChange(suggestion)}
+                      className="px-3 py-1.5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-full text-[9px] md:text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all whitespace-nowrap shadow-sm active:scale-95"
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="glass-panel p-1.5 md:p-2 rounded-[24px] md:rounded-[40px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-1 md:gap-2">
                 <button onClick={() => fileInputRef.current?.click()} className="w-11 h-11 md:w-14 md:h-14 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"><i className="fa-solid fa-paperclip text-base md:text-lg"></i></button>
                 <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {

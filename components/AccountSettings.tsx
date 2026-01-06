@@ -1,5 +1,4 @@
 
-/* Fix: Added missing closing tags and default export for AccountSettings component */
 import React, { useState, useEffect, useRef } from 'react';
 import { geminiService } from '../services/geminiService';
 import { UserAccount, Language } from '../types';
@@ -18,6 +17,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const [isInitializing, setIsInitializing] = useState(true);
   const googleBtnRef = useRef<HTMLDivElement>(null);
 
+  // Note: Using the provided client ID from the environment/existing setup
   const GOOGLE_CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
 
   const handleCredentialResponse = (response: any) => {
@@ -62,12 +62,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     
     const initializeGSI = () => {
       const google = (window as any).google;
-      if (google?.accounts?.id) {
+      if (google && google.accounts && google.accounts.id) {
         try {
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: handleCredentialResponse,
             auto_select: false,
+            cancel_on_tap_outside: true,
             context: 'signin'
           });
 
@@ -75,10 +76,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
             google.accounts.id.renderButton(googleBtnRef.current, {
               theme: "filled_blue",
               size: "large",
-              width: "100%",
+              width: 320,
               shape: "pill",
               logo_alignment: "left"
             });
+            // Also show the one-tap dialog if not logged in
+            google.accounts.id.prompt();
           }
           setIsInitializing(false);
           if (checkInterval) clearInterval(checkInterval);
@@ -93,16 +96,17 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     if (user) {
       setIsInitializing(false);
     } else {
-      // Robust script check with retry
-      if (!(window as any).google) {
-        checkInterval = setInterval(() => {
-          if ((window as any).google) {
-            initializeGSI();
-          }
-        }, 300);
-      } else {
-        initializeGSI();
-      }
+      // Check every 500ms for the Google script to be ready
+      checkInterval = setInterval(() => {
+        const google = (window as any).google;
+        if (google && google.accounts && google.accounts.id) {
+          initializeGSI();
+          clearInterval(checkInterval);
+        }
+      }, 500);
+
+      // Immediate check
+      initializeGSI();
     }
 
     return () => {
@@ -158,7 +162,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                 </div>
                 <div className="space-y-4">
                   <h3 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-                    Nexus Link
+                    Sign In
                   </h3>
                   <p className="text-sm md:text-xl font-bold text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed">
                     Connect your Google Account to unlock high-performance neural modules and cloud memory.
@@ -166,20 +170,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                 </div>
               </div>
 
-              <div className="glass-panel p-10 md:p-14 rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-3xl">
+              <div className="glass-panel p-10 md:p-14 rounded-[56px] border border-black/5 dark:border-white/5 shadow-2xl space-y-10 bg-white/60 dark:bg-slate-900/40 backdrop-blur-3xl min-h-[300px] flex flex-col justify-center">
                 {isInitializing ? (
                   <div className="flex flex-col items-center gap-6 py-8">
                     <div className="w-10 h-10 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 animate-pulse">Establishing Neural Handshake...</span>
                   </div>
                 ) : (
-                  <div className="space-y-8 animate-reveal">
-                    <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                  <div className="space-y-8 animate-reveal flex flex-col items-center">
+                    <div className="flex items-center gap-3 px-6 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl w-full justify-center">
                       <i className="fa-solid fa-shield-check text-emerald-500"></i>
                       <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">Encrypted OAuth Connection</span>
                     </div>
 
-                    <div ref={googleBtnRef} className="w-full flex justify-center min-h-[50px]"></div>
+                    <div className="w-full flex justify-center py-4">
+                      <div ref={googleBtnRef} className="min-h-[50px] flex items-center justify-center"></div>
+                    </div>
                     
                     <p className="text-[10px] text-center font-bold text-slate-400 leading-relaxed max-w-[280px] mx-auto">
                       By proceeding, you agree to the Orin AI Privacy Protocol and Terms of Neural Compliance.
@@ -188,7 +194,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                 )}
                 
                 {error && (
-                  <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl animate-reveal">
+                  <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-3xl animate-reveal mt-4">
                     <p className="text-[10px] font-black text-red-500 text-center uppercase tracking-[0.2em] leading-relaxed">
                       <i className="fa-solid fa-circle-exclamation mr-2"></i>
                       {error}
