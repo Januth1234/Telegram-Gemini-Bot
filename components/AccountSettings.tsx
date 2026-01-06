@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { UserAccount, Language } from '../types';
@@ -16,8 +17,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const [hasApiKey, setHasApiKey] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Identity & Key State
+  const [siteUrl, setSiteUrl] = useState(() => localStorage.getItem('orin_site_url') || '');
+  const [siteName, setSiteName] = useState(() => localStorage.getItem('orin_site_name') || '');
+  const [googleKey, setGoogleKey] = useState(() => localStorage.getItem('orin_google_key') || '');
+  const [orKey, setOrKey] = useState(() => localStorage.getItem('orin_openrouter_key') || '');
+
   useEffect(() => {
     const checkApiKey = async () => {
+      // Check if AI Studio key is selected OR if we have a manual key
+      const manualKey = localStorage.getItem('orin_google_key');
+      if (manualKey) {
+        setHasApiKey(true);
+        return;
+      }
+
       if ((window as any).aistudio) {
         const has = await (window as any).aistudio.hasSelectedApiKey();
         setHasApiKey(has);
@@ -53,6 +67,31 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     onUserUpdate();
   };
 
+  const handleSiteUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSiteUrl(val);
+    localStorage.setItem('orin_site_url', val);
+  };
+
+  const handleSiteNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setSiteName(val);
+    localStorage.setItem('orin_site_name', val);
+  };
+
+  const handleGoogleKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setGoogleKey(val);
+    localStorage.setItem('orin_google_key', val);
+    setHasApiKey(!!val);
+  };
+
+  const handleOrKeyChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setOrKey(val);
+    localStorage.setItem('orin_openrouter_key', val);
+  };
+
   const isSi = lang === 'si';
 
   return (
@@ -78,7 +117,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
         </button>
       </header>
 
-      {/* Main Content Area - Optimized for Mobile Scrolling */}
+      {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto custom-scrollbar relative z-10 overscroll-contain px-6">
         <div className="w-full max-w-4xl mx-auto py-12 md:py-24 flex flex-col items-center">
           
@@ -113,16 +152,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                     </>
                   )}
                 </button>
-
-                <div className="text-center space-y-6">
-                  <p className="text-[9px] md:text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em]">
-                    {isSi ? 'ඔබේ දත්ත ඔබ සතුව පමණි' : 'Secure & Private'}
-                  </p>
-                  <div className="flex justify-center gap-6 opacity-20">
-                    <i className="fa-solid fa-shield-halved text-2xl"></i>
-                    <i className="fa-solid fa-lock text-2xl"></i>
-                  </div>
-                </div>
               </div>
             </div>
           ) : (
@@ -148,20 +177,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                       {user.email}
                     </p>
                   </div>
-                  <div className="flex flex-wrap justify-center md:justify-start gap-3 pt-2">
-                    <span className="px-4 py-1.5 bg-cyan-500 text-white text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-cyan-500/20">
-                      <i className="fa-solid fa-circle-check mr-2"></i> Verified
-                    </span>
-                    <span className="px-4 py-1.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[8px] md:text-[10px] font-black uppercase tracking-widest rounded-full">
-                      {user.tier}
-                    </span>
-                  </div>
                 </div>
               </div>
 
               {/* Setting Modules */}
               <div className="grid grid-cols-1 gap-8 justify-center">
-                {/* Personal Bridge */}
+                
+                {/* 1. Google Gemini Key (Native Bridge) */}
                 <div className="glass-panel p-8 md:p-10 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 space-y-8 flex flex-col justify-between hover-lift transition-all max-w-2xl mx-auto w-full">
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
@@ -169,25 +191,88 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                         <i className="fa-solid fa-key text-xl"></i>
                       </div>
                       <div className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${hasApiKey ? 'bg-emerald-500/10 text-emerald-600 border border-emerald-500/20' : 'bg-red-500/10 text-red-600 border border-red-500/20'}`}>
-                        {hasApiKey ? 'Neural Bridge Active' : 'Bridge Inactive'}
+                        {hasApiKey ? 'Active' : 'Missing'}
                       </div>
                     </div>
                     <div className="space-y-3">
-                      <h4 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Neural Bridge</h4>
+                      <h4 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Neural Bridge (Google)</h4>
                       <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
-                        {isSi 
-                          ? 'පුද්ගලික Gemini API යතුර මෙතැනින් සම්බන්ධ කරන්න. මෙය විශේෂිත 4K නිර්මාණ සඳහා පමණි.' 
-                          : 'Connect personal key to unlock 4K production assets and high-intensity reasoning.'}
+                        Required for Studio, Vision, and Voice. Enter your Gemini API key below.
                       </p>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <button onClick={handleSelectKey} className="w-full py-5 bg-indigo-600 text-white rounded-[24px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all">
-                      {hasApiKey ? (isSi ? 'යතුර වෙනස් කරන්න' : 'Update Connection') : (isSi ? 'යතුර සම්බන්ධ කරන්න' : 'Connect Personal Key')}
-                    </button>
-                    <p className="text-center">
-                      <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[8px] font-black text-slate-400 uppercase tracking-widest hover:underline">Billing Documentation</a>
-                    </p>
+                  <div className="space-y-4">
+                     {(window as any).aistudio && (
+                        <button onClick={handleSelectKey} className="w-full py-4 bg-indigo-600 text-white rounded-[20px] font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] transition-all mb-2">
+                          Connect via Google
+                        </button>
+                     )}
+                     <div className="space-y-2">
+                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Manual API Key</label>
+                       <input 
+                         type="password" 
+                         value={googleKey}
+                         onChange={handleGoogleKeyChange}
+                         placeholder="AIzaSy..."
+                         className="w-full p-4 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-bold focus:border-indigo-500 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700"
+                       />
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. OpenRouter Key (Chat Logic) */}
+                <div className="glass-panel p-8 md:p-10 rounded-[40px] md:rounded-[56px] border border-black/5 dark:border-white/5 space-y-8 flex flex-col justify-between hover-lift transition-all max-w-2xl mx-auto w-full">
+                  <div className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="w-12 h-12 rounded-2xl bg-orange-500/10 flex items-center justify-center text-orange-600">
+                        <i className="fa-solid fa-microchip text-xl"></i>
+                      </div>
+                      <div className={`px-4 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${orKey ? 'bg-emerald-500/10 text-emerald-600' : 'bg-slate-100 dark:bg-white/10 text-slate-500'}`}>
+                        {orKey ? 'Custom Key' : 'Default'}
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <h4 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Reasoning Core (OpenRouter)</h4>
+                      <p className="text-[11px] font-bold text-slate-500 leading-relaxed">
+                        Required for Text Chat. Override the default key if you encounter "User not found" errors.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-5">
+                    <div className="space-y-2">
+                       <label className="text-[9px] font-black text-orange-500 uppercase tracking-widest pl-1">OpenRouter API Key</label>
+                       <input 
+                         type="password" 
+                         value={orKey}
+                         onChange={handleOrKeyChange}
+                         placeholder="sk-or-v1..."
+                         className="w-full p-4 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-2xl text-xs font-bold focus:border-orange-500 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700"
+                       />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 dark:border-white/5">
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Site Name (Optional)</label>
+                           <input 
+                             type="text" 
+                             value={siteName}
+                             onChange={handleSiteNameChange}
+                             placeholder="My App"
+                             className="w-full p-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold outline-none"
+                           />
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Site URL (Optional)</label>
+                           <input 
+                             type="text" 
+                             value={siteUrl}
+                             onChange={handleSiteUrlChange}
+                             placeholder="https://..."
+                             className="w-full p-3 bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 rounded-xl text-xs font-bold outline-none"
+                           />
+                        </div>
+                    </div>
                   </div>
                 </div>
               </div>
