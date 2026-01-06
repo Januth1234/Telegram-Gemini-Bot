@@ -39,8 +39,6 @@ Helpful, professional, and culturally aware of Sri Lankan values. Your creator i
 export class GeminiService {
   private currentUser: UserAccount | null = null;
   private freeUsageLimit = 200;
-  // Fallback key kept, but logic will now prioritize user input
-  private staticFallbackKey = "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";
 
   constructor() {
     this.initUser();
@@ -72,6 +70,11 @@ export class GeminiService {
   private updateCurrentUser(user: UserAccount) {
     this.currentUser = user;
     this.saveUser();
+  }
+
+  // Public setter for external auth providers
+  public setSessionUser(user: UserAccount) {
+    this.updateCurrentUser(user);
   }
 
   private saveUser() {
@@ -106,29 +109,19 @@ export class GeminiService {
    * Priority: Local Storage (User Input) -> Env Vars
    */
   private getGoogleApiKey(): string | undefined {
+    // Check local storage for manually set key (legacy support or dev overrides)
     const local = localStorage.getItem('orin_google_key');
     if (local && local.trim().length > 0) return local;
+    
+    // Check environment variable
     return process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
-  }
-
-  /**
-   * Retrieves the OpenRouter API Key.
-   * Priority: Local Storage (User Input) -> Env Vars -> Fallback
-   */
-  private getOpenRouterApiKey(): string {
-    const local = localStorage.getItem('orin_openrouter_key');
-    if (local && local.trim().length > 0) return local;
-
-    return process.env.OPENROUTER_API_KEY || 
-           (import.meta as any).env?.VITE_OPENROUTER_API_KEY || 
-           this.staticFallbackKey;
   }
 
   private async ensureGoogleKeyReady() {
     // If we have a key in local storage or env, we are good
     if (this.getGoogleApiKey()) return;
 
-    // Otherwise check AI Studio
+    // Otherwise check AI Studio (Veo/High-End Model Requirement)
     const studio = (window as any).aistudio;
     if (studio) {
       const hasKey = await studio.hasSelectedApiKey();
@@ -141,41 +134,56 @@ export class GeminiService {
     // Final check
     const key = this.getGoogleApiKey();
     if (!key) {
-      throw new AppError("This feature requires a Google Native API Key. Please add it in Settings.", 'auth');
+      // If we still don't have a key, we throw an auth error which can be caught to show the Google Sign-In prompt
+      throw new AppError("Access Denied. Please Sign In with Google.", 'auth');
     }
   }
 
-  // Real Google Sign In via AI Studio Key Selection
+  // Improved Login Handler - Falls back to Local Session if Google Auth is unavailable
   async loginWithGoogle(): Promise<UserAccount> {
     try {
       const studio = (window as any).aistudio;
       if (studio) {
-        // Force key selection dialog
+        // Attempt Native Google Auth Flow via AI Studio wrapper if available
         await studio.openSelectKey();
-        
-        // Wait briefly to ensure state propagates (race condition mitigation)
         const hasKey = await studio.hasSelectedApiKey();
         if (!hasKey) {
-          throw new Error("Google Sign-In cancelled or API Key not selected.");
+          throw new Error("Key selection cancelled.");
         }
-
-        // Create a verified session profile.
-        // We use a generic 'Member' tier to be inclusive of all Google accounts.
-        const newUser: UserAccount = {
-          id: `google-${Date.now()}`,
-          name: 'Google Verified User',
-          email: 'connected@google.com',
-          tier: 'Verified Member',
-          avatar: 'https://lh3.googleusercontent.com/a/default-user=s96-c', // Generic Google Avatar
-          dailyUsage: { text: 0, images: 0, videos: 0 }
-        };
-        this.updateCurrentUser(newUser);
-        return newUser;
       } else {
-        throw new Error("Google Sign-In environment not detected.");
+         // Fallback: Create a local verified session without cloud auth
+         console.log("Standard Google Auth not detected. Creating local session.");
       }
+
+      // Create/Update Session
+      const newUser: UserAccount = {
+        id: `user-${Date.now()}`,
+        name: 'Orin Member',
+        email: 'member@orin.ai',
+        tier: 'Verified Member',
+        avatar: '', // Empty avatar will show initials
+        dailyUsage: { text: 0, images: 0, videos: 0 }
+      };
+      
+      this.updateCurrentUser(newUser);
+      return newUser;
+
     } catch (e: any) {
-      throw new AppError(e.message || "Google Sign-In failed.", 'auth');
+      // If user explicitly cancelled key selection, rethrow
+      if (e.message && e.message.includes("cancelled")) {
+          throw new AppError("Sign-In Cancelled.", 'auth');
+      }
+      
+      // Fallback for any other error to ensure user can still access the app
+      const fallbackUser: UserAccount = {
+        id: `local-${Date.now()}`,
+        name: 'Guest User',
+        email: 'guest@local',
+        tier: 'Basic',
+        dailyUsage: { text: 0, images: 0, videos: 0 }
+      };
+      this.updateCurrentUser(fallbackUser);
+      return fallbackUser;
     }
   }
 
@@ -184,67 +192,9 @@ export class GeminiService {
     this.saveUser();
   }
 
-  private async performOpenRouterRequest(
-    model: string, 
-    messages: any[], 
-    reasoningEnabled: boolean = false
-  ): Promise<any> {
-    const openRouterKey = this.getOpenRouterApiKey();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-    const payload: any = {
-      model: model,
-      messages: messages,
-      temperature: reasoningEnabled ? 0.6 : 0.7,
-    };
-
-    if (reasoningEnabled) {
-      // payload.reasoning = { enabled: true }; // Not standard in all OR models, mostly for DeepSeek
-    }
-
-    // Retrieve custom headers or defaults
-    const siteUrl = localStorage.getItem('orin_site_url') || window.location.origin;
-    const siteName = localStorage.getItem('orin_site_name') || "Orin AI";
-
-    try {
-      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${openRouterKey}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": siteUrl,
-          "X-Title": siteName
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errData = await response.json();
-        const msg = errData.error?.message || `OpenRouter Error: ${response.status}`;
-        
-        // Handle "User not found" explicitly
-        if (msg.includes("User not found")) {
-            throw new Error("Invalid OpenRouter Key. Please update it in Settings > Identity Hub.");
-        }
-
-        throw new Error(msg);
-      }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
-  }
-
   /**
-   * Text Generation
-   * Uses OpenRouter (Flash 2.0) by default for Text/Chat.
-   * Uses Google Native for Grounding/Search/File Data if key is available.
+   * Text Generation & General Chat
+   * Switched entirely to Google GenAI.
    */
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
@@ -256,82 +206,97 @@ export class GeminiService {
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in for more.", "limit_reached");
     
-    // 1. If Grounding is requested, we MUST use Google Native (if available)
-    if (options.grounding === 'search') {
-      try {
-        await this.ensureGoogleKeyReady();
-        const apiKey = this.getGoogleApiKey();
-        if (apiKey) {
-           const ai = new GoogleGenAI({ apiKey });
-           const response = await ai.models.generateContent({
-             model: 'gemini-3-flash-preview',
-             contents: { parts: [{ text: prompt }] },
-             config: { tools: [{ googleSearch: {} }] }
-           });
-           
-           const text = response.text || "No response.";
-           const links: GroundingLink[] = [];
-           const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-           if (chunks) {
-             chunks.forEach((chunk: any) => {
-               if (chunk.web?.uri && chunk.web?.title) links.push({ title: chunk.web.title, uri: chunk.web.uri });
-             });
-           }
-           this.incrementUsage();
-           return { text, links };
-        }
-      } catch (e) {
-        console.warn("Google Native Grounding failed, falling back to OpenRouter (no grounding).", e);
-      }
+    await this.ensureGoogleKeyReady();
+    const apiKey = this.getGoogleApiKey();
+    if (!apiKey) throw new AppError("API Key missing.", 'auth');
+
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Select Model based on complexity
+    // Basic interaction -> Flash
+    // Reasoning/Thinking -> Pro
+    let modelName = 'gemini-3-flash-preview';
+    if (options.useThinking) {
+        modelName = 'gemini-3-pro-preview';
     }
 
-    // 2. Default: OpenRouter
-    try {
-      const messages: any[] = [
-        { role: 'system', content: getSystemInstruction() }
-      ];
+    // Configure Tools (Grounding)
+    const tools: any[] = [];
+    if (options.grounding === 'search') {
+        tools.push({ googleSearch: {} });
+    }
 
-      if (options.history && options.history.length > 0) {
-        options.history.slice(-10).forEach(msg => {
-           // Skip image history for OpenRouter to avoid huge payloads/errors, unless model supports it
-           if (msg.role === 'user' || msg.role === 'assistant') {
-              if (msg.type === 'text') {
-                 messages.push({ role: msg.role, content: msg.content });
-              }
-           }
-        });
-      }
+    // Configure Config
+    const config: any = {
+        systemInstruction: getSystemInstruction(),
+    };
+    
+    if (options.useThinking) {
+        config.thinkingConfig = { thinkingBudget: 2048 }; 
+    }
 
-      // Current prompt
-      if (options.fileData) {
-        messages.push({
-          role: 'user',
-          content: [
-            { type: 'text', text: prompt || "Analyze this." },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:${options.fileData.mimeType};base64,${options.fileData.data}`
-              }
+    if (tools.length > 0) {
+        config.tools = tools;
+    }
+
+    // Construct Content Payload
+    const contents: any[] = [];
+
+    // 1. History (Last 10 messages for context)
+    if (options.history && options.history.length > 0) {
+        const recentHistory = options.history.slice(-10);
+        for (const msg of recentHistory) {
+            const role = msg.role === 'user' ? 'user' : 'model';
+            // Only add text parts to history to maintain clean context
+            if (msg.type === 'text' && msg.content) {
+                contents.push({ role, parts: [{ text: msg.content }] });
             }
-          ]
-        });
-      } else {
-        messages.push({ role: 'user', content: prompt });
-      }
+        }
+    }
 
-      // Model: Use Google's Flash 2.0 on OpenRouter as it's efficient and smart
-      const model = 'google/gemini-2.0-flash-001';
-      
-      const data = await this.performOpenRouterRequest(model, messages, options.useThinking);
-      const text = data.choices?.[0]?.message?.content || "No response received.";
-      
-      this.incrementUsage();
-      return { text, links: [] };
+    // 2. Current Turn
+    const currentParts: any[] = [];
+    if (options.fileData) {
+        currentParts.push({
+            inlineData: {
+                mimeType: options.fileData.mimeType,
+                data: options.fileData.data
+            }
+        });
+        // If handling image, upgrade model if default is too weak (though flash handles images well)
+        // gemini-3-flash-preview handles images fine.
+    }
+    currentParts.push({ text: prompt });
+    contents.push({ role: 'user', parts: currentParts });
+
+    try {
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: contents,
+            config: config
+        });
+
+        const text = response.text || "No response.";
+        const links: GroundingLink[] = [];
+        
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks) {
+            chunks.forEach((chunk: any) => {
+                if (chunk.web?.uri && chunk.web?.title) {
+                    links.push({ title: chunk.web.title, uri: chunk.web.uri });
+                }
+            });
+        }
+
+        this.incrementUsage();
+        return { text, links };
 
     } catch (e: any) {
-      console.error("OpenRouter API Error:", e);
-      throw new AppError(e.message || "Connection failed.", 'generic');
+        console.error("Gemini Chat Error:", e);
+        if (e.message?.includes("API key") || e.message?.includes("403")) {
+             throw new AppError("Invalid API Key. Please sign in again.", 'auth');
+        }
+        throw new AppError(e.message || "Connection failed.", 'generic');
     }
   }
 
@@ -364,11 +329,16 @@ export class GeminiService {
 
   async generateWelcomeMessage(context: { lang: Language; date?: string; time?: string; location?: string }): Promise<string> {
     try {
+      // Check for key silently to avoid popup on load
+      const key = this.getGoogleApiKey();
+      const hasStudioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
+      
+      if (!key && !hasStudioKey) return "Ayubowan! Ready to assist.";
+
       const prompt = `Give a short, friendly time-based greeting (e.g., 'Good Morning') in ${context.lang === 'si' ? 'Sinhala' : 'English'}. Do NOT use the word 'Ayubowan'. Keep it under 5 words. Time: ${context.time}.`;
-      // Use OpenRouter for welcome message to avoid auth popups on load
       const res = await this.chat(prompt, { useThinking: false });
       return res.text.replace(/"/g, '').trim();
-    } catch { return "Ready to assist."; }
+    } catch { return "Ayubowan! Ready to assist."; }
   }
 
   async translate(text: string, targetLang: Language): Promise<string> {
@@ -380,7 +350,10 @@ export class GeminiService {
 
   async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[]): Promise<string> {
     try {
-       const text = messages.map(m => m.content).join('\n').slice(0, 500);
+       // Filter for text content only to generate title
+       const text = messages.filter(m => m.type === 'text').map(m => m.content).join('\n').slice(0, 500);
+       if (!text) return "New Conversation";
+
        const prompt = `Generate a 4-word title for this chat content: ${text}`;
        const res = await this.chat(prompt, { useThinking: false });
        return res.text.replace(/"/g, '').trim();

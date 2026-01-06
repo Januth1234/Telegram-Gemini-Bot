@@ -22,9 +22,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const handleLoginClick = async () => {
     setIsLoggingIn(true);
     try {
+      // Triggers handleLogin in App.tsx which navigates to 'account'
       await onLogin();
     } catch (e) {
-      console.error("Login failed", e);
+      console.error("Navigation to login failed", e);
     } finally {
       setIsLoggingIn(false);
     }
@@ -71,7 +72,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Main Hero Area */}
         <section className="w-full text-center flex flex-col items-center gap-10 md:gap-12 animate-fade">
           <div className="flex flex-col items-center gap-6 md:gap-8 w-full">
-            <div className="w-16 h-16 md:w-24 md:h-24 bg-cyan-600 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-2xl animate-neural border border-white/10 shrink-0">
+            <div className="w-16 h-16 md:w-24 md:h-24 bg-cyan-600 rounded-[28px] md:rounded-[32px] flex items-center justify-center text-white shadow-2xl animate-neural border border-white/10 shrink-0">
               <i className="fa-solid fa-bolt text-white text-3xl md:text-5xl"></i>
             </div>
             

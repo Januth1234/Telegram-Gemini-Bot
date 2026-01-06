@@ -100,12 +100,8 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async () => {
-    try {
-      await geminiService.loginWithGoogle();
-      refreshUser();
-    } catch (e) {
-      console.error("Login failed", e);
-    }
+    // Navigates user to the Account Settings view where the official Google Sign-In button is rendered.
+    navigate('account');
   };
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
@@ -135,13 +131,12 @@ const App: React.FC = () => {
     }
   };
 
-  const handleUpdateActiveConversation = (messages: ChatMessage[], title?: string, modesUsed?: WorkspaceMode[]) => {
+  const handleUpdateActiveConversation = (title?: string, modesUsed?: WorkspaceMode[]) => {
     if (!activeConversationId) return;
     setConversations(prev => prev.map(c => 
       c.id === activeConversationId 
         ? { 
             ...c, 
-            messages, 
             title: title || c.title, 
             timestamp: new Date(),
             modesUsed: modesUsed || c.modesUsed 
@@ -206,9 +201,14 @@ const App: React.FC = () => {
             onInputChange={setGlobalPrompt}
             messages={activeMessages}
             setMessages={(updater) => {
-              const current = conversations.find(c => c.id === activeConversationId)?.messages || [];
-              const next = typeof updater === 'function' ? updater(current) : updater;
-              handleUpdateActiveConversation(next);
+              if (!activeConversationId) return;
+              setConversations(prev => prev.map(c => {
+                if (c.id === activeConversationId) {
+                  const nextMessages = typeof updater === 'function' ? updater(c.messages) : updater;
+                  return { ...c, messages: nextMessages, timestamp: new Date() };
+                }
+                return c;
+              }));
             }}
             lang={lang}
             conversations={conversations}
@@ -216,10 +216,7 @@ const App: React.FC = () => {
             onNewConv={handleNewConversation}
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
-            onUpdateTitle={(title, modes) => {
-              const current = conversations.find(c => c.id === activeConversationId)?.messages || [];
-              handleUpdateActiveConversation(current, title, modes);
-            }}
+            onUpdateTitle={handleUpdateActiveConversation}
           />
         );
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={refreshUser} />;
