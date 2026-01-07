@@ -117,7 +117,8 @@ export const translations = {
       graphReady: "Graph Visualization Ready",
       solving: "Applying mathematical logic...",
       steps: "Solution Steps",
-      answer: "Final Result"
+      answer: "Final Result",
+      solve: "Solve"
     }
   },
   si: {
@@ -180,7 +181,7 @@ export const translations = {
     creatorRole: "ප්‍රධාන නිර්මාණකරු සහ නිර්මාතෘ",
     creatorTitle: "ව්‍යාපෘති නායක • ඔරින් AI",
     execProfile: "විධායක පැතිකඩ",
-    creatorQuote: "\"ඔරින් AI නියෝජනය කරන්නේ කෘතිම බුද්ධිය සඳහා දේශීය පාලමකි. මගේ මෙහෙවර වන්නේ ලෝක මට්ටමේ කාර්ය සාධනයක් සහිතව ඉංග්‍රීසි සහ සිංහල තර්කනයට සහාය වෙමින් ශ්‍රී ලංකාවට ආවේණික වූ මෙවලම් නිර්මාණය කිරීමයි. මෙම වේදිකාව එම ගමනේ ආරම්භයයි.\"",
+    creatorQuote: "\"ඔරින් AI නියෝජනය කරන්නේ කෘතිම බුද්ධිය සඳහා දේශීය පාලමකි. මගේ මෙහෙවර වන්නේ ලෝක මට්ටමේ කාර්ය සාධනයක් සහිතව ඉංග්‍රීසි සහ සිංහල තර්කනයට සහාය වෙමින් ශ්‍රී ලාංකිකයින්ට ආවේණික වූ මෙවලම් නිර්මාණය කිරීමයි. මෙම වේදිකාව එම ගමනේ ආරම්භයයි.\"",
     footerRights: "JN Productions Global • නිල නිකුතුව 2026",
     pricing: "මිල ගණන්",
     pricingDesc: "සැලසුම් තෝරන්න.",
@@ -237,7 +238,8 @@ export const translations = {
       graphReady: "ප්‍රස්ථාර දර්ශනය සූදානම්",
       solving: "ගණිත තර්කනය යොදමින්...",
       steps: "පියවර",
-      answer: "අවසාන පිළිතුර"
+      answer: "අවසාන පිළිතුර",
+      solve: "විසඳන්න"
     }
   }
 };
