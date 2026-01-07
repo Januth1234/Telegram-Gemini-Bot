@@ -6,6 +6,7 @@ import { translations } from '../translations';
 import VoiceAssistant from './VoiceAssistant';
 import TranslatorMode from './TranslatorMode';
 import GetHelpMode from './GetHelpMode';
+import MathsMode from './MathsMode';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -51,7 +52,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const progressIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp') {
+    if (activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp' && activeTab !== 'maths') {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [activeTab]);
@@ -205,7 +206,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   const currentSuggestions = useMemo(() => {
-    const key = activeTab === 'chat' ? 'chat' : activeTab === 'studio' ? 'studio' : 'vision';
+    const key = activeTab === 'chat' ? 'chat' : activeTab === 'studio' ? 'studio' : activeTab === 'maths' ? 'maths' : 'vision';
     return t.prompts[key as keyof typeof t.prompts] || [];
   }, [activeTab, t.prompts]);
 
@@ -250,7 +251,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <i className="fa-solid fa-clock-rotate-left"></i>
             </button>
             <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-1">
-              {(['chat', 'studio', 'vision', 'voice', 'translator', 'gethelp'] as WorkspaceMode[]).map(tab => (
+              {(['chat', 'maths', 'studio', 'vision', 'voice', 'translator', 'gethelp'] as WorkspaceMode[]).map(tab => (
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}
@@ -258,8 +259,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     activeTab === tab ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-md' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                   }`}
                 >
-                  <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : tab === 'translator' ? 'fa-language' : 'fa-life-ring'} text-[8px] md:text-[9px]`}></i>
-                  <span>{tab === 'chat' ? t.reasoning : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voice : tab === 'translator' ? t.translator : t.getHelp}</span>
+                  <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'maths' ? 'fa-calculator' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : tab === 'translator' ? 'fa-language' : 'fa-life-ring'} text-[8px] md:text-[9px]`}></i>
+                  <span>{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voice : tab === 'translator' ? t.translator : t.getHelp}</span>
                   {(tab === 'voice' || tab === 'translator' || tab === 'gethelp') && (
                     <span className="absolute -top-1 -right-1 px-1 bg-cyan-600 text-white text-[5px] font-black rounded-sm border border-white/20 scale-75 md:scale-100">BETA</span>
                   )}
@@ -287,6 +288,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <TranslatorMode onClose={() => handleTabChange('chat')} lang={lang} />
           ) : activeTab === 'gethelp' ? (
             <GetHelpMode onClose={() => handleTabChange('chat')} lang={lang} />
+          ) : activeTab === 'maths' ? (
+            <MathsMode onClose={() => handleTabChange('chat')} lang={lang} />
           ) : messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center animate-reveal px-4 text-center">
               <div className="w-20 h-20 rounded-[32px] glass-panel flex items-center justify-center text-slate-400 dark:text-slate-600 mb-8 animate-soft-pulse border-slate-200 dark:border-white/10">
@@ -333,7 +336,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
         </div>
 
-        {activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp' && (
+        {activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp' && activeTab !== 'maths' && (
           <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent">
             <div className="max-w-4xl mx-auto">
               <div className="glass-panel p-2 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2">
