@@ -106,11 +106,19 @@ export class GeminiService {
   private getGoogleApiKey(): string | undefined {
     const local = localStorage.getItem('orin_google_key');
     if (local && local.trim().length > 0) return local;
-    return process.env.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+    
+    // Safely check for process.env.API_KEY
+    try {
+      return (window as any).process?.env?.API_KEY || (import.meta as any).env?.VITE_API_KEY;
+    } catch {
+      return undefined;
+    }
   }
 
   private async ensureGoogleKeyReady() {
-    if (this.getGoogleApiKey()) return;
+    const key = this.getGoogleApiKey();
+    if (key) return;
+
     const studio = (window as any).aistudio;
     if (studio) {
       const hasKey = await studio.hasSelectedApiKey();
@@ -118,10 +126,6 @@ export class GeminiService {
         await studio.openSelectKey();
         return;
       }
-    }
-    const key = this.getGoogleApiKey();
-    if (!key) {
-      throw new AppError("Access Denied. Please Sign In with Google.", 'auth');
     }
   }
 
@@ -181,26 +185,42 @@ export class GeminiService {
     await this.ensureGoogleKeyReady();
     const apiKey = this.getGoogleApiKey();
     if (!apiKey) throw new AppError("API Key missing.", 'auth');
+    
     const ai = new GoogleGenAI({ apiKey });
 
-    let modelName = 'gemini-3-flash-preview';
-    if (options.useThinking) modelName = 'gemini-3-pro-preview';
-    const tools: any[] = [];
-    if (options.grounding === 'search') tools.push({ googleSearch: {} });
-    const config: any = { systemInstruction: getSystemInstruction() };
-    if (options.useThinking) config.thinkingConfig = { thinkingBudget: 2048 }; 
-    if (tools.length > 0) config.tools = tools;
-    const contents: any[] = [];
+    // Use Gemini 3 Flash for basic tasks, Pro for thinking
+    const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+    
+    const config: any = { 
+      systemInstruction: getSystemInstruction(),
+      temperature: 0.7,
+    };
+    
+    if (options.useThinking) {
+      config.thinkingConfig = { thinkingBudget: 2048 }; 
+    }
+    
+    if (options.grounding === 'search') {
+      config.tools = [{ googleSearch: {} }];
+    } else if (options.grounding === 'maps') {
+      config.tools = [{ googleMaps: {} }];
+    }
 
+    const contents: any[] = [];
     if (options.history && options.history.length > 0) {
         const recentHistory = options.history.slice(-10);
         for (const msg of recentHistory) {
             const role = msg.role === 'user' ? 'user' : 'model';
-            if (msg.type === 'text' && msg.content) contents.push({ role, parts: [{ text: msg.content }] });
+            if (msg.type === 'text' && msg.content) {
+              contents.push({ role, parts: [{ text: msg.content }] });
+            }
         }
     }
+    
     const currentParts: any[] = [];
-    if (options.fileData) currentParts.push({ inlineData: { mimeType: options.fileData.mimeType, data: options.fileData.data } });
+    if (options.fileData) {
+      currentParts.push({ inlineData: { mimeType: options.fileData.mimeType, data: options.fileData.data } });
+    }
     currentParts.push({ text: prompt });
     contents.push({ role: 'user', parts: currentParts });
 
@@ -211,7 +231,9 @@ export class GeminiService {
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
         if (chunks) {
             chunks.forEach((chunk: any) => {
-                if (chunk.web?.uri && chunk.web?.title) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+                if (chunk.web?.uri && chunk.web?.title) {
+                  links.push({ title: chunk.web.title, uri: chunk.web.uri });
+                }
             });
         }
         this.incrementUsage();
@@ -226,7 +248,9 @@ export class GeminiService {
     try {
       await this.ensureGoogleKeyReady();
       const apiKey = this.getGoogleApiKey();
-      const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+      if (!apiKey) throw new AppError("API Key missing.", 'auth');
+      
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -237,7 +261,9 @@ export class GeminiService {
       }
       throw new Error("Empty image returned.");
     } catch (e: any) {
-      if (e.message?.includes("entity was not found") && (window as any).aistudio) await (window as any).aistudio.openSelectKey();
+      if (e.message?.includes("entity was not found") && (window as any).aistudio) {
+        await (window as any).aistudio.openSelectKey();
+      }
       throw new AppError(e.message || "Image creation failed.", 'generic');
     }
   }
@@ -245,8 +271,7 @@ export class GeminiService {
   async generateWelcomeMessage(context: { lang: Language; date?: string; time?: string; location?: string }): Promise<string> {
     try {
       const key = this.getGoogleApiKey();
-      const hasStudioKey = (window as any).aistudio ? await (window as any).aistudio.hasSelectedApiKey() : false;
-      if (!key && !hasStudioKey) return "Ayubowan! Ready to assist.";
+      if (!key) return "Ayubowan! Ready to assist.";
       const prompt = `Give a short, friendly time-based greeting (e.g., 'Good Morning') in ${context.lang === 'si' ? 'Sinhala' : 'English'}. Do NOT use the word 'Ayubowan'. Keep it under 5 words. Time: ${context.time}.`;
       const res = await this.chat(prompt, { useThinking: false });
       return res.text.replace(/"/g, '').trim();
@@ -267,7 +292,6 @@ export class GeminiService {
        if (textMessages.length === 0 && modesUsed?.includes('translator')) return preferredLang === 'si' ? "භාෂා පරිවර්තනය" : "Live Translation";
        if (textMessages.length === 0) return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat";
        
-       // Strict filtering of greeting keywords
        const filteredContent = textMessages
           .map(m => m.content)
           .join(' ')
@@ -286,7 +310,6 @@ export class GeminiService {
        const res = await this.chat(prompt, { useThinking: false });
        let title = res.text.replace(/"/g, '').replace(/\*\*/g, '').trim();
        
-       // Final safety check to ensure Ayubowan didn't slip in
        title = title.replace(/Ayubowan/gi, '').replace(/ආයුබෝවන්/g, '').trim();
        if (!title) return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat";
        
@@ -297,9 +320,11 @@ export class GeminiService {
   async connectLive(callbacks: any) {
     await this.ensureGoogleKeyReady();
     const apiKey = this.getGoogleApiKey();
-    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+    if (!apiKey) throw new AppError("API Key missing.", 'auth');
+    
+    const ai = new GoogleGenAI({ apiKey });
     return ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],
@@ -314,7 +339,9 @@ export class GeminiService {
   async connectTranslator(callbacks: any, languages: { source: string, target: string }) {
     await this.ensureGoogleKeyReady();
     const apiKey = this.getGoogleApiKey();
-    const ai = new GoogleGenAI({ apiKey: apiKey || process.env.API_KEY });
+    if (!apiKey) throw new AppError("API Key missing.", 'auth');
+    
+    const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = `You are a professional simultaneous interpreter mediating between ${languages.source} and ${languages.target} speakers.
     
     PROTOCOL:
@@ -326,7 +353,7 @@ export class GeminiService {
     6. Response must be immediate. Maintain the speaker's tone.`;
 
     return ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],

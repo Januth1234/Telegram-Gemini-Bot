@@ -13,7 +13,7 @@ interface MathsModeProps {
 interface MathSymbol {
   label: string;
   tex: string;
-  displayTex: string; // Used for rendering the button preview
+  displayTex: string; 
   category: 'Arithmetic' | 'Calculus' | 'Matrices' | 'Variables';
 }
 
@@ -68,17 +68,19 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Update KaTeX preview for the input field to show "real math" as the user types
+  // Integrated real-time KaTeX preview for the input bar
   useEffect(() => {
     if (katexPreviewRef.current && (window as any).katex) {
       try {
-        const cleanInput = input || ' ';
+        const cleanInput = input.trim() || ' ';
         (window as any).katex.render(cleanInput, katexPreviewRef.current, {
           throwOnError: false,
           displayMode: false
         });
       } catch (e) {
-        if (katexPreviewRef.current) katexPreviewRef.current.innerText = input;
+        if (katexPreviewRef.current) {
+          katexPreviewRef.current.innerText = input;
+        }
       }
     }
   }, [input]);
@@ -87,9 +89,9 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
   useEffect(() => {
     if (isDropdownOpen && (window as any).katex) {
       MATH_SYMBOLS.forEach((sym, idx) => {
-        const el = document.getElementById(`sym-preview-${idx}`);
+        const el = document.getElementById(`sym-preview-box-${idx}`);
         if (el) {
-          (window as any).katex.render(sym.displayTex, el, { throwOnError: false, fontSize: 0.9 });
+          (window as any).katex.render(sym.displayTex, el, { throwOnError: false, fontSize: 0.85 });
         }
       });
     }
@@ -138,13 +140,12 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
 
     try {
       const prompt = `Solve this math problem. 
-      If it involves a function (e.g., plot, graph, sin, cos, polynomial), include a JSON block with "graphData" (array of points).
-      If it involves matrices, perform the requested calculation (multiplication, inverse, determinant, etc.) and show step-by-step reasoning.
+      CRITICAL: If the input asks to "plot", "graph", or involves a mathematical function (sin, cos, quadratic, etc.), YOU MUST provide a JSON block at the end containing "graphData" as an array of 100 points across a relevant range. Example: {"graphData": [{"x": -10, "y": 100}, ...]}.
       
       Structure your response:
       1. Step-by-step mathematical explanation using Standard LaTeX notation ($...$).
       2. The final result labeled clearly.
-      3. A JSON block at the end if graphing is relevant.
+      3. A JSON block for graph points if applicable.
       
       Problem: ${input}`;
 
@@ -154,15 +155,12 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
       let cleanText = res.text;
       
       try {
-        const jsonMatch = res.text.match(/```json\s*([\s\S]*?)\s*```/) || res.text.match(/\{[\s\S]*\}/);
+        const jsonMatch = res.text.match(/```json\s*([\s\S]*?)\s*```/) || res.text.match(/\{[\s\S]*"graphData"[\s\S]*\}/);
         if (jsonMatch) {
           const rawJson = jsonMatch[1] || jsonMatch[0];
           const parsed = JSON.parse(rawJson);
           if (parsed.graphData) {
             graphData = parsed.graphData;
-            cleanText = res.text.replace(jsonMatch[0], '').trim();
-          } else if (Array.isArray(parsed)) {
-            graphData = parsed;
             cleanText = res.text.replace(jsonMatch[0], '').trim();
           }
         }
@@ -182,46 +180,52 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
     const svg = d3.select(graphRef.current);
     svg.selectAll("*").remove();
 
-    const margin = { top: 40, right: 40, bottom: 50, left: 60 };
-    const width = graphRef.current.parentElement?.clientWidth || 800;
+    const margin = { top: 40, right: 40, bottom: 40, left: 60 };
+    const width = 800;
     const height = 400;
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
     const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-    const xExtent = d3.extent(data, d => d.x) as [number, number];
-    const yExtent = d3.extent(data, d => d.y) as [number, number];
     
-    const x = d3.scaleLinear().domain([xExtent[0], xExtent[1]]).range([0, innerWidth]);
-    const y = d3.scaleLinear().domain([yExtent[0], yExtent[1]]).range([innerHeight, 0]);
+    const cleanData = data.filter(d => isFinite(d.x) && isFinite(d.y));
+    const xExtent = d3.extent(cleanData, d => d.x) as [number, number];
+    const yExtent = d3.extent(cleanData, d => d.y) as [number, number];
+    
+    const x = d3.scaleLinear().domain(xExtent).range([0, innerWidth]);
+    const y = d3.scaleLinear().domain(yExtent).range([innerHeight, 0]);
 
-    // Grid lines
-    g.append("g").attr("class", "opacity-5 dark:opacity-10").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).tickSize(-innerHeight).tickFormat(() => ""));
-    g.append("g").attr("class", "opacity-5 dark:opacity-10").call(d3.axisLeft(y).tickSize(-innerWidth).tickFormat(() => ""));
+    g.append("g").attr("class", "opacity-5 dark:opacity-[0.08]").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).tickSize(-innerHeight).tickFormat(() => ""));
+    g.append("g").attr("class", "opacity-5 dark:opacity-[0.08]").call(d3.axisLeft(y).tickSize(-innerWidth).tickFormat(() => ""));
     
-    // Axes labels
-    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x)).attr("class", "text-[10px] text-slate-400 font-bold");
-    g.append("g").call(d3.axisLeft(y)).attr("class", "text-[10px] text-slate-400 font-bold");
+    g.append("line").attr("x1", x(0)).attr("y1", 0).attr("x2", x(0)).attr("y2", innerHeight).attr("stroke", "currentColor").attr("stroke-width", 1).attr("class", "opacity-10");
+    g.append("line").attr("x1", 0).attr("y1", y(0)).attr("x2", innerWidth).attr("y2", y(0)).attr("stroke", "currentColor").attr("stroke-width", 1).attr("class", "opacity-10");
+
+    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(10)).attr("class", "text-[10px] text-slate-400 font-black");
+    g.append("g").call(d3.axisLeft(y).ticks(10)).attr("class", "text-[10px] text-slate-400 font-black");
 
     const line = d3.line<{x: number, y: number}>().x(d => x(d.x)).y(d => y(d.y)).curve(d3.curveMonotoneX);
-    
-    g.append("path")
-      .datum(data)
-      .attr("fill", "none")
-      .attr("stroke", "#06b6d4")
-      .attr("stroke-width", 3)
-      .attr("d", line)
-      .attr("class", "drop-shadow-[0_0_8px_rgba(6,182,212,0.3)]");
+    const path = g.append("path").datum(cleanData).attr("fill", "none").attr("stroke", "#06b6d4").attr("stroke-width", 3.5).attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("d", line).attr("class", "drop-shadow-[0_0_12px_rgba(6,182,212,0.4)]");
+
+    const node = path.node();
+    if (node) {
+      const totalLength = (node as any).getTotalLength();
+      path.attr("stroke-dasharray", totalLength + " " + totalLength)
+          .attr("stroke-dashoffset", totalLength)
+          .transition()
+          .duration(1500)
+          .ease(d3.easeCubicOut)
+          .attr("stroke-dashoffset", 0);
+    }
   };
 
   const categories = Array.from(new Set(MATH_SYMBOLS.map(s => s.category)));
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden">
-      {/* Header - Aligned with other modes */}
       <header className="h-16 md:h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-[130]">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-xl transition-transform hover:scale-110">
+          <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-xl">
             <i className="fa-solid fa-calculator text-lg md:text-xl"></i>
           </div>
           <div>
@@ -237,9 +241,8 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
         </button>
       </header>
 
-      {/* Main Scroll Area for Solutions */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-12 relative">
-        <div className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-40">
+        <div className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-48">
           {!solution && !isSolving && !error && (
             <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-8 opacity-20 animate-fade">
                <div className="w-32 h-32 rounded-[48px] border-4 border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center">
@@ -280,7 +283,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
                       
                       <div className="prose prose-slate dark:prose-invert max-w-none">
                          <div 
-                           className="text-slate-800 dark:text-slate-200 leading-relaxed space-y-8 text-base md:text-xl font-medium"
+                           className="text-slate-800 dark:text-slate-200 leading-relaxed space-y-10 text-base md:text-xl font-medium"
                            dangerouslySetInnerHTML={{ __html: solution.text.replace(/\n/g, '<br/>') }}
                            ref={(el) => {
                              if (el && (window as any).renderMathInElement) {
@@ -305,7 +308,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
                               <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.5em]">{t.math.graphReady}</h3>
                            </div>
                         </div>
-                        <div className="w-full bg-slate-100/50 dark:bg-black/40 rounded-[40px] md:rounded-[56px] p-4 md:p-14 border border-black/5 dark:border-white/5 overflow-hidden shadow-inner relative group">
+                        <div className="w-full bg-slate-100/50 dark:bg-black/40 rounded-[40px] md:rounded-[56px] p-4 md:p-10 border border-black/5 dark:border-white/5 overflow-hidden shadow-inner relative group">
                            <svg ref={graphRef} viewBox="0 0 800 400" className="w-full h-auto max-h-[500px]"></svg>
                            <div className="absolute bottom-6 right-8 text-[8px] font-black uppercase tracking-widest text-slate-400 opacity-40">Neural Rendering • D3.js Engine</div>
                         </div>
@@ -317,11 +320,9 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
         </div>
       </div>
 
-      {/* Bottom Input Area - Aligned with App UI Standards */}
-      <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent z-[140]">
+      <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent z-[140]">
         <div className="max-w-4xl mx-auto space-y-6">
           
-          {/* Symbol Toolbar Dropdown */}
           <div className="relative" ref={dropdownRef}>
             {isDropdownOpen && (
               <div className="absolute bottom-full left-0 mb-6 w-full glass-panel rounded-[40px] md:rounded-[48px] border border-black/10 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] z-[150] p-6 md:p-10 animate-scale-in max-h-[50vh] overflow-y-auto custom-scrollbar backdrop-blur-3xl">
@@ -337,7 +338,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
                             className="flex flex-col items-center justify-center gap-3 p-5 bg-slate-50 dark:bg-white/5 rounded-[24px] hover:bg-cyan-600 hover:text-white transition-all group border border-transparent hover:border-cyan-400/30"
                             title={sym.label}
                           >
-                            <div id={`sym-preview-${idx}`} className="text-sm md:text-base transition-transform group-hover:scale-110"></div>
+                            <div id={`sym-preview-box-${idx}`} className="text-sm md:text-base transition-transform group-hover:scale-110"></div>
                             <span className="text-[7px] font-black uppercase truncate w-full text-center opacity-40 group-hover:opacity-100">{sym.label}</span>
                           </button>
                         ))}
@@ -349,61 +350,64 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
             )}
           </div>
 
-          {/* Suggestion Notification */}
-          {suggestion && (
-            <div className="px-8 py-3 bg-amber-500/10 border border-amber-500/20 rounded-full animate-reveal flex items-center gap-4 mx-auto w-fit backdrop-blur-md">
-               <i className="fa-solid fa-lightbulb text-amber-500 text-xs animate-pulse"></i>
-               <p className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest">{suggestion}</p>
-            </div>
-          )}
-
-          {/* Combined Input Field with Real Math Overlay */}
-          <div className="relative">
-            <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl transition-all duration-500 focus-within:ring-8 focus-within:ring-cyan-500/5 relative">
-              
-              {/* Toolbar Toggle Button */}
+          <div className="relative group">
+            <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl transition-all duration-500 focus-within:ring-8 focus-within:ring-cyan-500/5 relative overflow-hidden h-16 md:h-20">
               <button 
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className={`w-12 h-12 md:w-16 md:h-16 rounded-full transition-all flex items-center justify-center shrink-0 border ${isDropdownOpen ? 'bg-cyan-600 text-white border-cyan-500 shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500 border-transparent hover:border-cyan-500/20'}`}
+                className={`w-12 h-12 md:w-16 md:h-16 rounded-full transition-all flex items-center justify-center shrink-0 border z-30 ${isDropdownOpen ? 'bg-cyan-600 text-white border-cyan-500 shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500 border-transparent hover:border-cyan-500/20'}`}
               >
                 <i className={`fa-solid ${isDropdownOpen ? 'fa-keyboard' : 'fa-plus-minus'} text-lg md:text-xl`}></i>
               </button>
 
-              <div className="flex-1 relative h-12 md:h-16 flex items-center overflow-hidden">
-                {/* Real Math Formatting Overlay (KaTeX) */}
+              <div className="flex-1 relative h-full flex items-center">
+                {/* 
+                  DUAL-LAYER INTEGRATION:
+                  Raw LaTeX input on top (transparent), KaTeX render underneath.
+                */}
                 <div 
                   ref={katexPreviewRef} 
-                  className={`absolute inset-0 flex items-center px-4 pointer-events-none text-base md:text-2xl font-bold transition-opacity duration-200 ${input ? 'opacity-100' : 'opacity-0'} dark:text-white text-slate-900 z-10 whitespace-nowrap overflow-hidden`}
+                  className={`absolute inset-0 flex items-center px-4 pointer-events-none text-base md:text-2xl font-black transition-opacity duration-200 ${input ? 'opacity-100' : 'opacity-0'} dark:text-white text-slate-900 z-10 whitespace-nowrap overflow-hidden`}
                 ></div>
 
-                {/* Actual Input - transparent to allow the KaTeX layer to show through */}
                 <input 
                   ref={inputRef}
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && solveMath()}
                   placeholder={input ? "" : t.placeholderMaths}
-                  className={`absolute inset-0 w-full bg-transparent border-none focus:ring-0 text-base md:text-2xl py-4 px-4 font-mono transition-all caret-cyan-500 ${input ? 'text-transparent' : 'dark:text-slate-500 text-slate-400'} placeholder:text-slate-300 dark:placeholder:text-slate-800 z-20`}
+                  className={`absolute inset-0 w-full bg-transparent border-none focus:ring-0 text-base md:text-2xl py-4 px-4 font-mono transition-all caret-cyan-500 z-20 ${input ? 'text-transparent' : 'text-slate-400 dark:text-slate-700'}`}
                 />
               </div>
 
-              {/* Action Button */}
               <button 
                 onClick={solveMath}
                 disabled={isSolving || !input.trim()}
-                className="w-12 h-12 md:w-16 md:h-16 rounded-[24px] md:rounded-[32px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shrink-0"
+                className="px-6 md:px-8 h-12 md:h-16 rounded-[24px] md:rounded-[36px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center gap-3 shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shrink-0 z-30 group/solve"
               >
-                {isSolving ? <i className="fa-solid fa-circle-notch animate-spin text-lg md:text-xl"></i> : <i className="fa-solid fa-bolt-lightning text-lg md:text-xl"></i>}
+                {isSolving ? (
+                  <i className="fa-solid fa-circle-notch animate-spin text-lg md:text-xl"></i>
+                ) : (
+                  <>
+                    <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] hidden sm:inline">{t.math.solve}</span>
+                    <i className="fa-solid fa-bolt-lightning text-sm md:text-base group-hover/solve:rotate-12 transition-transform"></i>
+                  </>
+                )}
               </button>
             </div>
             
-            {/* Live Status Indicator */}
             {input && (
-              <div className="absolute -top-12 left-1/2 -translate-x-1/2 px-4 py-1 bg-cyan-600/10 dark:bg-cyan-400/10 backdrop-blur-md rounded-full border border-cyan-500/20 opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none">
-                 <p className="text-[8px] font-black uppercase tracking-[0.4em] text-cyan-600 dark:text-cyan-400">Real-Time Neural Preview</p>
+              <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-4 py-1 bg-cyan-600/10 dark:bg-cyan-400/10 backdrop-blur-md rounded-full border border-cyan-500/20 opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none">
+                 <p className="text-[8px] font-black uppercase tracking-[0.4em] text-cyan-600 dark:text-cyan-400">Neural Render Overlay Active</p>
               </div>
             )}
           </div>
+
+          {suggestion && (
+            <div className="px-6 py-3 bg-amber-500/10 border border-amber-500/20 rounded-full animate-reveal flex items-center gap-4 mx-auto w-fit backdrop-blur-md">
+               <i className="fa-solid fa-lightbulb text-amber-500 text-xs animate-pulse"></i>
+               <p className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest">{suggestion}</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
