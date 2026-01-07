@@ -206,7 +206,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   const currentSuggestions = useMemo(() => {
-    const key = activeTab === 'chat' ? 'chat' : activeTab === 'studio' ? 'studio' : activeTab === 'maths' ? 'maths' : 'vision';
+    const key = activeTab === 'chat' ? 'chat' : activeTab === 'maths' ? 'maths' : activeTab === 'studio' ? 'studio' : 'vision';
     return t.prompts[key as keyof typeof t.prompts] || [];
   }, [activeTab, t.prompts]);
 
@@ -261,7 +261,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 >
                   <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'maths' ? 'fa-calculator' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : tab === 'translator' ? 'fa-language' : 'fa-life-ring'} text-[8px] md:text-[9px]`}></i>
                   <span>{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voice : tab === 'translator' ? t.translator : t.getHelp}</span>
-                  {(tab === 'voice' || tab === 'translator' || tab === 'gethelp') && (
+                  {(tab === 'voice' || tab === 'translator' || tab === 'gethelp' || tab === 'maths') && (
                     <span className="absolute -top-1 -right-1 px-1 bg-cyan-600 text-white text-[5px] font-black rounded-sm border border-white/20 scale-75 md:scale-100">BETA</span>
                   )}
                 </button>

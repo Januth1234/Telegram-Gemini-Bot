@@ -144,10 +144,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Features Grid - Added Maths */}
         <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
           <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Advanced chat logic" onClick={() => onStartChat(prompt, 'chat')} />
-          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Neural math solver" onClick={() => onStartChat(prompt, 'maths')} />
+          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Neural math solver" onClick={() => onStartChat(prompt, 'maths')} isBeta />
           <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
           <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Visual recognition" onClick={() => onStartChat(prompt, 'vision')} />
-          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} />
+          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} isBeta />
         </section>
 
         {/* Navigation Cards */}
@@ -155,7 +155,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           <NavCard index={0} href="#creator" icon="fa-user-tie" color="orange" title={t.creator} desc={t.aboutCreator} />
           <NavCard index={1} href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} desc={t.pricingDesc} />
           <NavCard index={2} href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} desc="Neural map." />
-          <NavCard index={3} href="#releases" icon="fa-rocket" color="cyan" title={t.releases} desc="Changelogs." />
+          <NavCard index={3} href="#rocket" icon="fa-rocket" color="cyan" title={t.releases} desc="Changelogs." />
           <NavCard index={4} href="#privacy" icon="fa-shield-halved" color="indigo" title={t.privacy} desc="Safety doc." />
           <NavCard index={5} href="#terms" icon="fa-file-contract" color="emerald" title={t.terms} desc="Agreement." />
         </section>
@@ -170,11 +170,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   );
 };
 
-const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void }> = ({ icon, title, desc, index, onClick }) => (
+const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void; isBeta?: boolean }> = ({ icon, title, desc, index, onClick, isBeta }) => (
   <button 
     onClick={onClick}
-    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full"
+    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden"
   >
+    {isBeta && (
+      <div className="absolute top-4 right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
+    )}
     <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
       <i className={`fa-solid ${icon} text-xl md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
     </div>
