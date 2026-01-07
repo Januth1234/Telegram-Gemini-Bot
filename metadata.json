@@ -2,7 +2,8 @@
   "requestFramePermissions": [
     "camera",
     "microphone",
-    "geolocation"
+    "geolocation",
+    "display-capture"
   ],
   "name": "Orin AI",
   "description": ""

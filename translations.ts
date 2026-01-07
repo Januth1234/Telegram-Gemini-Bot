@@ -18,6 +18,8 @@ export const translations = {
     translation: "Translate",
     voice: "Voice",
     voiceBeta: "Voice (Beta)",
+    translator: "Translator",
+    getHelp: "Get Help",
     back: "Back",
     calculating: "Thinking...",
     syncing: "Loading...",
@@ -83,6 +85,26 @@ export const translations = {
       chat: ["Explain math", "Write a story", "Latest news"],
       studio: ["Sunset beach", "Cute cat", "Robot city"],
       vision: ["What is this?", "Read the text", "Describe image"]
+    },
+    transMode: {
+      start: "Start Interpreting",
+      stop: "End Session",
+      listening: "Listening...",
+      autoDetect: "Auto-Detecting Language",
+      sideA: "English",
+      sideB: "Sinhala",
+      instruction: "Place device between speakers"
+    },
+    help: {
+      diagnostic: "Running System Diagnostic...",
+      sharing: "Initializing Actionated Screen Sharing...",
+      accessibility: "Checking Android Accessibility Bridge...",
+      stop: "Stop Session",
+      startSharing: "Start Screen Share",
+      startAccess: "Enable Accessibility Assistance",
+      infoPC: "PC/iPhone: Using Actionated Screen Sharing for visual support.",
+      infoAndroid: "Android: Utilizing Accessibility options for system-wide assistance.",
+      notSupported: "Your browser does not support screen sharing."
     }
   },
   si: {
@@ -103,6 +125,8 @@ export const translations = {
     translation: "පරිවර්තනය",
     voice: "හඬ",
     voiceBeta: "හඬ (Beta)",
+    translator: "පරිවර්තක",
+    getHelp: "උදව් ලබාගන්න",
     back: "ආපසු",
     calculating: "සිතමින් සිටී...",
     syncing: "සම්බන්ධ වෙමින්...",
@@ -120,7 +144,7 @@ export const translations = {
     reasoningMode: "හොඳින් සිතීම",
     search: "අන්තර්ජාලය",
     maps: "සිතියම්",
-    none: "සාමාන්‍ය",
+    none: "සාමාන්්‍ය",
     loginDesc: "ඔබගේ දත්ත සුරක්ෂිතව තබා ගැනීමට සම්බන්ධ වන්න.",
     protocol: "විස්තර",
     light: "දිවා",
@@ -145,7 +169,7 @@ export const translations = {
     footerRights: "JN Productions Global • නිල නිකුතුව 2026",
     pricing: "මිල ගණන්",
     pricingDesc: "සැලසුම් තෝරන්න.",
-    starterPlan: "සාමාන්‍ය",
+    starterPlan: "සාමාන්්‍ය",
     proPlan: "ප්‍රෝ",
     elitePlan: "විශේෂ",
     lkr: "රු.",
@@ -168,7 +192,26 @@ export const translations = {
       chat: ["ගණිතය කියා දෙන්න", "කතාවක් ලියන්න", "අලුත්ම පුවත්"],
       studio: ["ලස්සන වෙරළක්", "හුරතල් පූසෙක්", "අනාගත නගරයක්"],
       vision: ["මොකක්ද මේ?", "අකුරු කියවන්න", "විස්තර කරන්න"]
+    },
+    transMode: {
+      start: "පරිවර්තනය අරඹන්න",
+      stop: "සැසිය අවසන් කරන්න",
+      listening: "සවන් දෙමින්...",
+      autoDetect: "භාෂාව හඳුනා ගනිමින්",
+      sideA: "ඉංග්‍රීසි",
+      sideB: "සිංහල",
+      instruction: "දෙදෙනා මැදින් තබන්න"
+    },
+    help: {
+      diagnostic: "පද්ධතිය පරීක්ෂා කරමින්...",
+      sharing: "තිරය බෙදාගැනීම සූදානම් කරමින්...",
+      accessibility: "Android Accessibility සම්බන්ධතාවය පරීක්ෂා කරමින්...",
+      stop: "අවසන් කරන්න",
+      startSharing: "තිරය බෙදාගැනීම අරඹන්න",
+      startAccess: "Accessibility සහාය සක්‍රීය කරන්න",
+      infoPC: "PC/iPhone: දෘශ්‍ය සහාය සඳහා Actionated Screen Sharing භාවිතා වේ.",
+      infoAndroid: "Android: පද්ධතිය පුරා සහාය සඳහා Accessibility විකල්ප භාවිතා වේ.",
+      notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි."
     }
   }
 };
-    
