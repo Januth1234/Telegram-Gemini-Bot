@@ -53,6 +53,11 @@ export const translations = {
     stepOutput: "Answer",
     creator: "Creator",
     aboutCreator: "About Januth",
+    creatorRole: "Chief Architect & Founder",
+    creatorTitle: "Project Lead • Orin AI",
+    execProfile: "Executive Profile",
+    creatorQuote: "\"Orin AI represents a localized bridge to artificial intelligence. My mission is to build tools that feel native to Sri Lanka, supporting both English and Sinhala logic with world-class performance. This platform is the start of that journey.\"",
+    footerRights: "JN Productions Global • Official Release 2026",
     pricing: "Plans",
     pricingDesc: "Choose your plan.",
     starterPlan: "Basic",
@@ -133,6 +138,11 @@ export const translations = {
     stepOutput: "පිළිතුර",
     creator: "නිර්මාණය",
     aboutCreator: "නිර්මාතෘ ගැන",
+    creatorRole: "ප්‍රධාන නිර්මාණකරු සහ නිර්මාතෘ",
+    creatorTitle: "ව්‍යාපෘති නායක • ඔරින් AI",
+    execProfile: "විධායක පැතිකඩ",
+    creatorQuote: "\"ඔරින් AI නියෝජනය කරන්නේ කෘතිම බුද්ධිය සඳහා දේශීය පාලමකි. මගේ මෙහෙවර වන්නේ ලෝක මට්ටමේ කාර්ය සාධනයක් සහිතව ඉංග්‍රීසි සහ සිංහල තර්කනයට සහාය වෙමින් ශ්‍රී ලංකාවට ආවේණික වූ මෙවලම් නිර්මාණය කිරීමයි. මෙම වේදිකාව එම ගමනේ ආරම්භයයි.\"",
+    footerRights: "JN Productions Global • නිල නිකුතුව 2026",
     pricing: "මිල ගණන්",
     pricingDesc: "සැලසුම් තෝරන්න.",
     starterPlan: "සාමාන්‍ය",
@@ -161,3 +171,4 @@ export const translations = {
     }
   }
 };
+    

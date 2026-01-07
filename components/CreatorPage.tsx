@@ -20,7 +20,7 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
           </div>
           <div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.creator}</h2>
-            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">Chief Architect & Founder</p>
+            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">{t.creatorRole}</p>
           </div>
         </div>
         <button 
@@ -49,14 +49,14 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
 
              <div className="space-y-2 opacity-0 animate-reveal">
                 <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Januth Nimnal</h1>
-                <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em]">Project Lead • Orin AI</p>
+                <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em]">{t.creatorTitle}</p>
              </div>
           </div>
 
           <div className="glass-panel p-8 md:p-12 rounded-[48px] border border-black/5 dark:border-white/5 space-y-8 animate-reveal" style={{ animationDelay: '0.2s' }}>
-             <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] border-b border-black/5 dark:border-white/5 pb-4">Executive Profile</h3>
-             <p className="text-sm md:text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium italic">
-                "Orin AI represents a localized bridge to artificial intelligence. My mission is to build tools that feel native to Sri Lanka, supporting both English and Sinhala logic with world-class performance. This platform is the start of that journey."
+             <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] border-b border-black/5 dark:border-white/5 pb-4">{t.execProfile}</h3>
+             <p className={`text-sm md:text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium italic ${lang === 'si' ? 'sinhala-text' : ''}`}>
+                {t.creatorQuote}
              </p>
           </div>
 
@@ -68,7 +68,7 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
 
           <footer className="pt-20 pb-12 text-center opacity-30">
              <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 dark:text-slate-400">
-               JN Productions Global • Official Release 2026
+               {t.footerRights}
              </p>
           </footer>
         </div>
@@ -85,3 +85,4 @@ const SocialLink: React.FC<{ href: string; icon: string; label: string; color: s
 );
 
 export default CreatorPage;
+    
