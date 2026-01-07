@@ -9,13 +9,18 @@ interface ReleasesPageProps {
   lang: Language;
 }
 
+// Extends CodeSnapshot to include Sinhala summary
+interface LocalCodeSnapshot extends CodeSnapshot {
+  bodySi?: string;
+}
+
 const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
-  const [updates, setUpdates] = useState<CodeSnapshot[]>([]);
+  const [updates, setUpdates] = useState<LocalCodeSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Expanded official platform logs to show rapid development
-  const officialUpdates: CodeSnapshot[] = [
+  // Expanded official platform logs with Sinhala summaries
+  const officialUpdates: LocalCodeSnapshot[] = [
     {
       version: "4.5.0",
       date: "January 20, 2026",
@@ -26,6 +31,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Bilingual memory optimization"
       ],
       body: "Major synchronization update. Orin now maintains perfect temporal awareness across all reasoning chains.",
+      bodySi: "ප්‍රධාන කාල-සමමුහුර්තකරණ යාවත්කාලීන කිරීම. ඔරින් දැන් සියලු තර්ක දාමයන් හරහා පරිපූර්ණ කාලීන අවබෝධයක් පවත්වා ගනී.",
       htmlUrl: "#"
     },
     {
@@ -37,6 +43,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Sinhala Noto Sans rendering fix"
       ],
       body: "Iterative stabilization of the vision pipeline and typography refinements for better accessibility.",
+      bodySi: "දෘශ්‍ය කියවීමේ (OCR) හැකියාවන් වැඩි දියුණු කිරීම සහ සිංහල අකුරු දර්ශනය වීමේ දෝෂ නිවැරදි කිරීම.",
       htmlUrl: "#"
     },
     {
@@ -48,6 +55,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Multi-speaker TTS (Beta)"
       ],
       body: "A new way to interact. Version 4.4.0 brings the Voice module to the main workspace as an experimental feature.",
+      bodySi: "හඬ මොඩියුලය (Voice Module) පද්ධතියට එක් කිරීම. දැන් ඔබට ඔරින් සමඟ කතා කළ හැක.",
       htmlUrl: "#"
     },
     {
@@ -59,6 +67,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Performance boost for thinking mode"
       ],
       body: "Enhanced the way Orin navigates the web for factual verification, providing clearer knowledge sources.",
+      bodySi: "තොරතුරු තහවුරු කර ගැනීමේ හැකියාව වැඩි දියුණු කිරීම සහ මූලාශ්‍ර පෙන්වීමේ ක්‍රමවේදය යාවත්කාලීන කිරීම.",
       htmlUrl: "#"
     },
     {
@@ -70,6 +79,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Style transfer optimizations"
       ],
       body: "The Studio gets a massive upgrade with 4K generation capabilities for Pro users.",
+      bodySi: "4K ගුණාත්මක භාවයෙන් රූප නිර්මාණය කිරීමේ හැකියාව Studio වෙත එක් කිරීම.",
       htmlUrl: "#"
     },
     {
@@ -81,6 +91,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Hardware-accelerated animations"
       ],
       body: "Visualizing the 'how'. Users can now see the internal logic steps of the AI's reasoning process.",
+      bodySi: "AI ක්‍රියා කරන ආකාරය පෙන්වන 'Logic Flow' දර්ශනය හඳුන්වා දීම.",
       htmlUrl: "#"
     },
     {
@@ -92,6 +103,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Cross-device sync protocol"
       ],
       body: "Your workspace now follows you. All conversations are securely synced with your Puter instance.",
+      bodySi: "ඔබගේ සංවාද දත්ත Puter Cloud හරහා ස්වයංක්‍රීයව සුරැකීමේ පහසුකම.",
       htmlUrl: "#"
     },
     {
@@ -103,6 +115,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Contextual greeting intelligence"
       ],
       body: "Refining the 'From a Sri Lankan to Sri Lankans' experience with better native phrasing.",
+      bodySi: "සිංහල භාෂා පරිවර්තනය සහ දේශීය ව්‍යවහාරයන් තේරුම් ගැනීමේ හැකියාව වැඩි දියුණු කිරීම.",
       htmlUrl: "#"
     },
     {
@@ -114,6 +127,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Pagination for older memories"
       ],
       body: "Complete UI overhaul for the Workspace to allow better management of many conversations.",
+      bodySi: "වැඩ අවකාශයේ (Workspace) නව මුහුණුවර සහ ඉතිහාසය (History) කළමනාකරණය කිරීමේ පහසුකම්.",
       htmlUrl: "#"
     },
     {
@@ -125,6 +139,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Neural core safety filtering"
       ],
       body: "Stabilizing the core multimodal features after the initial 4.0 launch.",
+      bodySi: "මූලික ආරක්ෂක පද්ධති සහ ද්විභාෂා සෙවුම් හැකියාවන් ස්ථායි කිරීම.",
       htmlUrl: "#"
     },
     {
@@ -137,6 +152,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
         "Foundational Studio Synthesis"
       ],
       body: "The genesis of the Orin platform. A unified workspace built specifically for the needs of Sri Lankan professionals.",
+      bodySi: "ඔරින් AI වේදිකාවේ මංගල එළිදැක්වීම. ශ්‍රී ලාංකික වෘත්තිකයන් සඳහාම නිර්මාණය වූ විශේෂිත AI පද්ධතිය.",
       htmlUrl: "#"
     }
   ];
@@ -207,8 +223,8 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
                     </div>
 
                     <div className="pt-8 border-t border-black/5 dark:border-white/5">
-                      <p className="text-sm leading-relaxed text-slate-500 italic">
-                        "{update.body}"
+                      <p className={`text-sm leading-relaxed text-slate-500 italic ${lang === 'si' ? 'sinhala-text' : ''}`}>
+                        {lang === 'si' && update.bodySi ? `"${update.bodySi}"` : `"${update.body}"`}
                       </p>
                       {update.htmlUrl !== "#" && (
                         <div className="mt-8 flex justify-end">
@@ -239,3 +255,4 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
 };
 
 export default ReleasesPage;
+    

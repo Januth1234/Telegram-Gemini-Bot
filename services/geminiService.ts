@@ -348,16 +348,25 @@ export class GeminiService {
     return result.text;
   }
 
-  async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[]): Promise<string> {
+  async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[], preferredLang: Language = 'en'): Promise<string> {
     try {
        // Filter for text content only to generate title
-       const text = messages.filter(m => m.type === 'text').map(m => m.content).join('\n').slice(0, 500);
-       if (!text) return "New Conversation";
+       const textMessages = messages.filter(m => m.type === 'text');
+       if (textMessages.length === 0 && modesUsed?.includes('studio')) return preferredLang === 'si' ? "නිර්මාණාත්මක සැසිය" : "Creative Session";
+       if (textMessages.length === 0) return preferredLang === 'si' ? "නව සංවාදය" : "New Conversation";
 
-       const prompt = `Generate a 4-word title for this chat content: ${text}`;
+       const text = textMessages.map(m => m.content).join('\n').slice(0, 500);
+       
+       // Detect if the conversation is predominantly Sinhala characters
+       // Range: \u0D80-\u0DFF covers Sinhala
+       const hasSinhala = /[\u0D80-\u0DFF]/.test(text);
+       
+       const targetLang = hasSinhala ? 'Sinhala' : (preferredLang === 'si' ? 'Sinhala' : 'English');
+
+       const prompt = `Generate a very short (3-5 words) title for this conversation context. Output ONLY the title in ${targetLang}. Do NOT use quotation marks.\n\nContext: ${text}`;
        const res = await this.chat(prompt, { useThinking: false });
-       return res.text.replace(/"/g, '').trim();
-    } catch { return "New Chat"; }
+       return res.text.replace(/"/g, '').replace(/\*\*/g, '').trim();
+    } catch { return preferredLang === 'si' ? "නව සංවාදය" : "New Chat"; }
   }
 
   /**
@@ -385,3 +394,4 @@ export class GeminiService {
 }
 
 export const geminiService = new GeminiService();
+    

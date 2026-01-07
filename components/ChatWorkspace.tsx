@@ -95,7 +95,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         const studioMsg: ChatMessage = { id: Date.now().toString(), role: 'assistant', content: lang === 'si' ? "නිර්මාණය අවසන්." : "Synthesis complete.", imageUrl: url, timestamp: new Date(), type: 'image' };
         setMessages(prev => [...prev, studioMsg]);
         handleInputChange('');
-        const title = await geminiService.generateTitle([studioMsg], Array.from(currentModes));
+        const title = await geminiService.generateTitle([studioMsg], Array.from(currentModes), lang);
         onUpdateTitle(title, Array.from(currentModes));
       } catch (e: any) {
         if (e instanceof AppError && e.type === 'auth') {
@@ -134,7 +134,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       setMessages(prev => [...prev, assistantMsg]);
       
       if (messages.length < 4) {
-        const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], Array.from(currentModes));
+        // Pass current lang to ensure title is generated in the correct language
+        const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], Array.from(currentModes), lang);
         onUpdateTitle(title, Array.from(currentModes));
       }
     } catch (e: any) {
@@ -197,7 +198,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 className={`w-full text-left p-3.5 rounded-2xl transition-all flex flex-col gap-0.5 border border-transparent ${activeConvId === conv.id ? 'bg-cyan-600/10 border-cyan-600/20' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
               >
                 <div className="flex items-center gap-1.5 overflow-hidden">
-                  <span className={`text-[10px] font-black truncate max-w-[160px] ${activeConvId === conv.id ? 'text-cyan-600' : 'text-slate-700 dark:text-slate-300'}`}>
+                  <span className={`text-[10px] font-black truncate max-w-[160px] ${activeConvId === conv.id ? 'text-cyan-600' : 'text-slate-700 dark:text-slate-300'} ${isSinhala(conv.title) ? 'sinhala-text' : ''}`}>
                     {conv.title}
                   </span>
                 </div>
@@ -264,7 +265,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 mb-8">{activeTab === 'chat' ? t.reasoning : activeTab === 'studio' ? t.creative : t.vision}</p>
               <div className="flex flex-wrap justify-center gap-2 max-w-md">
                  {currentSuggestions.map(p => (
-                   <button key={p} onClick={() => { handleInputChange(p); }} className="px-3 py-1.5 bg-slate-200/50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg text-[9px] font-bold text-slate-500 hover:text-cyan-600 transition-all">{p}</button>
+                   <button key={p} onClick={() => { handleInputChange(p); }} className={`px-3 py-1.5 bg-slate-200/50 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-lg text-[9px] font-bold text-slate-500 hover:text-cyan-600 transition-all ${lang === 'si' ? 'sinhala-text' : ''}`}>{p}</button>
                  ))}
               </div>
             </div>
@@ -312,7 +313,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <button
                       key={`${activeTab}-${idx}`}
                       onClick={() => handleInputChange(suggestion)}
-                      className="px-3 py-1.5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-full text-[9px] md:text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all whitespace-nowrap shadow-sm active:scale-95"
+                      className={`px-3 py-1.5 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md border border-slate-200 dark:border-white/10 rounded-full text-[9px] md:text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all whitespace-nowrap shadow-sm active:scale-95 ${lang === 'si' ? 'sinhala-text' : ''}`}
                     >
                       {suggestion}
                     </button>
@@ -336,7 +337,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   onChange={e => handleInputChange(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSend()}
                   placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-[13px] md:text-lg py-3 md:py-5 px-1 md:px-3 text-slate-900 dark:text-white font-medium"
+                  className={`flex-1 bg-transparent border-none focus:ring-0 text-[13px] md:text-lg py-3 md:py-5 px-1 md:px-3 text-slate-900 dark:text-white font-medium ${lang === 'si' ? 'sinhala-text' : ''}`}
                 />
                 <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-11 h-11 md:w-16 md:h-16 rounded-xl md:rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-paper-plane text-base md:text-lg"></i></button>
               </div>
@@ -355,3 +356,4 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 };
 
 export default ChatWorkspace;
+    
