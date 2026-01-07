@@ -114,7 +114,7 @@ const App: React.FC = () => {
       const newId = Date.now().toString();
       const newConv: Conversation = {
         id: newId,
-        title: mode === 'voice' ? "Voice Interaction" : "New Conversation",
+        title: lang === 'si' ? "නව පිළිසඳර" : "New Chat",
         messages: [],
         timestamp: new Date(),
         mode: mode,
@@ -159,7 +159,7 @@ const App: React.FC = () => {
     const newId = Date.now().toString();
     const newConv: Conversation = {
       id: newId,
-      title: "New Conversation",
+      title: lang === 'si' ? "නව පිළිසඳර" : "New Chat",
       messages: [],
       timestamp: new Date(),
       mode: 'chat',

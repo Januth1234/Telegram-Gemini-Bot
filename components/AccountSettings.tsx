@@ -14,6 +14,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const t = translations[lang];
   const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
   const [loading, setLoading] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   // Configuration
   const CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
@@ -100,7 +101,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     return () => clearInterval(timer);
   }, [user, handleCallback, CLIENT_ID]);
 
-  const handleSignOut = () => {
+  const confirmSignOut = () => {
     const w = window as any;
     if (w.google?.accounts?.id) {
       w.google.accounts.id.disableAutoSelect();
@@ -108,11 +109,41 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
     geminiService.logout();
     setUser(null);
     onUserUpdate();
+    setShowSignOutConfirm(false);
   };
 
   return (
     <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal h-[100dvh] overflow-hidden">
       
+      {/* Sign Out Confirmation Modal Overlay */}
+      {showSignOutConfirm && (
+        <div className="fixed inset-0 z-[140] bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade">
+          <div className="max-w-sm w-full glass-panel p-8 md:p-10 rounded-[40px] border border-white/10 shadow-2xl space-y-8 animate-scale-in">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl mx-auto flex items-center justify-center text-red-500">
+               <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
+            </div>
+            <div className="text-center space-y-2">
+               <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Confirm Sign Out?</h3>
+               <p className="text-xs font-bold text-slate-500 dark:text-slate-400">Your session tokens will be purged. You will need to sign in again to access pro features.</p>
+            </div>
+            <div className="flex flex-col gap-3">
+               <button 
+                 onClick={confirmSignOut}
+                 className="w-full py-4 bg-red-500 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-red-500/20 active:scale-95 transition-all"
+               >
+                 Sign Out Now
+               </button>
+               <button 
+                 onClick={() => setShowSignOutConfirm(false)}
+                 className="w-full py-4 bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-300 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 dark:hover:bg-white/20 active:scale-95 transition-all"
+               >
+                 Stay Logged In
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Background */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] animate-soft-pulse"></div>
@@ -217,7 +248,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               </div>
 
               <button 
-                onClick={handleSignOut}
+                onClick={() => setShowSignOutConfirm(true)}
                 className="w-full py-5 rounded-[24px] bg-red-500/5 hover:bg-red-500 text-red-500 hover:text-white border border-red-500/10 transition-all duration-300 flex items-center justify-center gap-3 group"
               >
                 <i className="fa-solid fa-power-off text-sm transition-transform group-hover:scale-110"></i>
