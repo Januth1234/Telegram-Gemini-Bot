@@ -20,6 +20,7 @@ export const translations = {
     voiceBeta: "Voice (Beta)",
     translator: "Translator",
     getHelp: "Get Help",
+    maths: "Maths",
     back: "Back",
     calculating: "Thinking...",
     syncing: "Loading...",
@@ -32,6 +33,7 @@ export const translations = {
     placeholderStudio: "Describe the image you want...",
     placeholderVision: "Add an image and ask about it...",
     placeholderVoice: "Talk to Orin...",
+    placeholderMaths: "Enter your math problem...",
     langToggle: "සිංහල",
     themeToggle: "Theme",
     reasoningMode: "Deep Thinking",
@@ -84,7 +86,8 @@ export const translations = {
     prompts: {
       chat: ["Explain math", "Write a story", "Latest news"],
       studio: ["Sunset beach", "Cute cat", "Robot city"],
-      vision: ["What is this?", "Read the text", "Describe image"]
+      vision: ["What is this?", "Read the text", "Describe image"],
+      maths: ["Solve x^2 + 5x + 6 = 0", "Differentiate sin(x)", "Graph y = x^2"]
     },
     transMode: {
       start: "Start Interpreting",
@@ -105,6 +108,16 @@ export const translations = {
       infoPC: "PC/iPhone: Using Actionated Screen Sharing for visual support.",
       infoAndroid: "Android: Utilizing Accessibility options for system-wide assistance.",
       notSupported: "Your browser does not support screen sharing."
+    },
+    math: {
+      title: "Math Solver",
+      subtitle: "Neural Calculation Engine",
+      dropdownLabel: "Functions & Symbols",
+      suggestStandard: "Please use the symbols from the dropdown for better accuracy.",
+      graphReady: "Graph Visualization Ready",
+      solving: "Applying mathematical logic...",
+      steps: "Solution Steps",
+      answer: "Final Result"
     }
   },
   si: {
@@ -127,6 +140,7 @@ export const translations = {
     voiceBeta: "හඬ (Beta)",
     translator: "පරිවර්තක",
     getHelp: "උදව් ලබාගන්න",
+    maths: "ගණිතය",
     back: "ආපසු",
     calculating: "සිතමින් සිටී...",
     syncing: "සම්බන්ධ වෙමින්...",
@@ -139,6 +153,7 @@ export const translations = {
     placeholderStudio: "නිර්මාණය කළ යුතු රූපය පවසන්න...",
     placeholderVision: "ඡායාරූපයක් එක් කරන්න...",
     placeholderVoice: "කතා කරන්න...",
+    placeholderMaths: "ගණිත ගැටලුව ඇතුළත් කරන්න...",
     langToggle: "English",
     themeToggle: "තේමාව",
     reasoningMode: "හොඳින් සිතීම",
@@ -191,7 +206,8 @@ export const translations = {
     prompts: {
       chat: ["ගණිතය කියා දෙන්න", "කතාවක් ලියන්න", "අලුත්ම පුවත්"],
       studio: ["ලස්සන වෙරළක්", "හුරතල් පූසෙක්", "අනාගත නගරයක්"],
-      vision: ["මොකක්ද මේ?", "අකුරු කියවන්න", "විස්තර කරන්න"]
+      vision: ["මොකක්ද මේ?", "අකුරු කියවන්න", "විස්තර කරන්න"],
+      maths: ["x^2 + 5x + 6 = 0 විසඳන්න", "sin(x) අවකලනය කරන්න", "y = x^2 ප්‍රස්ථාරය"]
     },
     transMode: {
       start: "පරිවර්තනය අරඹන්න",
@@ -212,6 +228,16 @@ export const translations = {
       infoPC: "PC/iPhone: දෘශ්‍ය සහාය සඳහා Actionated Screen Sharing භාවිතා වේ.",
       infoAndroid: "Android: පද්ධතිය පුරා සහාය සඳහා Accessibility විකල්ප භාවිතා වේ.",
       notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි."
+    },
+    math: {
+      title: "ගණිත විසඳුම්",
+      subtitle: "නියුරල් ගණනය කිරීමේ පද්ධතිය",
+      dropdownLabel: "සංකේත සහ ශ්‍රිත",
+      suggestStandard: "වඩාත් නිවැරදි ප්‍රතිඵල සඳහා කරුණාකර ලබා දී ඇති සංකේත භාවිතා කරන්න.",
+      graphReady: "ප්‍රස්ථාර දර්ශනය සූදානම්",
+      solving: "ගණිත තර්කනය යොදමින්...",
+      steps: "පියවර",
+      answer: "අවසාන පිළිතුර"
     }
   }
 };

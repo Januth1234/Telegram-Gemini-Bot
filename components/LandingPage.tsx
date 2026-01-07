@@ -141,12 +141,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Features Grid - Reordered: Chat, Creator, Camera, Voice */}
-        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8">
+        {/* Features Grid - Added Maths */}
+        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
           <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Advanced chat logic" onClick={() => onStartChat(prompt, 'chat')} />
-          <FeatureCard index={1} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
-          <FeatureCard index={2} icon="fa-camera" title={t.vision} desc="Visual recognition" onClick={() => onStartChat(prompt, 'vision')} />
-          <FeatureCard index={3} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} />
+          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Neural math solver" onClick={() => onStartChat(prompt, 'maths')} />
+          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
+          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Visual recognition" onClick={() => onStartChat(prompt, 'vision')} />
+          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} />
         </section>
 
         {/* Navigation Cards */}
@@ -172,14 +173,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void }> = ({ icon, title, desc, index, onClick }) => (
   <button 
     onClick={onClick}
-    className="glass-panel p-6 md:p-10 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full"
+    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full"
   >
-    <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
+    <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
       <i className={`fa-solid ${icon} text-xl md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
     </div>
     <div>
       <h4 className="text-xs md:text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
-      <p className="text-[9px] md:text-[11px] text-slate-500 dark:text-slate-400 mt-1 md:mt-2 font-medium leading-relaxed">{desc}</p>
+      <p className="text-[9px] md:text-[10px] text-slate-500 dark:text-slate-400 mt-1 md:mt-2 font-medium leading-relaxed">{desc}</p>
     </div>
   </button>
 );
