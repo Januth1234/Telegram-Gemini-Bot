@@ -14,10 +14,10 @@ export const translations = {
     metrics: "Stats",
     reasoning: "Chat",
     vision: "Camera",
-    creative: "Create", // Renamed from Creator/Studio
+    creative: "Create", 
     translation: "Translate",
     voice: "Voice",
-    voiceBeta: "Voice & Translate",
+    voiceBeta: "Voice", // Renamed
     translator: "Translator",
     getHelp: "Get Help",
     maths: "Maths",
@@ -55,7 +55,7 @@ export const translations = {
     stepTranslate: "Translate",
     stepProcess: "Thinking",
     stepOutput: "Answer",
-    creator: "Author", // Renamed from Creator
+    creator: "Author", 
     aboutCreator: "About Januth",
     creatorRole: "Chief Architect & Founder",
     creatorTitle: "Project Lead • Orin AI",
@@ -142,10 +142,10 @@ export const translations = {
     metrics: "දත්ත",
     reasoning: "පිළිසඳර",
     vision: "කැමරාව",
-    creative: "නිර්මාණය", // Create
+    creative: "නිර්මාණය", 
     translation: "පරිවර්තනය",
     voice: "හඬ",
-    voiceBeta: "හඬ සහ පරිවර්තනය",
+    voiceBeta: "හඬ", // Renamed
     translator: "පරිවර්තක",
     getHelp: "උදව් ලබාගන්න",
     maths: "ගණිතය",
@@ -183,7 +183,7 @@ export const translations = {
     stepTranslate: "පරිවර්තනය",
     stepProcess: "සිතා බැලීම",
     stepOutput: "පිළිතුර",
-    creator: "නිර්මාතෘ", // Author
+    creator: "නිර්මාතෘ", 
     aboutCreator: "නිර්මාතෘ ගැන",
     creatorRole: "ප්‍රධාන නිර්මාණකරු සහ නිර්මාතෘ",
     creatorTitle: "ව්‍යාපෘති නායක • ඔරින් AI",
