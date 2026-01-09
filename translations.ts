@@ -107,9 +107,7 @@ export const translations = {
       startAccess: "Enable Accessibility Assistance",
       infoPC: "PC/iPhone: Using Actionated Screen Sharing for visual support.",
       infoAndroid: "Android: Utilizing Accessibility options for system-wide assistance.",
-      notSupported: "Your browser does not support screen sharing.",
-      placeholder: "Describe the task you need help with...",
-      label: "Support Request"
+      notSupported: "Your browser does not support screen sharing."
     },
     math: {
       title: "Math Solver",
@@ -230,9 +228,7 @@ export const translations = {
       startAccess: "Accessibility සහාය සක්‍රීය කරන්න",
       infoPC: "PC/iPhone: දෘශ්‍ය සහාය සඳහා Actionated Screen Sharing භාවිතා වේ.",
       infoAndroid: "Android: පද්ධතිය පුරා සහාය සඳහා Accessibility විකල්ප භාවිතා වේ.",
-      notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි.",
-      placeholder: "ඔබට සහාය අවශ්‍ය කාර්යය විස්තර කරන්න...",
-      label: "සහාය ඉල්ලීම"
+      notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි."
     },
     math: {
       title: "ගණිත විසඳුම්",
