@@ -66,16 +66,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar bg-transparent flex flex-col items-center overscroll-contain relative z-10">
-      <div className="w-full max-w-6xl px-6 py-12 md:py-32 flex flex-col items-center gap-16 md:gap-24">
+      <div className="w-full max-w-6xl px-6 py-12 md:py-32 flex flex-col items-center gap-12 md:gap-24">
         
         {/* Main Hero Area */}
-        <section className="w-full text-center flex flex-col items-center gap-10 md:gap-12 animate-fade">
+        <section className="w-full text-center flex flex-col items-center gap-8 md:gap-12 animate-fade">
           <div className="flex flex-col items-center gap-6 md:gap-8 w-full">
-            <div className="w-16 h-16 md:w-24 md:h-24 bg-cyan-600 rounded-[28px] md:rounded-[32px] flex items-center justify-center text-white shadow-2xl animate-neural border border-white/10 shrink-0">
-              <i className="fa-solid fa-bolt text-white text-3xl md:text-5xl"></i>
+            <div className="w-20 h-20 md:w-24 md:h-24 bg-cyan-600 rounded-[24px] md:rounded-[32px] flex items-center justify-center text-white shadow-2xl animate-neural border border-white/10 shrink-0">
+              <i className="fa-solid fa-bolt text-white text-4xl md:text-5xl"></i>
             </div>
             
-            <div className="flex flex-col items-center max-w-5xl px-4 space-y-4 md:space-y-6">
+            <div className="flex flex-col items-center max-w-5xl px-2 space-y-4 md:space-y-6">
               {/* Largest: Ayubowan */}
               <h1 className="text-5xl md:text-9xl font-black tracking-tighter text-slate-900 dark:text-white leading-none">
                 {t.welcome}
@@ -85,36 +85,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               <div className="flex flex-col items-center gap-4">
                 <div className="min-h-[1.5rem] md:min-h-[2.5rem] flex items-center justify-center">
                   {contextGreeting ? (
-                    <h2 className="text-base md:text-4xl font-bold text-slate-700 dark:text-slate-300 tracking-tight transition-all duration-1000 animate-reveal">
+                    <h2 className="text-lg md:text-4xl font-bold text-slate-700 dark:text-slate-300 tracking-tight transition-all duration-1000 animate-reveal text-center">
                       {contextGreeting}
                     </h2>
                   ) : (
-                    <div className="w-16 md:w-24 h-1 md:h-2 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
+                    <div className="w-24 md:w-24 h-1 md:h-2 bg-slate-200 dark:bg-slate-800 rounded-full animate-pulse"></div>
                   )}
                 </div>
               </div>
 
               {/* Smallest: Slogan */}
-              <p className="text-slate-500 dark:text-slate-400 font-black tracking-[0.3em] md:tracking-[0.5em] uppercase text-[8px] md:text-xs opacity-60">
+              <p className="text-slate-500 dark:text-slate-400 font-black tracking-[0.3em] md:tracking-[0.5em] uppercase text-[9px] md:text-xs opacity-60">
                 {t.slogan}
               </p>
             </div>
           </div>
 
           <div className="w-full max-w-3xl flex flex-col items-center gap-6">
-            <div className="w-full relative group px-2 z-20">
-              <div className="glass-panel p-1 md:p-2 rounded-[28px] md:rounded-[36px] flex items-center shadow-2xl border border-slate-300 dark:border-slate-800 focus-within:ring-4 md:focus-within:ring-8 focus-within:ring-cyan-500/10 transition-all duration-500">
+            <div className="w-full relative group px-0 md:px-2 z-20">
+              <div className="glass-panel p-1.5 md:p-2 rounded-[28px] md:rounded-[36px] flex items-center shadow-2xl border border-slate-300 dark:border-slate-800 focus-within:ring-4 md:focus-within:ring-8 focus-within:ring-cyan-500/10 transition-all duration-500">
                 <input 
                   type="text" 
                   value={prompt}
                   onChange={(e) => onPromptChange(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
                   placeholder={t.howHelp}
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-4 md:px-8 py-4 md:py-5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 font-medium"
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl px-4 md:px-8 py-4 md:py-5 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 font-medium"
                 />
                 <button 
                   onClick={() => onStartChat(prompt, 'chat')}
-                  className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl ml-1 md:ml-2"
+                  className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-[20px] md:rounded-2xl font-black text-[10px] md:text-sm uppercase tracking-widest hover:scale-[1.02] active:scale-95 transition-all shadow-xl ml-1 md:ml-2"
                 >
                   {t.go}
                 </button>
@@ -125,7 +125,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                <button 
                  onClick={handleLoginClick}
                  disabled={isLoggingIn}
-                 className="flex items-center gap-3 px-6 py-3 rounded-full glass-panel border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all group z-20"
+                 className="flex items-center gap-3 px-6 py-3 rounded-full glass-panel border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all group z-20 shadow-md"
                >
                  {isLoggingIn ? (
                     <i className="fa-solid fa-circle-notch animate-spin text-slate-500"></i>
@@ -140,17 +140,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Features Grid - Added Maths */}
-        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 z-10">
-          <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Advanced chat logic" onClick={() => onStartChat(prompt, 'chat')} />
-          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Neural math solver" onClick={() => onStartChat(prompt, 'maths')} isBeta />
-          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
-          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Visual recognition" onClick={() => onStartChat(prompt, 'vision')} />
-          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Neural voice assistant" onClick={onVoiceOpen} isBeta />
+        {/* Features Grid - Improved spacing for mobile */}
+        <section className="w-full grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 z-10">
+          <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Deep Logic" onClick={() => onStartChat(prompt, 'chat')} />
+          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Solver" onClick={() => onStartChat(prompt, 'maths')} isBeta />
+          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Studio" onClick={() => onStartChat(prompt, 'studio')} />
+          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Vision" onClick={() => onStartChat(prompt, 'vision')} />
+          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Live" onClick={onVoiceOpen} isBeta />
         </section>
 
         {/* Navigation Cards */}
-        <section className="w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6 z-10">
+        <section className="w-full grid grid-cols-3 lg:grid-cols-6 gap-2 md:gap-6 z-10">
           <NavCard index={0} href="#creator" icon="fa-user-tie" color="orange" title={t.creator} desc={t.aboutCreator} />
           <NavCard index={1} href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} desc={t.pricingDesc} />
           <NavCard index={2} href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} desc="Neural map." />
@@ -160,7 +160,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         </section>
 
         {/* Simple Footer */}
-        <footer className="w-full pt-16 md:pt-32 pb-16 md:pb-24 text-center space-y-4 md:space-y-6 opacity-30">
+        <footer className="w-full pt-8 md:pt-32 pb-16 md:pb-24 text-center space-y-4 md:space-y-6 opacity-30">
           <div className="w-8 md:w-12 h-1 bg-slate-300 dark:bg-slate-800 mx-auto rounded-full"></div>
           <p className="text-[8px] md:text-[10px] font-black uppercase tracking-[0.3em] md:tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • Powered by Januth's Neural Bridge</p>
         </footer>
@@ -172,17 +172,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void; isBeta?: boolean }> = ({ icon, title, desc, index, onClick, isBeta }) => (
   <button 
     onClick={onClick}
-    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95"
+    className={`glass-panel p-4 md:p-8 rounded-[24px] md:rounded-[40px] space-y-3 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95 ${index === 4 ? 'col-span-2 md:col-span-1' : ''}`}
   >
     {isBeta && (
-      <div className="absolute top-4 right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
+      <div className="absolute top-3 right-3 md:top-4 md:right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
     )}
-    <div className="w-12 h-12 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
-      <i className={`fa-solid ${icon} text-xl md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
+    <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
+      <i className={`fa-solid ${icon} text-lg md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
     </div>
     <div>
-      <h4 className="text-xs md:text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
-      <p className="text-[9px] md:text-[10px] text-slate-500 dark:text-slate-400 mt-1 md:mt-2 font-medium leading-relaxed">{desc}</p>
+      <h4 className="text-[10px] md:text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
+      <p className="text-[8px] md:text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 md:mt-2 font-medium leading-relaxed">{desc}</p>
     </div>
   </button>
 );
@@ -190,12 +190,12 @@ const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: 
 const NavCard: React.FC<{ href: string; icon: string; title: string; desc: string; color: string; index: number }> = ({ href, icon, title, desc, color, index }) => (
   <a 
     href={href} 
-    className="glass-panel p-4 md:p-8 rounded-[28px] md:rounded-[40px] flex flex-col items-center text-center space-y-2 md:space-y-4 hover:translate-y-[-2px] transition-all group border border-slate-200 dark:border-white/5 active:scale-95"
+    className="glass-panel p-3 md:p-8 rounded-[20px] md:rounded-[40px] flex flex-col items-center text-center space-y-2 md:space-y-4 hover:translate-y-[-2px] transition-all group border border-slate-200 dark:border-white/5 active:scale-95"
   >
-    <div className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-${color}-500/10 flex items-center justify-center text-${color}-600 border border-${color}-500/20`}>
-      <i className={`fa-solid ${icon} text-sm md:text-xl`}></i>
+    <div className={`w-8 h-8 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-${color}-500/10 flex items-center justify-center text-${color}-600 border border-${color}-500/20`}>
+      <i className={`fa-solid ${icon} text-xs md:text-xl`}></i>
     </div>
-    <h3 className="text-[8px] md:text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white leading-tight">{title}</h3>
+    <h3 className="text-[7px] md:text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white leading-tight">{title}</h3>
     <p className="text-[7px] md:text-[9px] text-slate-500 dark:text-slate-400 leading-relaxed font-bold opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 hidden md:block">{desc}</p>
   </a>
 );
