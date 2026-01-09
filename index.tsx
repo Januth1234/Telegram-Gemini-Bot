@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { createRoot } from 'react-dom/client';
+import ReactDOM from 'react-dom/client';
 import App from './App';
 
 const startApp = () => {
@@ -11,7 +11,7 @@ const startApp = () => {
   }
 
   try {
-    const root = createRoot(rootElement);
+    const root = ReactDOM.createRoot(rootElement);
     root.render(
       <React.StrictMode>
         <App />

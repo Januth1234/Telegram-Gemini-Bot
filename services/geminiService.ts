@@ -2,6 +2,17 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 
+declare const puter: any;
+
+// Safe environment access helper
+const getEnvApiKey = () => {
+  try {
+    return process.env.API_KEY;
+  } catch {
+    return "";
+  }
+};
+
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
     super(message);
@@ -41,18 +52,24 @@ export class GeminiService {
   private freeUsageLimit = 200;
 
   constructor() {
-    this.initUser();
+    this.initPuter();
     this.checkAndResetUsage();
   }
 
-  private initUser() {
+  private async initPuter() {
     try {
-      const saved = localStorage.getItem('orin_user');
-      if (saved) {
-        this.currentUser = JSON.parse(saved);
+      if (typeof puter !== 'undefined') {
+        const signedIn = await puter.auth.isSignedIn();
+        if (signedIn) {
+          const user = await puter.auth.getUser();
+          this.updateCurrentUser(user);
+        } else {
+          const saved = localStorage.getItem('orin_user');
+          if (saved) this.currentUser = JSON.parse(saved);
+        }
       }
     } catch (e) {
-      console.warn("User init failed.");
+      console.warn("Puter delayed.");
     }
   }
 
@@ -67,13 +84,22 @@ export class GeminiService {
     }
   }
 
-  private updateCurrentUser(user: UserAccount) {
-    this.currentUser = user;
+  private updateCurrentUser(user: any) {
+    if (!user) return;
+    this.currentUser = {
+      id: user.id || 'anonymous',
+      name: user.name || user.username || 'Friend',
+      email: user.email || `${user.username || user.id}@puter.com`,
+      tier: 'Pro (BYO-Google)',
+      avatar: user.avatar_url,
+      dailyUsage: { text: 0, images: 0, videos: 0 }
+    };
     this.saveUser();
   }
 
-  public setSessionUser(user: UserAccount) {
-    this.updateCurrentUser(user);
+  setSessionUser(user: UserAccount) {
+    this.currentUser = user;
+    this.saveUser();
   }
 
   private saveUser() {
@@ -103,74 +129,35 @@ export class GeminiService {
     return this.getUsageCount() >= this.freeUsageLimit;
   }
 
-  private getGoogleApiKey(): string | undefined {
-    const local = localStorage.getItem('orin_google_key');
-    if (local && local.trim().length > 0) return local;
+  private async getApiKey(): Promise<string> {
+    // 1. Try safe environment access
+    let key = getEnvApiKey() || "";
     
-    // Safely check for process.env.API_KEY
-    try {
-      return (window as any).process?.env?.API_KEY || (import.meta as any).env?.VITE_API_KEY;
-    } catch {
-      return undefined;
+    // 2. Check AI Studio integration if env key is missing
+    if (!key && (window as any).aistudio) {
+        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+        if (hasKey) {
+            key = getEnvApiKey() || "";
+        }
     }
-  }
-
-  private async ensureGoogleKeyReady() {
-    const key = this.getGoogleApiKey();
-    if (key) return;
-
-    const studio = (window as any).aistudio;
-    if (studio) {
-      const hasKey = await studio.hasSelectedApiKey();
-      if (!hasKey) {
-        await studio.openSelectKey();
-        return;
-      }
-    }
+    return key;
   }
 
   async loginWithGoogle(): Promise<UserAccount> {
     try {
-      const studio = (window as any).aistudio;
-      if (studio) {
-        await studio.openSelectKey();
-        const hasKey = await studio.hasSelectedApiKey();
-        if (!hasKey) {
-          throw new Error("Key selection cancelled.");
-        }
-      }
-
-      const newUser: UserAccount = {
-        id: `user-${Date.now()}`,
-        name: 'Orin Member',
-        email: 'member@orin.ai',
-        tier: 'Verified Member',
-        avatar: '',
-        dailyUsage: { text: 0, images: 0, videos: 0 }
-      };
-      
-      this.updateCurrentUser(newUser);
-      return newUser;
-
+      if (typeof puter === 'undefined') throw new Error("System offline.");
+      const user = await puter.auth.signIn();
+      this.updateCurrentUser(user);
+      return this.currentUser!;
     } catch (e: any) {
-      if (e.message && e.message.includes("cancelled")) {
-          throw new AppError("Sign-In Cancelled.", 'auth');
-      }
-      const fallbackUser: UserAccount = {
-        id: `local-${Date.now()}`,
-        name: 'Guest User',
-        email: 'guest@local',
-        tier: 'Basic',
-        dailyUsage: { text: 0, images: 0, videos: 0 }
-      };
-      this.updateCurrentUser(fallbackUser);
-      return fallbackUser;
+      throw new AppError("Sign in failed.", 'auth');
     }
   }
 
   async logout() {
     this.currentUser = null;
     this.saveUser();
+    if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
   async chat(prompt: string, options: { 
@@ -182,75 +169,89 @@ export class GeminiService {
     history?: ChatMessage[];
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in for more.", "limit_reached");
-    await this.ensureGoogleKeyReady();
-    const apiKey = this.getGoogleApiKey();
-    if (!apiKey) throw new AppError("API Key missing.", 'auth');
     
-    const ai = new GoogleGenAI({ apiKey });
+    const count = options.messageCount || 0;
+    const isUserLoggedIn = !!this.currentUser;
+    const usePuterAI = isUserLoggedIn || count >= 2;
 
-    // Use Gemini 3 Flash for basic tasks, Pro for thinking
-    const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-    
-    const config: any = { 
-      systemInstruction: getSystemInstruction(),
-      temperature: 0.7,
-    };
-    
-    if (options.useThinking) {
-      config.thinkingConfig = { thinkingBudget: 2048 }; 
+    if (usePuterAI && typeof puter !== 'undefined') {
+      try {
+        const response = await puter.ai.chat(prompt, {
+           model: 'gemini-flash',
+           system_prompt: getSystemInstruction()
+        });
+        this.incrementUsage();
+        return { text: response.toString(), links: [] };
+      } catch (e) {
+        console.warn("Puter fallback triggered.");
+      }
     }
-    
-    if (options.grounding === 'search') {
-      config.tools = [{ googleSearch: {} }];
-    } else if (options.grounding === 'maps') {
-      config.tools = [{ googleMaps: {} }];
-    }
-
-    const contents: any[] = [];
-    if (options.history && options.history.length > 0) {
-        const recentHistory = options.history.slice(-10);
-        for (const msg of recentHistory) {
-            const role = msg.role === 'user' ? 'user' : 'model';
-            if (msg.type === 'text' && msg.content) {
-              contents.push({ role, parts: [{ text: msg.content }] });
-            }
-        }
-    }
-    
-    const currentParts: any[] = [];
-    if (options.fileData) {
-      currentParts.push({ inlineData: { mimeType: options.fileData.mimeType, data: options.fileData.data } });
-    }
-    currentParts.push({ text: prompt });
-    contents.push({ role: 'user', parts: currentParts });
 
     try {
-        const response = await ai.models.generateContent({ model: modelName, contents: contents, config: config });
-        const text = response.text || "No response.";
-        const links: GroundingLink[] = [];
-        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (chunks) {
-            chunks.forEach((chunk: any) => {
-                if (chunk.web?.uri && chunk.web?.title) {
-                  links.push({ title: chunk.web.title, uri: chunk.web.uri });
-                }
-            });
-        }
-        this.incrementUsage();
-        return { text, links };
+      const key = await this.getApiKey();
+      if (!key) {
+          if ((window as any).aistudio) {
+              await (window as any).aistudio.openSelectKey();
+              // Re-check key after dialog interaction
+              const retryKey = getEnvApiKey();
+              if (!retryKey) throw new AppError("API Key required. Please select a key to continue.", 'auth');
+          } else {
+              throw new AppError("Neural Bridge inactive. Ensure API_KEY is set in your domain's environment variables.", 'auth');
+          }
+      }
+
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
+      
+      let contents: any = [];
+      
+      // Add history if available
+      if (options.history && options.history.length > 0) {
+          const recentHistory = options.history.slice(-10);
+          for (const msg of recentHistory) {
+              const role = msg.role === 'user' ? 'user' : 'model';
+              if (msg.type === 'text' && msg.content) {
+                  contents.push({ role, parts: [{ text: msg.content }] });
+              }
+          }
+      }
+
+      const currentParts: any[] = [];
+      if (options.fileData) {
+          currentParts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
+      }
+      currentParts.push({ text: prompt || "Explain this." });
+      contents.push({ role: 'user', parts: currentParts });
+
+      const config: any = { systemInstruction: getSystemInstruction() };
+      if (options.useThinking) config.thinkingConfig = { thinkingBudget: 32768 };
+      if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
+
+      const response = await ai.models.generateContent({ model: modelName, contents, config });
+      const links: GroundingLink[] = [];
+      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (chunks) {
+        chunks.forEach((chunk: any) => {
+          if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+        });
+      }
+
+      this.incrementUsage();
+      return { text: response.text || "I'm sorry, I couldn't process that.", links };
     } catch (e: any) {
-        if (e.message?.includes("API key") || e.message?.includes("403")) throw new AppError("Invalid API Key. Please sign in again.", 'auth');
-        throw new AppError(e.message || "Connection failed.", 'generic');
+      const errorMsg = e.message || "";
+      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
+        throw new AppError("Neural Bridge connection failed. Verify your API Key configuration.", 'auth');
+      }
+      throw new AppError(errorMsg || "Connection failed.", 'generic');
     }
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
     try {
-      await this.ensureGoogleKeyReady();
-      const apiKey = this.getGoogleApiKey();
-      if (!apiKey) throw new AppError("API Key missing.", 'auth');
-      
-      const ai = new GoogleGenAI({ apiKey });
+      const key = await this.getApiKey();
+      if (!key) throw new AppError("API Key required for Studio mode.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -261,21 +262,19 @@ export class GeminiService {
       }
       throw new Error("Empty image returned.");
     } catch (e: any) {
-      if (e.message?.includes("entity was not found") && (window as any).aistudio) {
-        await (window as any).aistudio.openSelectKey();
-      }
       throw new AppError(e.message || "Image creation failed.", 'generic');
     }
   }
 
   async generateWelcomeMessage(context: { lang: Language; date?: string; time?: string; location?: string }): Promise<string> {
     try {
-      const key = this.getGoogleApiKey();
-      if (!key) return "Ayubowan! Ready to assist.";
-      const prompt = `Give a short, friendly time-based greeting (e.g., 'Good Morning') in ${context.lang === 'si' ? 'Sinhala' : 'English'}. Do NOT use the word 'Ayubowan'. Keep it under 5 words. Time: ${context.time}.`;
-      const res = await this.chat(prompt, { useThinking: false });
-      return res.text.replace(/"/g, '').trim();
-    } catch { return "Ayubowan! Ready to assist."; }
+      if (typeof puter !== 'undefined') {
+        const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
+        const response = await puter.ai.chat(`Give a 4-word greeting in ${targetLang}.`, { model: 'gemini-flash' });
+        return response.toString();
+      }
+      return "Ayubowan!";
+    } catch { return "Ayubowan!"; }
   }
 
   async translate(text: string, targetLang: Language): Promise<string> {
@@ -287,48 +286,30 @@ export class GeminiService {
 
   async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[], preferredLang: Language = 'en'): Promise<string> {
     try {
-       const textMessages = messages.filter(m => m.type === 'text');
-       if (textMessages.length === 0 && modesUsed?.includes('studio')) return preferredLang === 'si' ? "නිර්මාණාත්මක සැසිය" : "Creative Session";
-       if (textMessages.length === 0 && modesUsed?.includes('translator')) return preferredLang === 'si' ? "භාෂා පරිවර්තනය" : "Live Translation";
-       if (textMessages.length === 0) return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat";
-       
-       const filteredContent = textMessages
-          .map(m => m.content)
-          .join(' ')
-          .replace(/Ayubowan/gi, '')
-          .replace(/ආයුබෝවන්/g, '')
-          .replace(/Hello/gi, '')
-          .replace(/Hi/gi, '')
-          .trim()
-          .slice(0, 500);
-
-       if (!filteredContent || filteredContent.length < 5) return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat";
-
-       const hasSinhala = /[\u0D80-\u0DFF]/.test(filteredContent);
-       const targetLang = hasSinhala ? 'Sinhala' : (preferredLang === 'si' ? 'Sinhala' : 'English');
-       const prompt = `Generate a very short (2-4 words) descriptive title for this conversation based on the user's intent. IGNORE all greetings like "Ayubowan". Output ONLY the title in ${targetLang}. Do NOT use quotation marks.\n\nContext: ${filteredContent}`;
-       const res = await this.chat(prompt, { useThinking: false });
-       let title = res.text.replace(/"/g, '').replace(/\*\*/g, '').trim();
-       
-       title = title.replace(/Ayubowan/gi, '').replace(/ආයුබෝවන්/g, '').trim();
-       if (!title) return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat";
-       
-       return title;
-    } catch { return preferredLang === 'si' ? "නව පිළිසඳර" : "New Chat"; }
+      if (typeof puter !== 'undefined') {
+        const text = messages.map(m => m.content).join('\n').slice(0, 500);
+        const prompt = `Title (4 words) for: ${text}. Modes: ${modesUsed?.join(', ')}`;
+        const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
+        return response.toString().replace(/"/g, '').trim();
+      }
+      return "New Chat";
+    } catch { return "New Chat"; }
   }
 
   async connectLive(callbacks: any) {
-    await this.ensureGoogleKeyReady();
-    const apiKey = this.getGoogleApiKey();
-    if (!apiKey) throw new AppError("API Key missing.", 'auth');
-    
-    const ai = new GoogleGenAI({ apiKey });
+    const key = await this.getApiKey();
+    if (!key && (window as any).aistudio) {
+        await (window as any).aistudio.openSelectKey();
+    }
+    const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+        speechConfig: { 
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } 
+        },
         systemInstruction: getSystemInstruction(),
         outputAudioTranscription: {},
         inputAudioTranscription: {},
@@ -337,11 +318,11 @@ export class GeminiService {
   }
 
   async connectTranslator(callbacks: any, languages: { source: string, target: string }) {
-    await this.ensureGoogleKeyReady();
-    const apiKey = this.getGoogleApiKey();
-    if (!apiKey) throw new AppError("API Key missing.", 'auth');
-    
-    const ai = new GoogleGenAI({ apiKey });
+    const key = await this.getApiKey();
+    if (!key && (window as any).aistudio) {
+        await (window as any).aistudio.openSelectKey();
+    }
+    const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     const systemInstruction = `You are a professional simultaneous interpreter mediating between ${languages.source} and ${languages.target} speakers.
     
     PROTOCOL:

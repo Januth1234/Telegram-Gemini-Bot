@@ -8,16 +8,28 @@
     <meta name="google-site-verification" content="Lu-JLRTCralp28H_YoNGHXwgMiI7grchuK-9Qq6rluc" />
     <title>Orin AI - Smart Workspace</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <script src="https://cdn.tailwindcss.com" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     
     <!-- KaTeX for standard math symbols -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 
-    <!-- D3.js and Google GSI -->
-    <script src="https://accounts.google.com/gsi/client" async defer crossorigin="anonymous"></script>
+    <!-- D3.js for graphical math representation -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+    <!-- Nerdamer CAS (Symbolic Math Engine) -->
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Extra.js"></script>
+
+    <!-- MathLive for Visual Equation Editing -->
+    <script src="//unpkg.com/mathlive"></script>
+
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       (function() {
         const theme = localStorage.getItem('orin_theme') || 'dark';
@@ -151,6 +163,30 @@
       .animate-reveal { animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
       .animate-fade { animation: fade 0.5s ease-out forwards; }
       .animate-scale-in { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+      /* MathLive Customization */
+      math-field {
+        width: 100%;
+        background: transparent;
+        font-size: 1.5rem;
+        padding: 1rem;
+        border-radius: 1rem;
+        border: none;
+        outline: none;
+        color: inherit;
+        --keyboard-zindex: 3000;
+      }
+      math-field::part(menu-toggle) {
+        display: none;
+      }
+      math-field:focus-within {
+        outline: none;
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .dark math-field {
+        --caret-color: #fff;
+        color: white;
+      }
     </style>
   <script type="importmap">
 {
@@ -160,10 +196,8 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
-    "react-dom": "https://esm.sh/react-dom@^19.2.3",
-    "react-dom/client": "https://esm.sh/react-dom@^19.2.3/client",
-    "d3": "https://esm.sh/d3@^7.9.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/"
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "d3": "https://esm.sh/d3@^7.9.0"
   }
 }
 </script>

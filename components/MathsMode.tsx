@@ -2,413 +2,548 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { geminiService } from '../services/geminiService';
 import * as d3 from 'd3';
+
+// Nerdamer & MathLive are loaded via index.html
+declare const nerdamer: any;
+
+// Use 'any' type for the custom element tag to bypass JSX.IntrinsicElements check issues
+const MathFieldTag = 'math-field' as any;
 
 interface MathsModeProps {
   onClose: () => void;
   lang: Language;
 }
 
-interface MathSymbol {
+type MathCategory = 'General' | 'Algebra' | 'Calculus' | 'Linear Algebra' | 'Statistics' | 'Physics';
+
+interface MathTool {
   label: string;
-  tex: string;
-  displayTex: string; 
-  category: 'Arithmetic' | 'Calculus' | 'Matrices' | 'Variables';
+  command: string; // Internal command or LaTeX insertion
+  type: 'insert' | 'action'; // Insert symbol OR trigger solve action
+  desc: string;
 }
 
-const MATH_SYMBOLS: MathSymbol[] = [
-  // Arithmetic
-  { label: 'Fraction', tex: '\\frac{}{}', displayTex: '\\frac{a}{b}', category: 'Arithmetic' },
-  { label: 'Square Root', tex: '\\sqrt{}', displayTex: '\\sqrt{x}', category: 'Arithmetic' },
-  { label: 'Exponent', tex: '^{}', displayTex: 'x^{n}', category: 'Arithmetic' },
-  { label: 'Parentheses', tex: '()', displayTex: '(x)', category: 'Arithmetic' },
-  
-  // Matrices
-  { label: '2x2 Matrix', tex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}', displayTex: '\\begin{pmatrix} \\cdot & \\cdot \\\\ \\cdot & \\cdot \\end{pmatrix}', category: 'Matrices' },
-  { label: '3x3 Matrix', tex: '\\begin{pmatrix} a & b & c \\\\ d & e & f \\\\ g & h & i \\end{pmatrix}', displayTex: '\\begin{pmatrix} \\cdot & \\cdot & \\cdot \\\\ \\cdot & \\cdot & \\cdot \\\\ \\cdot & \\cdot & \\cdot \\end{pmatrix}', category: 'Matrices' },
-  { label: 'Determinant', tex: '|A|', displayTex: '|A|', category: 'Matrices' },
-
-  // Calculus
-  { label: 'Integral', tex: '\\int', displayTex: '\\int f(x)', category: 'Calculus' },
-  { label: 'Derivative', tex: '\\frac{d}{dx}', displayTex: '\\frac{d}{dx}', category: 'Calculus' },
-  { label: 'Limit', tex: '\\lim_{x \\to \\infty}', displayTex: '\\lim_{x \\to \\infty}', category: 'Calculus' },
-  { label: 'Summation', tex: '\\sum_{}^{}', displayTex: '\\sum_{i=0}^{n}', category: 'Calculus' },
-
-  // Variables & Symbols
-  { label: 'Infinity', tex: '\\infty', displayTex: '\\infty', category: 'Variables' },
-  { label: 'Pi', tex: '\\pi', displayTex: '\\pi', category: 'Variables' },
-  { label: 'Theta', tex: '\\theta', displayTex: '\\theta', category: 'Variables' },
-];
+// --- Configuration: The Mega Toolbox ---
+const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
+  'General': {
+    icon: 'fa-calculator',
+    tools: [
+      { label: 'Simplify', command: 'simplify', type: 'action', desc: 'Simplify Expression' },
+      { label: 'Evaluate', command: 'evaluate', type: 'action', desc: 'Numeric Value' },
+      { label: 'Fraction', command: '\\frac{\\placeholder}{\\placeholder}', type: 'insert', desc: 'a/b' },
+      { label: 'Sqrt', command: '\\sqrt{\\placeholder}', type: 'insert', desc: 'Square Root' },
+      { label: 'Power', command: '^\\placeholder', type: 'insert', desc: 'x^n' },
+      { label: 'Pi', command: '\\pi', type: 'insert', desc: 'Pi' },
+    ]
+  },
+  'Algebra': {
+    icon: 'fa-x',
+    tools: [
+      { label: 'Solve for x', command: 'solve', type: 'action', desc: 'Find x' },
+      { label: 'Factor', command: 'factor', type: 'action', desc: 'Factor Polynomial' },
+      { label: 'Expand', command: 'expand', type: 'action', desc: 'Expand Brackets' },
+      { label: 'Roots', command: 'roots', type: 'action', desc: 'Find Roots' },
+      { label: 'Log', command: '\\log_{\\placeholder}(\\placeholder)', type: 'insert', desc: 'Logarithm' },
+      { label: 'Ln', command: '\\ln(\\placeholder)', type: 'insert', desc: 'Natural Log' },
+    ]
+  },
+  'Calculus': {
+    icon: 'fa-infinity',
+    tools: [
+      { label: 'Differentiate', command: 'diff', type: 'action', desc: 'd/dx' },
+      { label: 'Integrate', command: 'integrate', type: 'action', desc: 'Integral' },
+      { label: 'Def. Integral', command: 'def_int', type: 'action', desc: 'Area under curve' },
+      { label: 'Limit', command: '\\lim_{x \\to \\infty}', type: 'insert', desc: 'Limit' },
+      { label: 'Sum', command: '\\sum_{n=0}^{\\infty}', type: 'insert', desc: 'Summation' },
+    ]
+  },
+  'Linear Algebra': {
+    icon: 'fa-border-all',
+    tools: [
+      { label: 'Determinant', command: 'determinant', type: 'action', desc: '|A|' },
+      { label: 'Invert', command: 'invert', type: 'action', desc: 'Inverse Matrix' },
+      { label: 'Transpose', command: 'transpose', type: 'action', desc: 'Swap Rows/Cols' },
+      { label: '2x2 Matrix', command: '\\begin{pmatrix}0&0\\\\0&0\\end{pmatrix}', type: 'insert', desc: 'Insert 2x2' },
+      { label: '3x3 Matrix', command: '\\begin{pmatrix}0&0&0\\\\0&0&0\\\\0&0&0\\end{pmatrix}', type: 'insert', desc: 'Insert 3x3' },
+      { label: 'Vector', command: '\\begin{pmatrix}0\\\\0\\\\0\\end{pmatrix}', type: 'insert', desc: 'Column Vector' },
+    ]
+  },
+  'Statistics': {
+    icon: 'fa-chart-bar',
+    tools: [
+      { label: 'Mean', command: 'mean', type: 'action', desc: 'Average' },
+      { label: 'Median', command: 'median', type: 'action', desc: 'Middle Value' },
+      { label: 'Std Dev', command: 'stdev', type: 'action', desc: 'Standard Deviation' },
+      { label: 'Data Set', command: '\\left[1, 2, 3, 4\\right]', type: 'insert', desc: 'List of numbers' },
+    ]
+  },
+  'Physics': {
+    icon: 'fa-atom',
+    tools: [
+      { label: 'kg to lbs', command: 'unit_mass', type: 'action', desc: 'Mass Convert' },
+      { label: 'm to ft', command: 'unit_len', type: 'action', desc: 'Length Convert' },
+      { label: 'C to F', command: 'unit_temp', type: 'action', desc: 'Temp Convert' },
+      { label: 'Force (F=ma)', command: 'F=m*a', type: 'insert', desc: 'Newton II' },
+      { label: 'Kinetic E', command: 'K=0.5*m*v^2', type: 'insert', desc: 'Energy' },
+    ]
+  }
+};
 
 const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
   const t = translations[lang];
-  const [input, setInput] = useState('');
-  const [isSolving, setIsSolving] = useState(false);
-  const [solution, setSolution] = useState<{ text: string; graph: any[] | null } | null>(null);
+  const [activeCat, setActiveCat] = useState<MathCategory>('General');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [solution, setSolution] = useState<{ 
+    inputLatex: string; 
+    resultLatex: string; 
+    steps: string[];
+    decimal?: string;
+    graph?: any[];
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [suggestion, setSuggestion] = useState<string | null>(null);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  
-  const graphRef = useRef<SVGSVGElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const katexPreviewRef = useRef<HTMLDivElement>(null);
 
+  const mfRef = useRef<any>(null);
+  const graphRef = useRef<SVGSVGElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Initialize MathField
   useEffect(() => {
-    if (inputRef.current) inputRef.current.focus();
-    
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    if (mfRef.current) {
+      mfRef.current.smartMode = true;
+      mfRef.current.virtualKeyboardMode = "manual";
+      setTimeout(() => mfRef.current.focus(), 100);
+    }
   }, []);
 
-  // Integrated real-time KaTeX preview for the input bar
+  // Graph Rendering
   useEffect(() => {
-    if (katexPreviewRef.current && (window as any).katex) {
-      try {
-        const cleanInput = input.trim() || ' ';
-        (window as any).katex.render(cleanInput, katexPreviewRef.current, {
-          throwOnError: false,
-          displayMode: false
-        });
-      } catch (e) {
-        if (katexPreviewRef.current) {
-          katexPreviewRef.current.innerText = input;
+    if (solution?.graph && graphRef.current) {
+      renderGraph(solution.graph);
+    }
+  }, [solution]);
+
+  // -- LOGIC ENGINE --
+
+  const LatexParser = {
+    // Helper to find the matching closing brace index starting from a given index
+    findClosingBrace: (str: string, startIndex: number): number => {
+      let depth = 0;
+      for (let i = startIndex; i < str.length; i++) {
+        if (str[i] === '{') depth++;
+        else if (str[i] === '}') {
+          depth--;
+          if (depth === 0) return i;
         }
       }
-    }
-  }, [input]);
+      return -1;
+    },
 
-  // Render previews for each symbol button in the dropdown
-  useEffect(() => {
-    if (isDropdownOpen && (window as any).katex) {
-      MATH_SYMBOLS.forEach((sym, idx) => {
-        const el = document.getElementById(`sym-preview-box-${idx}`);
-        if (el) {
-          (window as any).katex.render(sym.displayTex, el, { throwOnError: false, fontSize: 0.85 });
-        }
-      });
-    }
-  }, [isDropdownOpen]);
+    // Main parse function
+    parse: (latex: string): string => {
+      if (!latex) return '';
+      let clean = latex;
 
-  useEffect(() => {
-    if (solution || error || isSolving) {
-      scrollContainerRef.current?.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior: 'smooth' });
-    }
-  }, [solution, error, isSolving]);
+      // 1. Basic Cleanup (Format removal)
+      clean = clean.replace(/\\left/g, '').replace(/\\right/g, '');
+      clean = clean.replace(/\\,/g, ''); 
+      clean = clean.replace(/\\ /g, '');
 
-  const insertSymbol = (tex: string) => {
-    const start = inputRef.current?.selectionStart || 0;
-    const end = inputRef.current?.selectionEnd || 0;
-    const newVal = input.substring(0, start) + tex + input.substring(end);
-    setInput(newVal);
-    
-    setTimeout(() => {
-      inputRef.current?.focus();
-      const bracePos = tex.indexOf('{}');
-      const matrixPos = tex.indexOf('a'); 
-      if (bracePos !== -1) {
-        const newPos = start + bracePos + 1;
-        inputRef.current?.setSelectionRange(newPos, newPos);
-      } else if (matrixPos !== -1) {
-        const newPos = start + matrixPos;
-        inputRef.current?.setSelectionRange(newPos, newPos + 1);
-      } else {
-        const newPos = start + tex.length;
-        inputRef.current?.setSelectionRange(newPos, newPos);
+      // 2. Matrices: \begin{matrix} ... \end{matrix}
+      // Processed first to preserve internal structure before other replacements
+      if (clean.includes('matrix')) {
+         clean = clean.replace(/\\begin{[pb]?matrix}([\s\S]*?)\\end{[pb]?matrix}/g, (match, content) => {
+            const rows = content.split('\\\\').map(r => {
+               const cols = r.split('&').map(c => LatexParser.parse(c.trim()));
+               return `[${cols.join(',')}]`;
+            });
+            return `matrix(${rows.join(',')})`;
+         });
       }
-    }, 10);
-  };
 
-  const solveMath = async () => {
-    if (!input.trim()) return;
-    setIsSolving(true);
-    setError(null);
-    setSolution(null);
-    setSuggestion(null);
+      // 3. Recursive Command Processing (Fraction, Sqrt)
+      // This handles nested commands like \frac{\frac{1}{2}}{3} correctly
+      const processCommand = (str: string, cmd: string, replaceFn: (args: string[]) => string) => {
+        let result = str;
+        let loops = 0;
+        // Limit iterations to prevent infinite loops on malformed latex
+        while (result.includes(cmd) && loops++ < 50) {
+          const startIdx = result.indexOf(cmd);
+          const args: string[] = [];
+          let currentIdx = startIdx + cmd.length;
+          
+          // Attempt to extract up to 2 arguments
+          for (let i = 0; i < 2; i++) {
+             if (currentIdx < result.length && result[currentIdx] === '{') {
+                const closeIdx = LatexParser.findClosingBrace(result, currentIdx);
+                if (closeIdx !== -1) {
+                  args.push(result.substring(currentIdx + 1, closeIdx));
+                  currentIdx = closeIdx + 1;
+                } else break;
+             } else {
+                break;
+             }
+          }
 
-    const isLikelyPlain = !input.includes('\\') && (input.includes('/') || input.includes('^') || input.toLowerCase().includes('matrix'));
-    if (isLikelyPlain) {
-      setSuggestion(t.math.suggestStandard);
-    }
-
-    try {
-      const prompt = `Solve this math problem. 
-      CRITICAL: If the input asks to "plot", "graph", or involves a mathematical function (sin, cos, quadratic, etc.), YOU MUST provide a JSON block at the end containing "graphData" as an array of 100 points across a relevant range. Example: {"graphData": [{"x": -10, "y": 100}, ...]}.
-      
-      Structure your response:
-      1. Step-by-step mathematical explanation using Standard LaTeX notation ($...$).
-      2. The final result labeled clearly.
-      3. A JSON block for graph points if applicable.
-      
-      Problem: ${input}`;
-
-      const res = await geminiService.chat(prompt, { useThinking: true });
-      
-      let graphData = null;
-      let cleanText = res.text;
-      
-      try {
-        const jsonMatch = res.text.match(/```json\s*([\s\S]*?)\s*```/) || res.text.match(/\{[\s\S]*"graphData"[\s\S]*\}/);
-        if (jsonMatch) {
-          const rawJson = jsonMatch[1] || jsonMatch[0];
-          const parsed = JSON.parse(rawJson);
-          if (parsed.graphData) {
-            graphData = parsed.graphData;
-            cleanText = res.text.replace(jsonMatch[0], '').trim();
+          if (args.length > 0) {
+             const parsedArgs = args.map(a => LatexParser.parse(a));
+             const replacement = replaceFn(parsedArgs);
+             result = result.substring(0, startIdx) + replacement + result.substring(currentIdx);
+          } else {
+             break; // Malformed or no args
           }
         }
+        return result;
+      };
+
+      // Fractions
+      clean = processCommand(clean, '\\frac', args => args.length === 2 ? `(${args[0]})/(${args[1]})` : `(${args[0]})`);
+      
+      // Sqrt
+      clean = processCommand(clean, '\\sqrt', args => `sqrt(${args[0]})`);
+
+      // 4. Superscripts ^{...}
+      while (clean.includes('^{')) {
+        const start = clean.indexOf('^{');
+        const close = LatexParser.findClosingBrace(clean, start + 1);
+        if (close === -1) break;
+        const content = clean.substring(start + 2, close);
+        clean = clean.substring(0, start) + '^(' + LatexParser.parse(content) + ')' + clean.substring(close + 1);
+      }
+
+      // 5. Symbol Mapping
+      clean = clean
+        .replace(/\\sin/g, 'sin')
+        .replace(/\\cos/g, 'cos')
+        .replace(/\\tan/g, 'tan')
+        .replace(/\\csc/g, 'csc')
+        .replace(/\\sec/g, 'sec')
+        .replace(/\\cot/g, 'cot')
+        .replace(/\\arcsin/g, 'asin')
+        .replace(/\\arccos/g, 'acos')
+        .replace(/\\arctan/g, 'atan')
+        .replace(/\\ln/g, 'log')
+        .replace(/\\log/g, 'log10')
+        .replace(/\\pi/g, 'PI')
+        .replace(/\\infty/g, 'Infinity')
+        .replace(/\\cdot/g, '*')
+        .replace(/\\times/g, '*')
+        .replace(/\\div/g, '/')
+        .replace(/{/g, '(').replace(/}/g, ')') // Grouping cleanup
+        .replace(/\\/g, ''); // Remove stray backslashes
+
+      // 6. Implicit Multiplication
+      // 2x -> 2*x
+      clean = clean.replace(/(\d)([a-zA-Z\(])/g, '$1*$2');
+      // )x -> )*x or )( -> )*(
+      clean = clean.replace(/(\))([a-zA-Z0-9\(])/g, '$1*$2');
+
+      return clean;
+    }
+  };
+
+  const handleAction = async (command: string) => {
+    const rawLatex = mfRef.current?.value;
+    if (!rawLatex) return;
+
+    setIsProcessing(true);
+    setError(null);
+    setSolution(null);
+
+    // Simulate "Thinking" delay
+    await new Promise(r => setTimeout(r, 400));
+
+    try {
+      let parsed = LatexParser.parse(rawLatex);
+      let result: any;
+      let decimal: string | undefined;
+      let graphData: any[] | null = null;
+      let steps: string[] = [`Operation: ${command}`];
+
+      // --- ENGINE ROUTING ---
+      if (activeCat === 'Physics' && command.startsWith('unit_')) {
+          // Custom Unit Engine (Requires specialized parsing for numbers)
+          const val = parseFloat(parsed.match(/[\d.]+/)?.[0] || "0");
+          if (isNaN(val)) throw new Error("Please enter a number for conversion.");
+          
+          if (command === 'unit_mass') {
+             result = `${val} kg = ${(val * 2.20462).toFixed(2)} lbs`;
+             steps.push("Formula: kg * 2.20462");
+          } else if (command === 'unit_len') {
+             result = `${val} meters = ${(val * 3.28084).toFixed(2)} feet`;
+             steps.push("Formula: m * 3.28084");
+          } else if (command === 'unit_temp') {
+             result = `${val}°C = ${(val * 9/5 + 32).toFixed(1)}°F`;
+             steps.push("Formula: (C * 9/5) + 32");
+          }
+      } 
+      else if (activeCat === 'Statistics') {
+          // Nerdamer Stats or Custom
+          // Note: Matrix parsing in LatexParser converts [1,2,3] to [1,2,3], which matches what we need
+          // But check if it parsed as a matrix( ) string
+          const cleanStats = parsed.replace('matrix(', '').replace(')', '').replace('[', '').replace(']', '');
+          const numbers = cleanStats.split(',').map(n => parseFloat(n));
+          
+          if (numbers.some(isNaN)) throw new Error("Enter a data set like [1, 2, 3]");
+          
+          if (command === 'mean') {
+             const sum = numbers.reduce((a,b) => a+b, 0);
+             const mean = sum / numbers.length;
+             result = mean.toFixed(4);
+             steps.push(`Sum: ${sum}`, `Count: ${numbers.length}`);
+          } else if (command === 'median') {
+             const sorted = numbers.sort((a,b) => a-b);
+             const mid = Math.floor(sorted.length/2);
+             result = sorted.length % 2 !== 0 ? sorted[mid] : ((sorted[mid-1] + sorted[mid])/2);
+             steps.push(`Sorted: [${sorted.join(', ')}]`);
+          } else if (command === 'stdev') {
+             const mean = numbers.reduce((a,b) => a+b, 0) / numbers.length;
+             const variance = numbers.reduce((a,b) => a + Math.pow(b-mean, 2), 0) / numbers.length;
+             result = Math.sqrt(variance).toFixed(4);
+          }
+      }
+      else {
+          // Main Nerdamer Engine
+          switch (command) {
+              case 'simplify': result = nerdamer(parsed).simplify(); break;
+              case 'evaluate': result = nerdamer(parsed).evaluate(); break;
+              case 'expand': result = nerdamer(parsed).expand(); break;
+              case 'factor': result = nerdamer(parsed).factor(); break;
+              case 'solve': result = nerdamer.solve(parsed, 'x'); break;
+              case 'roots': result = nerdamer.roots(parsed); break;
+              case 'diff': result = nerdamer(`diff(${parsed}, x)`); break;
+              case 'integrate': result = nerdamer(`integrate(${parsed}, x)`); break;
+              case 'def_int': result = nerdamer(`defint(${parsed}, 0, 10)`); steps.push("Assumed range [0, 10]"); break;
+              case 'determinant': result = nerdamer(`determinant(${parsed})`); break;
+              case 'invert': result = nerdamer(`invert(${parsed})`); break;
+              case 'transpose': result = nerdamer(`transpose(${parsed})`); break;
+              default: result = nerdamer(parsed);
+          }
+      }
+
+      // Process Result
+      let resultLatex = "";
+      if (typeof result === 'object' && result.toTeX) resultLatex = result.toTeX();
+      else if (Array.isArray(result)) resultLatex = result.map(r => r.toString()).join(', ');
+      else resultLatex = result.toString();
+
+      // Attempt Decimal
+      try {
+         if (command !== 'solve' && !resultLatex.includes('matrix')) {
+            const d = nerdamer(result).evaluate().text('decimals');
+            if (d !== resultLatex && !d.includes('i') && !d.includes('matrix')) decimal = d;
+         }
       } catch (e) {}
 
-      setSolution({ text: cleanText, graph: graphData });
-      if (graphData) setTimeout(() => renderGraph(graphData), 300);
+      // Attempt Graphing
+      if (['simplify', 'expand', 'factor', 'solve'].includes(command) || activeCat === 'General') {
+          try {
+             // Graph the INPUT expression if solving, or the RESULT if simplifying
+             const exprToGraph = command === 'solve' ? parsed.split('=')[0] : result.toString();
+             const func = nerdamer(exprToGraph).buildFunction(['x']);
+             const points = [];
+             for (let x = -10; x <= 10; x += 0.2) {
+                 try {
+                     const y = func(x);
+                     if (isFinite(y) && Math.abs(y) < 20) points.push({ x, y });
+                 } catch(e){}
+             }
+             if (points.length > 5) graphData = points;
+          } catch (e) {}
+      }
+
+      setSolution({
+          inputLatex: rawLatex,
+          resultLatex,
+          steps,
+          decimal,
+          graph: graphData
+      });
+
     } catch (e: any) {
-      setError(e.message || "Neural calculation interrupted.");
+      console.error(e);
+      setError("Syntax Error. Please check your expression format.");
     } finally {
-      setIsSolving(false);
+      setIsProcessing(false);
+    }
+  };
+
+  const insertSymbol = (cmd: string) => {
+    if (mfRef.current) {
+        mfRef.current.executeCommand(['insert', cmd]);
+        mfRef.current.focus();
     }
   };
 
   const renderGraph = (data: {x: number, y: number}[]) => {
-    if (!graphRef.current || !data.length) return;
-    const svg = d3.select(graphRef.current);
-    svg.selectAll("*").remove();
+      if (!graphRef.current) return;
+      const svg = d3.select(graphRef.current);
+      svg.selectAll("*").remove();
 
-    const margin = { top: 40, right: 40, bottom: 40, left: 60 };
-    const width = 800;
-    const height = 400;
-    const innerWidth = width - margin.left - margin.right;
-    const innerHeight = height - margin.top - margin.bottom;
+      const width = 600; 
+      const height = 300;
+      const margin = {top: 20, right: 20, bottom: 20, left: 40};
+      
+      const xExtent = d3.extent(data, d => d.x) as [number, number];
+      const yExtent = d3.extent(data, d => d.y) as [number, number];
+      
+      const x = d3.scaleLinear().domain(xExtent).range([margin.left, width - margin.right]);
+      const y = d3.scaleLinear().domain(yExtent).range([height - margin.bottom, margin.top]);
 
-    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
-    
-    const cleanData = data.filter(d => isFinite(d.x) && isFinite(d.y));
-    const xExtent = d3.extent(cleanData, d => d.x) as [number, number];
-    const yExtent = d3.extent(cleanData, d => d.y) as [number, number];
-    
-    const x = d3.scaleLinear().domain(xExtent).range([0, innerWidth]);
-    const y = d3.scaleLinear().domain(yExtent).range([innerHeight, 0]);
+      const line = d3.line<{x: number, y: number}>().x(d => x(d.x)).y(d => y(d.y)).curve(d3.curveMonotoneX);
 
-    g.append("g").attr("class", "opacity-5 dark:opacity-[0.08]").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).tickSize(-innerHeight).tickFormat(() => ""));
-    g.append("g").attr("class", "opacity-5 dark:opacity-[0.08]").call(d3.axisLeft(y).tickSize(-innerWidth).tickFormat(() => ""));
-    
-    g.append("line").attr("x1", x(0)).attr("y1", 0).attr("x2", x(0)).attr("y2", innerHeight).attr("stroke", "currentColor").attr("stroke-width", 1).attr("class", "opacity-10");
-    g.append("line").attr("x1", 0).attr("y1", y(0)).attr("x2", innerWidth).attr("y2", y(0)).attr("stroke", "currentColor").attr("stroke-width", 1).attr("class", "opacity-10");
+      // Axes
+      const xAxis = (g: any) => g.attr("transform", `translate(0,${y(0)})`).call(d3.axisBottom(x).ticks(width / 80).tickSizeOuter(0));
+      const yAxis = (g: any) => g.attr("transform", `translate(${x(0)},0)`).call(d3.axisLeft(y).ticks(height / 40));
 
-    g.append("g").attr("transform", `translate(0,${innerHeight})`).call(d3.axisBottom(x).ticks(10)).attr("class", "text-[10px] text-slate-400 font-black");
-    g.append("g").call(d3.axisLeft(y).ticks(10)).attr("class", "text-[10px] text-slate-400 font-black");
+      svg.append("g").call(xAxis).attr("class", "text-slate-400 opacity-50");
+      svg.append("g").call(yAxis).attr("class", "text-slate-400 opacity-50");
 
-    const line = d3.line<{x: number, y: number}>().x(d => x(d.x)).y(d => y(d.y)).curve(d3.curveMonotoneX);
-    const path = g.append("path").datum(cleanData).attr("fill", "none").attr("stroke", "#06b6d4").attr("stroke-width", 3.5).attr("stroke-linejoin", "round").attr("stroke-linecap", "round").attr("d", line).attr("class", "drop-shadow-[0_0_12px_rgba(6,182,212,0.4)]");
-
-    const node = path.node();
-    if (node) {
-      const totalLength = (node as any).getTotalLength();
-      path.attr("stroke-dasharray", totalLength + " " + totalLength)
-          .attr("stroke-dashoffset", totalLength)
-          .transition()
-          .duration(1500)
-          .ease(d3.easeCubicOut)
-          .attr("stroke-dashoffset", 0);
-    }
+      svg.append("path")
+         .datum(data)
+         .attr("fill", "none")
+         .attr("stroke", "#06b6d4")
+         .attr("stroke-width", 2.5)
+         .attr("d", line);
   };
 
-  const categories = Array.from(new Set(MATH_SYMBOLS.map(s => s.category)));
-
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden">
-      <header className="h-16 md:h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-[130]">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 md:w-12 md:h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-xl">
-            <i className="fa-solid fa-calculator text-lg md:text-xl"></i>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.math.title}</h2>
-              <span className="px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[9px] font-black rounded-md uppercase tracking-widest border border-cyan-500/20 animate-pulse">BETA</span>
+    <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden font-sans">
+      {/* Header */}
+      <header className="h-16 flex items-center justify-between px-6 border-b border-black/5 dark:border-white/5 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-50">
+         <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+               <i className="fa-solid fa-square-root-variable"></i>
             </div>
-            <p className="hidden md:block text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] opacity-60">{t.math.subtitle}</p>
-          </div>
-        </div>
-        <button onClick={onClose} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all duration-300">
-          <i className="fa-solid fa-xmark text-lg"></i>
-        </button>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">Orin Math Engine <span className="text-indigo-500">v4.0</span></h2>
+         </div>
+         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors">
+            <i className="fa-solid fa-xmark"></i>
+         </button>
       </header>
 
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-12 relative">
-        <div className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-48">
-          {!solution && !isSolving && !error && (
-            <div className="h-[60vh] flex flex-col items-center justify-center text-center space-y-8 opacity-20 animate-fade">
-               <div className="w-32 h-32 rounded-[48px] border-4 border-dashed border-slate-300 dark:border-slate-800 flex items-center justify-center">
-                  <i className="fa-solid fa-square-root-variable text-6xl"></i>
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+         {/* Sidebar Categories */}
+         <nav className="w-full md:w-64 bg-slate-100 dark:bg-black/20 border-r border-black/5 dark:border-white/5 p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-visible shrink-0 custom-scrollbar">
+            {(Object.keys(CATEGORIES) as MathCategory[]).map(cat => (
+               <button
+                 key={cat}
+                 onClick={() => setActiveCat(cat)}
+                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold uppercase tracking-wide transition-all min-w-max md:w-full ${
+                    activeCat === cat 
+                    ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm border border-black/5 dark:border-white/5' 
+                    : 'text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'
+                 }`}
+               >
+                 <i className={`fa-solid ${CATEGORIES[cat].icon} w-5`}></i>
+                 {cat}
+               </button>
+            ))}
+         </nav>
+
+         {/* Main Workspace */}
+         <main className="flex-1 flex flex-col relative overflow-hidden">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-8">
+               
+               {/* Input Section */}
+               <div className="max-w-4xl mx-auto space-y-4">
+                  <div className="glass-panel rounded-3xl p-1 border border-indigo-500/20 shadow-xl bg-white dark:bg-slate-900">
+                     <MathFieldTag 
+                        ref={mfRef} 
+                        className="w-full text-2xl p-6 bg-transparent outline-none border-none text-slate-900 dark:text-white"
+                        placeholder="Type equation here..."
+                     ></MathFieldTag>
+                  </div>
+                  
+                  {/* Context Toolbar */}
+                  <div className="flex flex-wrap gap-2 animate-reveal">
+                     {CATEGORIES[activeCat].tools.map((tool, i) => (
+                        <button
+                          key={i}
+                          onClick={() => tool.type === 'action' ? handleAction(tool.command) : insertSymbol(tool.command)}
+                          className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all border ${
+                             tool.type === 'action'
+                             ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-500/20'
+                             : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                          }`}
+                          title={tool.desc}
+                        >
+                          {tool.type === 'action' && <i className="fa-solid fa-play mr-2 text-[8px]"></i>}
+                          {tool.label}
+                        </button>
+                     ))}
+                  </div>
                </div>
-               <div className="space-y-3">
-                 <p className="text-[14px] font-black uppercase tracking-[0.6em]">Neural Logic Gateway</p>
-                 <p className="text-[10px] font-bold uppercase tracking-widest">Awaiting mathematical stream</p>
-               </div>
-            </div>
-          )}
 
-          {isSolving && (
-            <div className="flex flex-col items-center justify-center py-24 gap-8 animate-reveal">
-               <div className="relative">
-                 <div className="w-24 h-24 border-4 border-cyan-500/10 rounded-full animate-soft-pulse"></div>
-                 <div className="absolute inset-0 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
-               </div>
-               <p className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-600 animate-pulse">{t.math.solving}</p>
-            </div>
-          )}
+               {/* Processing State */}
+               {isProcessing && (
+                  <div className="flex flex-col items-center justify-center py-12 animate-in fade-in">
+                     <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-indigo-500">Computing...</p>
+                  </div>
+               )}
 
-          {error && (
-             <div className="px-8 py-5 bg-red-500/10 border border-red-500/20 rounded-[32px] animate-reveal flex items-center gap-6 text-red-500 shadow-sm">
-                <i className="fa-solid fa-circle-exclamation text-lg"></i>
-                <p className="text-[11px] font-black uppercase tracking-widest">{error}</p>
-             </div>
-          )}
+               {/* Error State */}
+               {error && (
+                  <div className="max-w-2xl mx-auto p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 animate-bounce-subtle">
+                     <i className="fa-solid fa-triangle-exclamation"></i>
+                     <span className="text-xs font-bold">{error}</span>
+                  </div>
+               )}
 
-          {solution && (
-             <div className="space-y-12 animate-reveal">
-                <div className="glass-panel p-8 md:p-16 rounded-[48px] md:rounded-[64px] border border-black/5 dark:border-white/5 shadow-sm space-y-14 bg-white/60 dark:bg-slate-900/60 backdrop-blur-3xl">
-                   <div className="space-y-10">
-                      <div className="flex items-center gap-4">
-                         <div className="w-2 h-8 bg-cyan-600 rounded-full shadow-[0_0_15px_rgba(6,182,212,0.4)]"></div>
-                         <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.5em]">{t.math.steps}</h3>
-                      </div>
-                      
-                      <div className="prose prose-slate dark:prose-invert max-w-none">
-                         <div 
-                           className="text-slate-800 dark:text-slate-200 leading-relaxed space-y-10 text-base md:text-xl font-medium"
-                           dangerouslySetInnerHTML={{ __html: solution.text.replace(/\n/g, '<br/>') }}
-                           ref={(el) => {
-                             if (el && (window as any).renderMathInElement) {
-                               (window as any).renderMathInElement(el, {
-                                 delimiters: [
-                                   {left: '$$', right: '$$', display: true},
-                                   {left: '$', right: '$', display: false}
-                                 ],
-                                 throwOnError: false
-                               });
-                             }
-                           }}
-                         />
-                      </div>
-                   </div>
-
-                   {solution.graph && (
-                     <div className="pt-16 border-t border-black/5 dark:border-white/5 space-y-10 animate-reveal">
-                        <div className="flex items-center justify-between px-4">
-                           <div className="flex items-center gap-4">
-                              <div className="w-2 h-8 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.4)]"></div>
-                              <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.5em]">{t.math.graphReady}</h3>
-                           </div>
+               {/* Solution Output */}
+               {solution && !isProcessing && (
+                  <div className="max-w-4xl mx-auto space-y-8 animate-reveal pb-24">
+                     
+                     {/* Result Card */}
+                     <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-900/60 shadow-xl space-y-6">
+                        <div className="flex items-center gap-3 border-b border-black/5 dark:border-white/5 pb-4">
+                           <div className="w-2 h-8 bg-emerald-500 rounded-full"></div>
+                           <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Result</h3>
                         </div>
-                        <div className="w-full bg-slate-100/50 dark:bg-black/40 rounded-[40px] md:rounded-[56px] p-4 md:p-10 border border-black/5 dark:border-white/5 overflow-hidden shadow-inner relative group">
-                           <svg ref={graphRef} viewBox="0 0 800 400" className="w-full h-auto max-h-[500px]"></svg>
-                           <div className="absolute bottom-6 right-8 text-[8px] font-black uppercase tracking-widest text-slate-400 opacity-40">Neural Rendering • D3.js Engine</div>
+                        
+                        <div className="text-center py-4">
+                           <div className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white overflow-x-auto no-scrollbar">
+                              $${solution.resultLatex}$$
+                           </div>
+                           {solution.decimal && (
+                              <div className="mt-4 inline-block px-4 py-1 bg-slate-100 dark:bg-white/10 rounded-full text-xs font-mono font-bold text-slate-500">
+                                 ≈ {solution.decimal}
+                              </div>
+                           )}
                         </div>
                      </div>
-                   )}
-                </div>
-             </div>
-          )}
-        </div>
-      </div>
 
-      <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent z-[140]">
-        <div className="max-w-4xl mx-auto space-y-6">
-          
-          <div className="relative" ref={dropdownRef}>
-            {isDropdownOpen && (
-              <div className="absolute bottom-full left-0 mb-6 w-full glass-panel rounded-[40px] md:rounded-[48px] border border-black/10 dark:border-white/10 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.5)] z-[150] p-6 md:p-10 animate-scale-in max-h-[50vh] overflow-y-auto custom-scrollbar backdrop-blur-3xl">
-                <div className="space-y-12">
-                  {categories.map(cat => (
-                    <section key={cat} className="space-y-6">
-                      <h4 className="text-[10px] font-black uppercase tracking-[0.4em] text-cyan-600 px-2">{cat}</h4>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                        {MATH_SYMBOLS.filter(s => s.category === cat).map((sym, idx) => (
-                          <button 
-                            key={sym.label} 
-                            onClick={() => insertSymbol(sym.tex)}
-                            className="flex flex-col items-center justify-center gap-3 p-5 bg-slate-50 dark:bg-white/5 rounded-[24px] hover:bg-cyan-600 hover:text-white transition-all group border border-transparent hover:border-cyan-400/30"
-                            title={sym.label}
-                          >
-                            <div id={`sym-preview-box-${idx}`} className="text-sm md:text-base transition-transform group-hover:scale-110"></div>
-                            <span className="text-[7px] font-black uppercase truncate w-full text-center opacity-40 group-hover:opacity-100">{sym.label}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+                     {/* Graph */}
+                     {solution.graph && (
+                        <div className="glass-panel p-6 rounded-[40px] border border-black/5 dark:border-white/5 bg-white/60 dark:bg-slate-900/60 shadow-lg">
+                           <div className="flex items-center gap-3 mb-4">
+                              <div className="w-2 h-6 bg-cyan-500 rounded-full"></div>
+                              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Visual Plot</h3>
+                           </div>
+                           <div className="w-full bg-slate-50 dark:bg-black/30 rounded-3xl overflow-hidden relative">
+                              <svg ref={graphRef} viewBox="0 0 600 300" className="w-full h-auto"></svg>
+                           </div>
+                        </div>
+                     )}
 
-          <div className="relative group">
-            <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl transition-all duration-500 focus-within:ring-8 focus-within:ring-cyan-500/5 relative overflow-hidden h-16 md:h-20">
-              <button 
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className={`w-12 h-12 md:w-16 md:h-16 rounded-full transition-all flex items-center justify-center shrink-0 border z-30 ${isDropdownOpen ? 'bg-cyan-600 text-white border-cyan-500 shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500 border-transparent hover:border-cyan-500/20'}`}
-              >
-                <i className={`fa-solid ${isDropdownOpen ? 'fa-keyboard' : 'fa-plus-minus'} text-lg md:text-xl`}></i>
-              </button>
+                     {/* Steps */}
+                     <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/30">
+                        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6">Process Log</h3>
+                        <div className="space-y-4">
+                           {solution.steps.map((step, idx) => (
+                              <div key={idx} className="flex items-start gap-4">
+                                 <div className="w-6 h-6 rounded-full bg-indigo-500/10 text-indigo-600 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{idx + 1}</div>
+                                 <div className="text-sm font-medium text-slate-600 dark:text-slate-300">{step}</div>
+                              </div>
+                           ))}
+                        </div>
+                     </div>
 
-              <div className="flex-1 relative h-full flex items-center">
-                {/* 
-                  DUAL-LAYER INTEGRATION:
-                  Raw LaTeX input on top (transparent), KaTeX render underneath.
-                */}
-                <div 
-                  ref={katexPreviewRef} 
-                  className={`absolute inset-0 flex items-center px-4 pointer-events-none text-base md:text-2xl font-black transition-opacity duration-200 ${input ? 'opacity-100' : 'opacity-0'} dark:text-white text-slate-900 z-10 whitespace-nowrap overflow-hidden`}
-                ></div>
-
-                <input 
-                  ref={inputRef}
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && solveMath()}
-                  placeholder={input ? "" : t.placeholderMaths}
-                  className={`absolute inset-0 w-full bg-transparent border-none focus:ring-0 text-base md:text-2xl py-4 px-4 font-mono transition-all caret-cyan-500 z-20 ${input ? 'text-transparent' : 'text-slate-400 dark:text-slate-700'}`}
-                />
-              </div>
-
-              <button 
-                onClick={solveMath}
-                disabled={isSolving || !input.trim()}
-                className="px-6 md:px-8 h-12 md:h-16 rounded-[24px] md:rounded-[36px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center gap-3 shadow-xl hover:scale-105 active:scale-95 transition-all disabled:opacity-30 shrink-0 z-30 group/solve"
-              >
-                {isSolving ? (
-                  <i className="fa-solid fa-circle-notch animate-spin text-lg md:text-xl"></i>
-                ) : (
-                  <>
-                    <span className="text-[10px] md:text-xs font-black uppercase tracking-[0.2em] hidden sm:inline">{t.math.solve}</span>
-                    <i className="fa-solid fa-bolt-lightning text-sm md:text-base group-hover/solve:rotate-12 transition-transform"></i>
-                  </>
-                )}
-              </button>
+                  </div>
+               )}
             </div>
-            
-            {input && (
-              <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-4 py-1 bg-cyan-600/10 dark:bg-cyan-400/10 backdrop-blur-md rounded-full border border-cyan-500/20 opacity-0 md:group-hover:opacity-100 transition-opacity pointer-events-none">
-                 <p className="text-[8px] font-black uppercase tracking-[0.4em] text-cyan-600 dark:text-cyan-400">Neural Render Overlay Active</p>
-              </div>
-            )}
-          </div>
-
-          {suggestion && (
-            <div className="px-6 py-3 bg-amber-500/10 border border-amber-500/20 rounded-full animate-reveal flex items-center gap-4 mx-auto w-fit backdrop-blur-md">
-               <i className="fa-solid fa-lightbulb text-amber-500 text-xs animate-pulse"></i>
-               <p className="text-[9px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-widest">{suggestion}</p>
-            </div>
-          )}
-        </div>
+         </main>
       </div>
     </div>
   );

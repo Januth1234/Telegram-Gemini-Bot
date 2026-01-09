@@ -98,7 +98,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       try { s.stop(); } catch(e) {}
     });
     sourcesRef.current.clear();
-    nextStartTimeRef.current = audioContextRef.current?.currentTime || 0;
+    if (audioContextRef.current) {
+      nextStartTimeRef.current = audioContextRef.current.currentTime || 0;
+    }
     setIsSpeaking(false);
   }, []);
 
@@ -108,13 +110,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       try { sessionRef.current.close(); } catch(e) {}
       sessionRef.current = null;
     }
-    if (audioContextRef.current) {
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       try { audioContextRef.current.close(); } catch(e) {}
-      audioContextRef.current = null;
     }
-    if (inputAudioContextRef.current) {
+    if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') {
       try { inputAudioContextRef.current.close(); } catch(e) {}
-      inputAudioContextRef.current = null;
     }
     setIsActive(false);
     setIsConnecting(false);
@@ -126,8 +126,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setTranscription([]);
     
     try {
-      // Create new audio contexts specifically for this session
-      const context = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) throw new Error("Audio support not found in this browser.");
+
+      const context = new AudioCtx({ sampleRate: 24000 });
       if (context.state === 'suspended') await context.resume();
       audioContextRef.current = context;
 
@@ -137,7 +139,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       analyserRef.current.fftSize = 32; 
       analyserRef.current.connect(audioContextRef.current.destination);
 
-      inputAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+      inputAudioContextRef.current = new AudioCtx({ sampleRate: 16000 });
       inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
       inputAnalyserRef.current.fftSize = 32;
 
@@ -151,16 +153,18 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           source.connect(inputAnalyserRef.current!);
           
           processor.onaudioprocess = (e) => {
+            if (!sessionRef.current) return;
             const inputData = e.inputBuffer.getChannelData(0);
             const int16 = new Int16Array(inputData.length);
             for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
-            sessionPromise.then(session => {
-              try {
-                session.sendRealtimeInput({ 
-                  media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
-                });
-              } catch (err) {}
-            });
+            
+            try {
+               sessionRef.current.sendRealtimeInput({ 
+                 media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
+               });
+            } catch (err) {
+               // Ignore send errors if session closed mid-frame
+            }
           };
           source.connect(processor);
           processor.connect(inputAudioContextRef.current!.destination);
@@ -191,7 +195,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             source.connect(analyserRef.current);
             
             const now = audioContextRef.current.currentTime;
-            // Schedule for seamless playback
             if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05; 
             
             source.start(nextStartTimeRef.current);
@@ -208,6 +211,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsActive(false);
           setIsConnecting(false);
           setIsSpeaking(false);
+          sessionRef.current = null;
         },
         onerror: (e: any) => {
           console.error("Neural Bridge Connectivity Lost:", e);
@@ -215,7 +219,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setErrorMessage(msg);
           setIsActive(false);
           setIsConnecting(false);
-          // Auto-trigger dialog if key error detected
+          sessionRef.current = null;
           if ((msg.includes("API Key") || msg.includes("entity was not found")) && (window as any).aistudio) {
             (window as any).aistudio.openSelectKey();
           }
@@ -306,7 +310,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             {transcription.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-2">
                    <div className="w-8 h-1 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse"></div>
-                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic">Awaiting Input Stream</p>
+                   <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic text-center">Awaiting Input Stream</p>
                 </div>
             ) : (
                 transcription.map((item, i) => (
