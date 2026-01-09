@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
+import { geminiService } from '../services/geminiService';
 
 interface GetHelpModeProps {
   onClose: () => void;
@@ -16,6 +17,11 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Search State
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResult, setSearchResult] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+
   useEffect(() => {
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes('android')) {
@@ -24,6 +30,50 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
       setPlatform('ios-pc');
     }
   }, []);
+
+  const captureScreenFrame = (): string | null => {
+    if (!videoRef.current || !isSharing) return null;
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        return dataUrl.split(',')[1];
+      }
+    } catch (e) {
+      console.error("Screen capture failed:", e);
+    }
+    return null;
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setSearchResult(null);
+    try {
+       // Capture visual context if sharing is active
+       const visualContext = captureScreenFrame();
+       
+       let finalPrompt = `User is asking for help about: "${searchQuery}". Provide a helpful, concise solution. If it's about the app, use your system knowledge.`;
+       const options: any = { useThinking: true, grounding: 'search' };
+
+       if (visualContext) {
+         finalPrompt = `[VISUAL CONTEXT PROVIDED] The user is sharing their screen. Analyze the visual screenshot attached and answer their question: "${searchQuery}". Guide them based on what you see.`;
+         options.fileData = { data: visualContext, mimeType: 'image/jpeg' };
+       }
+
+       const response = await geminiService.chat(finalPrompt, options);
+       setSearchResult(response.text);
+    } catch (e: any) {
+       console.error(e);
+       setSearchResult("I couldn't connect to the support database or analyze the visual feed. Please try again.");
+    } finally {
+       setIsSearching(false);
+    }
+  };
 
   const startSharing = async () => {
     setIsDiagnostic(true);
@@ -89,8 +139,42 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
         </button>
       </header>
 
-      <div className="flex-1 p-6 md:p-12 overflow-y-auto custom-scrollbar flex flex-col items-center justify-center gap-12">
-        <div className="max-w-2xl w-full text-center space-y-6">
+      <div className="flex-1 p-6 md:p-12 overflow-y-auto custom-scrollbar flex flex-col items-center justify-start gap-12">
+        
+        {/* Smart Search Bar */}
+        <div className="w-full max-w-2xl space-y-4">
+             <div className="relative group">
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder={t.help.searchPlaceholder}
+                  className="w-full p-6 pl-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[24px] text-sm md:text-base shadow-lg focus:ring-4 focus:ring-cyan-500/10 outline-none transition-all dark:text-white"
+                />
+                <i className="fa-solid fa-magnifying-glass absolute left-5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <button 
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchQuery.trim()}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {isSearching ? <i className="fa-solid fa-circle-notch animate-spin"></i> : t.help.searchAction}
+                </button>
+             </div>
+
+             {/* Search Result */}
+             {searchResult && (
+               <div className="p-8 bg-cyan-50 dark:bg-cyan-900/10 border border-cyan-100 dark:border-cyan-500/20 rounded-[32px] animate-reveal">
+                  <div className="flex items-center gap-2 mb-4">
+                     <i className="fa-solid fa-robot text-cyan-600"></i>
+                     <span className="text-[10px] font-black uppercase tracking-widest text-cyan-600">Orin Support Agent</span>
+                  </div>
+                  <p className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 sinhala-text whitespace-pre-wrap">{searchResult}</p>
+               </div>
+             )}
+        </div>
+
+        <div className="max-w-2xl w-full text-center space-y-6 pt-8 border-t border-black/5 dark:border-white/5">
           <div className="w-32 h-32 rounded-[48px] bg-slate-200 dark:bg-white/5 flex items-center justify-center mx-auto relative group">
             <div className={`absolute -inset-4 rounded-[64px] border-2 border-cyan-500/20 ${isSharing ? 'animate-pulse' : 'animate-soft-pulse'}`}></div>
             <i className={`fa-solid ${isSharing ? 'fa-user-gear' : 'fa-headset'} text-5xl text-slate-400 dark:text-slate-600 transition-colors ${isSharing ? 'text-cyan-500' : ''}`}></i>
@@ -143,27 +227,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
               {t.help.stop}
             </button>
           )}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
-           <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-600">
-                 <i className="fa-solid fa-magnifying-glass-chart"></i>
-              </div>
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diagnostic Hub</h4>
-              <p className="text-xs font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
-                {lang === 'si' ? "ඔරින් ඔබගේ පද්ධතියේ දෝෂ පරීක්ෂා කර ස්වයංක්‍රීයව විසඳුම් ලබා දෙයි." : "Orin analyzes your system status and provides automated solutions for technical issues."}
-              </p>
-           </div>
-           <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-                 <i className="fa-solid fa-shield-halved"></i>
-              </div>
-              <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Secure Protocol</h4>
-              <p className="text-xs font-bold text-slate-600 dark:text-slate-400 leading-relaxed">
-                {lang === 'si' ? "සියලුම සහාය සැසි TLS 1.3 මට්ටමේ ගුප්තකේතනයක් මගින් ආරක්ෂා කර ඇත." : "All support sessions are protected by TLS 1.3 encryption and are strictly ephermal."}
-              </p>
-           </div>
         </div>
       </div>
     </div>

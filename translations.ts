@@ -14,10 +14,10 @@ export const translations = {
     metrics: "Stats",
     reasoning: "Chat",
     vision: "Camera",
-    creative: "Creator",
+    creative: "Create", // Renamed from Creator/Studio
     translation: "Translate",
     voice: "Voice",
-    voiceBeta: "Voice (Beta)",
+    voiceBeta: "Voice & Translate",
     translator: "Translator",
     getHelp: "Get Help",
     maths: "Maths",
@@ -55,7 +55,7 @@ export const translations = {
     stepTranslate: "Translate",
     stepProcess: "Thinking",
     stepOutput: "Answer",
-    creator: "Creator",
+    creator: "Author", // Renamed from Creator
     aboutCreator: "About Januth",
     creatorRole: "Chief Architect & Founder",
     creatorTitle: "Project Lead • Orin AI",
@@ -96,7 +96,12 @@ export const translations = {
       autoDetect: "Auto-Detecting Language",
       sideA: "English",
       sideB: "Sinhala",
-      instruction: "Place device between speakers"
+      instruction: "Place device between speakers",
+      modeLabel: "Interpreter Mode"
+    },
+    voiceMode: {
+      assistant: "AI Assistant",
+      interpreter: "Interpreter"
     },
     help: {
       diagnostic: "Running System Diagnostic...",
@@ -107,7 +112,9 @@ export const translations = {
       startAccess: "Enable Accessibility Assistance",
       infoPC: "PC/iPhone: Using Actionated Screen Sharing for visual support.",
       infoAndroid: "Android: Utilizing Accessibility options for system-wide assistance.",
-      notSupported: "Your browser does not support screen sharing."
+      notSupported: "Your browser does not support screen sharing.",
+      searchPlaceholder: "Search for help topics...",
+      searchAction: "Search Help"
     },
     math: {
       title: "Math Solver",
@@ -135,10 +142,10 @@ export const translations = {
     metrics: "දත්ත",
     reasoning: "පිළිසඳර",
     vision: "කැමරාව",
-    creative: "නිර්මාණය",
+    creative: "නිර්මාණය", // Create
     translation: "පරිවර්තනය",
     voice: "හඬ",
-    voiceBeta: "හඬ (Beta)",
+    voiceBeta: "හඬ සහ පරිවර්තනය",
     translator: "පරිවර්තක",
     getHelp: "උදව් ලබාගන්න",
     maths: "ගණිතය",
@@ -176,7 +183,7 @@ export const translations = {
     stepTranslate: "පරිවර්තනය",
     stepProcess: "සිතා බැලීම",
     stepOutput: "පිළිතුර",
-    creator: "නිර්මාණය",
+    creator: "නිර්මාතෘ", // Author
     aboutCreator: "නිර්මාතෘ ගැන",
     creatorRole: "ප්‍රධාන නිර්මාණකරු සහ නිර්මාතෘ",
     creatorTitle: "ව්‍යාපෘති නායක • ඔරින් AI",
@@ -217,7 +224,12 @@ export const translations = {
       autoDetect: "භාෂාව හඳුනා ගනිමින්",
       sideA: "ඉංග්‍රීසි",
       sideB: "සිංහල",
-      instruction: "දෙදෙනා මැදින් තබන්න"
+      instruction: "දෙදෙනා මැදින් තබන්න",
+      modeLabel: "පරිවර්තක"
+    },
+    voiceMode: {
+      assistant: "AI සහායක",
+      interpreter: "පරිවර්තක"
     },
     help: {
       diagnostic: "පද්ධතිය පරීක්ෂා කරමින්...",
@@ -228,7 +240,9 @@ export const translations = {
       startAccess: "Accessibility සහාය සක්‍රීය කරන්න",
       infoPC: "PC/iPhone: දෘශ්‍ය සහාය සඳහා Actionated Screen Sharing භාවිතා වේ.",
       infoAndroid: "Android: පද්ධතිය පුරා සහාය සඳහා Accessibility විකල්ප භාවිතා වේ.",
-      notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි."
+      notSupported: "ඔබගේ බ්‍රවුසරය තිරය බෙදාගැනීමට සහාය නොදක්වයි.",
+      searchPlaceholder: "උදව් අවශ්‍ය මාතෘකාව ලියන්න...",
+      searchAction: "සොයන්න"
     },
     math: {
       title: "ගණිත විසඳුම්",
