@@ -4,7 +4,6 @@ import { geminiService, AppError } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
 import VoiceAssistant from './VoiceAssistant';
-import TranslatorMode from './TranslatorMode';
 import GetHelpMode from './GetHelpMode';
 import MathsMode from './MathsMode';
 
@@ -52,7 +51,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const progressIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp' && activeTab !== 'maths') {
+    if (activeTab !== 'voice' && activeTab !== 'gethelp' && activeTab !== 'maths') {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [activeTab]);
@@ -212,11 +211,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   return (
     <div className="flex flex-row h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative">
+      {/* Mobile History Backdrop */}
       {isHistoryOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[45] md:hidden" onClick={() => setIsHistoryOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] md:hidden" onClick={() => setIsHistoryOpen(false)} />
       )}
       
-      <div className={`fixed md:relative inset-y-0 left-0 z-50 w-64 md:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full md:hidden'} flex flex-col shadow-2xl md:shadow-none`}>
+      {/* Sidebar - High Z-Index for Mobile */}
+      <div className={`fixed md:relative inset-y-0 left-0 z-[120] w-72 md:w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full md:hidden'} flex flex-col shadow-2xl md:shadow-none`}>
         <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <h3 className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">{t.memoryHistory}</h3>
           <button onClick={() => setIsHistoryOpen(false)} className="md:hidden text-slate-400 p-2"><i className="fa-solid fa-xmark"></i></button>
@@ -244,14 +245,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 h-full relative">
+      <div className="flex-1 flex flex-col min-w-0 h-full relative z-[50]">
         <div className="shrink-0 h-16 md:h-20 glass-panel p-3 md:p-4 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm relative">
           <div className="flex items-center gap-2 md:gap-4 flex-1">
             <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} className="w-9 h-9 md:w-10 md:h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all">
               <i className="fa-solid fa-clock-rotate-left"></i>
             </button>
             <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar py-1">
-              {(['chat', 'maths', 'studio', 'vision', 'voice', 'translator', 'gethelp'] as WorkspaceMode[]).map(tab => (
+              {(['chat', 'maths', 'studio', 'vision', 'voice', 'gethelp'] as WorkspaceMode[]).map(tab => (
                 <button
                   key={tab}
                   onClick={() => handleTabChange(tab)}
@@ -259,9 +260,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     activeTab === tab ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-md' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300'
                   }`}
                 >
-                  <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'maths' ? 'fa-calculator' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : tab === 'translator' ? 'fa-language' : 'fa-life-ring'} text-[8px] md:text-[9px]`}></i>
-                  <span>{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voice : tab === 'translator' ? t.translator : t.getHelp}</span>
-                  {(tab === 'voice' || tab === 'translator' || tab === 'gethelp' || tab === 'maths') && (
+                  <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'maths' ? 'fa-calculator' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : 'fa-life-ring'} text-[8px] md:text-[9px]`}></i>
+                  <span>{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voiceBeta : t.getHelp}</span>
+                  {(tab === 'voice' || tab === 'gethelp' || tab === 'maths') && (
                     <span className="absolute -top-1 -right-1 px-1 bg-cyan-600 text-white text-[5px] font-black rounded-sm border border-white/20 scale-75 md:scale-100">BETA</span>
                   )}
                 </button>
@@ -284,8 +285,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
           {activeTab === 'voice' ? (
             <VoiceAssistant inline onClose={() => handleTabChange('chat')} lang={lang} />
-          ) : activeTab === 'translator' ? (
-            <TranslatorMode onClose={() => handleTabChange('chat')} lang={lang} />
           ) : activeTab === 'gethelp' ? (
             <GetHelpMode onClose={() => handleTabChange('chat')} lang={lang} />
           ) : activeTab === 'maths' ? (
@@ -336,7 +335,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
         </div>
 
-        {activeTab !== 'voice' && activeTab !== 'translator' && activeTab !== 'gethelp' && activeTab !== 'maths' && (
+        {activeTab !== 'voice' && activeTab !== 'gethelp' && activeTab !== 'maths' && (
           <div className="shrink-0 p-4 md:p-10 bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent">
             <div className="max-w-4xl mx-auto">
               <div className="glass-panel p-2 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2">

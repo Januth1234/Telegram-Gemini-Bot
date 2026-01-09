@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
+import { geminiService } from '../services/geminiService';
 import * as d3 from 'd3';
 
 // Nerdamer & MathLive are loaded via index.html
@@ -15,7 +16,7 @@ interface MathsModeProps {
   lang: Language;
 }
 
-type MathCategory = 'General' | 'Algebra' | 'Calculus' | 'Linear Algebra' | 'Statistics' | 'Physics';
+type MathCategory = 'General' | 'Algebra' | 'Trigonometry' | 'Calculus' | 'Linear Algebra' | 'Statistics' | 'Physics';
 
 interface MathTool {
   label: string;
@@ -46,6 +47,17 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
       { label: 'Roots', command: 'roots', type: 'action', desc: 'Find Roots' },
       { label: 'Log', command: '\\log_{\\placeholder}(\\placeholder)', type: 'insert', desc: 'Logarithm' },
       { label: 'Ln', command: '\\ln(\\placeholder)', type: 'insert', desc: 'Natural Log' },
+    ]
+  },
+  'Trigonometry': {
+    icon: 'fa-wave-square',
+    tools: [
+      { label: 'Sin', command: '\\sin(\\placeholder)', type: 'insert', desc: 'Sine' },
+      { label: 'Cos', command: '\\cos(\\placeholder)', type: 'insert', desc: 'Cosine' },
+      { label: 'Tan', command: '\\tan(\\placeholder)', type: 'insert', desc: 'Tangent' },
+      { label: 'ArcSin', command: '\\arcsin(\\placeholder)', type: 'insert', desc: 'Inverse Sine' },
+      { label: 'ArcCos', command: '\\arccos(\\placeholder)', type: 'insert', desc: 'Inverse Cosine' },
+      { label: 'Deg to Rad', command: 'deg_to_rad', type: 'action', desc: 'Convert Degrees to Radians' },
     ]
   },
   'Calculus': {
@@ -85,6 +97,8 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
       { label: 'm to ft', command: 'unit_len', type: 'action', desc: 'Length Convert' },
       { label: 'C to F', command: 'unit_temp', type: 'action', desc: 'Temp Convert' },
       { label: 'Force (F=ma)', command: 'F=m*a', type: 'insert', desc: 'Newton II' },
+      { label: 'Velocity (v=u+at)', command: 'v=u+a*t', type: 'insert', desc: 'Kinematics 1' },
+      { label: 'Dist (s=ut+½at²)', command: 's=u*t+0.5*a*t^2', type: 'insert', desc: 'Kinematics 2' },
       { label: 'Kinetic E', command: 'K=0.5*m*v^2', type: 'insert', desc: 'Energy' },
     ]
   }
@@ -94,6 +108,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
   const t = translations[lang];
   const [activeCat, setActiveCat] = useState<MathCategory>('General');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [solution, setSolution] = useState<{ 
     inputLatex: string; 
     resultLatex: string; 
@@ -106,6 +121,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
   const mfRef = useRef<any>(null);
   const graphRef = useRef<SVGSVGElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initialize MathField
   useEffect(() => {
@@ -122,6 +138,32 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
       renderGraph(solution.graph);
     }
   }, [solution]);
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setError(null);
+    
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const base64Data = (reader.result as string).split(',')[1];
+        const latex = await geminiService.convertMathImageToLatex(base64Data, file.type);
+        if (mfRef.current) {
+          mfRef.current.setValue(latex);
+        }
+      } catch (err: any) {
+        setError(err.message || "Failed to read math from image.");
+      } finally {
+        setIsUploading(false);
+        // Clear input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // -- LOGIC ENGINE --
 
@@ -262,7 +304,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
 
       // --- ENGINE ROUTING ---
       if (activeCat === 'Physics' && command.startsWith('unit_')) {
-          // Custom Unit Engine (Requires specialized parsing for numbers)
+          // Custom Unit Engine
           const val = parseFloat(parsed.match(/[\d.]+/)?.[0] || "0");
           if (isNaN(val)) throw new Error("Please enter a number for conversion.");
           
@@ -277,10 +319,14 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
              steps.push("Formula: (C * 9/5) + 32");
           }
       } 
+      else if (activeCat === 'Trigonometry' && command === 'deg_to_rad') {
+          const val = parseFloat(parsed.match(/[\d.]+/)?.[0] || "0");
+          if (isNaN(val)) throw new Error("Enter value in degrees.");
+          result = `${val}° = ${(val * Math.PI / 180).toFixed(4)} rad`;
+          steps.push("Formula: deg * π / 180");
+      }
       else if (activeCat === 'Statistics') {
           // Nerdamer Stats or Custom
-          // Note: Matrix parsing in LatexParser converts [1,2,3] to [1,2,3], which matches what we need
-          // But check if it parsed as a matrix( ) string
           const cleanStats = parsed.replace('matrix(', '').replace(')', '').replace('[', '').replace(']', '');
           const numbers = cleanStats.split(',').map(n => parseFloat(n));
           
@@ -304,21 +350,35 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
       }
       else {
           // Main Nerdamer Engine
-          switch (command) {
-              case 'simplify': result = nerdamer(parsed).simplify(); break;
-              case 'evaluate': result = nerdamer(parsed).evaluate(); break;
-              case 'expand': result = nerdamer(parsed).expand(); break;
-              case 'factor': result = nerdamer(parsed).factor(); break;
-              case 'solve': result = nerdamer.solve(parsed, 'x'); break;
-              case 'roots': result = nerdamer.roots(parsed); break;
-              case 'diff': result = nerdamer(`diff(${parsed}, x)`); break;
-              case 'integrate': result = nerdamer(`integrate(${parsed}, x)`); break;
-              case 'def_int': result = nerdamer(`defint(${parsed}, 0, 10)`); steps.push("Assumed range [0, 10]"); break;
-              case 'determinant': result = nerdamer(`determinant(${parsed})`); break;
-              case 'invert': result = nerdamer(`invert(${parsed})`); break;
-              case 'transpose': result = nerdamer(`transpose(${parsed})`); break;
-              default: result = nerdamer(parsed);
+          try {
+            switch (command) {
+                case 'simplify': result = nerdamer(parsed).simplify(); break;
+                case 'evaluate': result = nerdamer(parsed).evaluate(); break;
+                case 'expand': result = nerdamer(parsed).expand(); break;
+                case 'factor': result = nerdamer(parsed).factor(); break;
+                case 'solve': result = nerdamer.solve(parsed, 'x'); break;
+                case 'roots': result = nerdamer.roots(parsed); break;
+                case 'diff': result = nerdamer(`diff(${parsed}, x)`); break;
+                case 'integrate': result = nerdamer(`integrate(${parsed}, x)`); break;
+                case 'def_int': result = nerdamer(`defint(${parsed}, 0, 10)`); steps.push("Assumed range [0, 10]"); break;
+                case 'determinant': result = nerdamer(`determinant(${parsed})`); break;
+                case 'invert': result = nerdamer(`invert(${parsed})`); break;
+                case 'transpose': result = nerdamer(`transpose(${parsed})`); break;
+                default: result = nerdamer(parsed);
+            }
+          } catch (nerdError: any) {
+            // SPECIFIC DIVISION BY ZERO CHECK
+            const msg = nerdError.message || "";
+            if (msg.includes("Division by zero") || msg.includes("Infinity")) {
+               throw new Error("Division by zero not allowed!");
+            }
+            throw nerdError;
           }
+      }
+
+      // Check for Infinity / Divide by Zero results that Nerdamer might return as an object/string
+      if (result.toString() === 'Infinity' || result.toString() === '-Infinity') {
+        throw new Error("Division by zero not allowed!");
       }
 
       // Process Result
@@ -362,7 +422,12 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
 
     } catch (e: any) {
       console.error(e);
-      setError("Syntax Error. Please check your expression format.");
+      // Specific UI message for div by zero
+      if (e.message && (e.message.includes("Division by zero") || e.message.includes("Infinity"))) {
+        setError("Division by zero not allowed!");
+      } else {
+        setError("Syntax Error. Please check your expression format.");
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -415,7 +480,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
             <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
                <i className="fa-solid fa-square-root-variable"></i>
             </div>
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">Orin Math Engine <span className="text-indigo-500">v4.0</span></h2>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">Math Solver <span className="text-indigo-500">v4.0</span></h2>
          </div>
          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-red-50 hover:text-red-500 transition-colors">
             <i className="fa-solid fa-xmark"></i>
@@ -447,12 +512,37 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
                
                {/* Input Section */}
                <div className="max-w-4xl mx-auto space-y-4">
-                  <div className="glass-panel rounded-3xl p-1 border border-indigo-500/20 shadow-xl bg-white dark:bg-slate-900">
+                  <div className="glass-panel rounded-3xl p-1 border border-indigo-500/20 shadow-xl bg-white dark:bg-slate-900 relative">
                      <MathFieldTag 
                         ref={mfRef} 
                         className="w-full text-2xl p-6 bg-transparent outline-none border-none text-slate-900 dark:text-white"
                         placeholder="Type equation here..."
                      ></MathFieldTag>
+
+                     {/* Image Upload Button - Positioned LEFT to avoid Virtual Keyboard conflict */}
+                     {activeCat === 'General' && (
+                        <div className="absolute top-4 left-4 z-20">
+                            <input 
+                              type="file" 
+                              ref={fileInputRef}
+                              accept="image/*"
+                              onChange={handleFileUpload}
+                              className="hidden"
+                            />
+                            <button 
+                              onClick={() => fileInputRef.current?.click()}
+                              disabled={isUploading}
+                              className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:text-indigo-600 transition-all hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                              title="Upload Math Problem (Image)"
+                            >
+                                {isUploading ? (
+                                    <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                ) : (
+                                    <i className="fa-solid fa-camera"></i>
+                                )}
+                            </button>
+                        </div>
+                     )}
                   </div>
                   
                   {/* Context Toolbar */}
@@ -476,16 +566,18 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang }) => {
                </div>
 
                {/* Processing State */}
-               {isProcessing && (
+               {(isProcessing || isUploading) && (
                   <div className="flex flex-col items-center justify-center py-12 animate-in fade-in">
                      <div className="w-12 h-12 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-indigo-500">Computing...</p>
+                     <p className="mt-4 text-[10px] font-black uppercase tracking-widest text-indigo-500">
+                        {isUploading ? "Transcribing Visual Math..." : "Computing..."}
+                     </p>
                   </div>
                )}
 
                {/* Error State */}
                {error && (
-                  <div className="max-w-2xl mx-auto p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 animate-bounce-subtle">
+                  <div className="max-w-2xl mx-auto p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-500/20 rounded-2xl flex items-center gap-3 text-red-600 dark:text-red-400 animate-bounce-subtle shadow-sm">
                      <i className="fa-solid fa-triangle-exclamation"></i>
                      <span className="text-xs font-bold">{error}</span>
                   </div>

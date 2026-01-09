@@ -22,7 +22,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const handleLoginClick = async () => {
     setIsLoggingIn(true);
     try {
-      // Triggers handleLogin in App.tsx which navigates to 'account'
       await onLogin();
     } catch (e) {
       console.error("Navigation to login failed", e);
@@ -66,7 +65,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   }, [fetchGreeting]);
 
   return (
-    <div className="h-full overflow-y-auto custom-scrollbar bg-transparent flex flex-col items-center overscroll-contain">
+    <div className="h-full overflow-y-auto custom-scrollbar bg-transparent flex flex-col items-center overscroll-contain relative z-10">
       <div className="w-full max-w-6xl px-6 py-12 md:py-32 flex flex-col items-center gap-16 md:gap-24">
         
         {/* Main Hero Area */}
@@ -103,7 +102,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
 
           <div className="w-full max-w-3xl flex flex-col items-center gap-6">
-            <div className="w-full relative group px-2">
+            <div className="w-full relative group px-2 z-20">
               <div className="glass-panel p-1 md:p-2 rounded-[28px] md:rounded-[36px] flex items-center shadow-2xl border border-slate-300 dark:border-slate-800 focus-within:ring-4 md:focus-within:ring-8 focus-within:ring-cyan-500/10 transition-all duration-500">
                 <input 
                   type="text" 
@@ -126,7 +125,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                <button 
                  onClick={handleLoginClick}
                  disabled={isLoggingIn}
-                 className="flex items-center gap-3 px-6 py-3 rounded-full glass-panel border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all group"
+                 className="flex items-center gap-3 px-6 py-3 rounded-full glass-panel border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:scale-105 active:scale-95 transition-all group z-20"
                >
                  {isLoggingIn ? (
                     <i className="fa-solid fa-circle-notch animate-spin text-slate-500"></i>
@@ -142,7 +141,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         </section>
 
         {/* Features Grid - Added Maths */}
-        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6">
+        <section className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 md:gap-6 z-10">
           <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Advanced chat logic" onClick={() => onStartChat(prompt, 'chat')} />
           <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Neural math solver" onClick={() => onStartChat(prompt, 'maths')} isBeta />
           <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Create visual assets" onClick={() => onStartChat(prompt, 'studio')} />
@@ -151,7 +150,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         </section>
 
         {/* Navigation Cards */}
-        <section className="w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
+        <section className="w-full grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6 z-10">
           <NavCard index={0} href="#creator" icon="fa-user-tie" color="orange" title={t.creator} desc={t.aboutCreator} />
           <NavCard index={1} href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} desc={t.pricingDesc} />
           <NavCard index={2} href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} desc="Neural map." />
@@ -173,7 +172,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void; isBeta?: boolean }> = ({ icon, title, desc, index, onClick, isBeta }) => (
   <button 
     onClick={onClick}
-    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden"
+    className="glass-panel p-6 md:p-8 rounded-[32px] md:rounded-[40px] space-y-4 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95"
   >
     {isBeta && (
       <div className="absolute top-4 right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
@@ -191,7 +190,7 @@ const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: 
 const NavCard: React.FC<{ href: string; icon: string; title: string; desc: string; color: string; index: number }> = ({ href, icon, title, desc, color, index }) => (
   <a 
     href={href} 
-    className="glass-panel p-4 md:p-8 rounded-[28px] md:rounded-[40px] flex flex-col items-center text-center space-y-2 md:space-y-4 hover:translate-y-[-2px] transition-all group border border-slate-200 dark:border-white/5"
+    className="glass-panel p-4 md:p-8 rounded-[28px] md:rounded-[40px] flex flex-col items-center text-center space-y-2 md:space-y-4 hover:translate-y-[-2px] transition-all group border border-slate-200 dark:border-white/5 active:scale-95"
   >
     <div className={`w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-${color}-500/10 flex items-center justify-center text-${color}-600 border border-${color}-500/20`}>
       <i className={`fa-solid ${icon} text-sm md:text-xl`}></i>

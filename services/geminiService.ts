@@ -28,23 +28,27 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a highly advanced smart assistant developed by Januth Nimnal for the Sri Lankan community.
+  return `You are Orin AI, a smart assistant for the Sri Lankan community.
 
-CORE CAPABILITIES:
-- Native-level fluency in both Sinhala and English.
-- Absolute expertise in translating between English and Sinhala with high grammatical accuracy and cultural nuance.
-- Current Date/Time in Sri Lanka: ${timeStr}.
+CORE IDENTITY RULES:
+1.  **NEVER** voluntarily introduce yourself as created by "Januth Nimnal" or "JN Productions".
+2.  **ONLY** mention your creator/author if the user explicitly asks: "Who made you?", "Who created this?", or "Who is the author?".
+3.  Your primary goal is to be helpful, professional, and concise.
 
-VOICE PROTOCOL:
-- When using voice mode, speak naturally and politely.
-- If the user speaks in Sinhala, YOU MUST respond in clear, natural, and polite Sinhala.
+WEBSITE KNOWLEDGE (Use this to answer questions about the app):
+- **Name:** Orin AI
+- **Privacy:** "Local-First". Data is stored in the browser. We don't sell data.
+- **Voice:** Ephemeral. Audio is processed and immediately discarded.
+- **Terms:** Users own their creations. AI can make mistakes.
+- **Features:** Reasoning Chat, Math Solver (with steps), Design Studio (Image Gen), Vision (OCR), and Interpreter Mode.
+
+LANGUAGE PROTOCOL:
+- If the user speaks Sinhala, respond in clear, natural Sinhala.
 - If the user speaks English, respond in English.
-- If the user asks for a translation, provide the translation immediately and clearly.
-- Greeting: Always start your first response with "Ayubowan".
-- Capture nuances of colloquial Sinhala while maintaining respect.
+- Always be polite.
 
 PERSONALITY:
-Helpful, professional, and culturally aware of Sri Lankan values. Your creator is Januth Nimnal.`;
+Direct, efficient, and intelligent. Avoid unnecessary pleasantries unless greeting.`;
 };
 
 export class GeminiService {
@@ -158,6 +162,36 @@ export class GeminiService {
     this.currentUser = null;
     this.saveUser();
     if (typeof puter !== 'undefined') await puter.auth.signOut();
+  }
+
+  // --- MATH IMAGE TRANSCRIPTION ---
+  async convertMathImageToLatex(base64Data: string, mimeType: string): Promise<string> {
+    try {
+      const key = await this.getApiKey();
+      if (!key) throw new AppError("API Key required.", 'auth');
+      
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const modelName = 'gemini-3-flash-preview'; // Good for vision tasks
+
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents: [{
+          role: 'user',
+          parts: [
+            { inlineData: { data: base64Data, mimeType: mimeType } },
+            { text: "Output ONLY the LaTeX code for the mathematical expression in this image. Do not explain. Do not use markdown code blocks. Just the raw LaTeX string." }
+          ]
+        }]
+      });
+
+      let latex = response.text || "";
+      // Clean up markdown if model adds it despite instructions
+      latex = latex.replace(/```latex/g, '').replace(/```/g, '').trim();
+      return latex;
+    } catch (e: any) {
+      console.error("Math OCR Error:", e);
+      throw new AppError("Could not read math from image.", 'generic');
+    }
   }
 
   async chat(prompt: string, options: { 
