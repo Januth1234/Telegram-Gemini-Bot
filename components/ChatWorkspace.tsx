@@ -334,7 +334,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ) : (
             <div className="max-w-4xl mx-auto space-y-6 md:space-y-12 pb-40 p-4 md:p-8">
               {messages.map((msg) => (
-                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                <div key={msg.id} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
                   <div className={`max-w-[95%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[40px] shadow-sm glass-panel border border-slate-200 dark:border-white/10 ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-sm' : 'rounded-tl-sm text-slate-800 dark:text-slate-200'}`}>
                     <div className={`text-[14px] md:text-base leading-relaxed whitespace-pre-wrap ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
                     {msg.links && msg.links.length > 0 && (
@@ -359,7 +359,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 </div>
               ))}
               {isTyping && (
-                <div className="flex flex-col gap-2 animate-reveal">
+                <div className="w-full flex flex-col gap-2 animate-reveal items-start">
                   <div className="flex items-center gap-3 bg-white/50 dark:bg-white/5 px-6 py-3 rounded-full w-fit animate-pulse border border-slate-200 dark:border-white/5">
                     <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce"></div>
                     <span className="text-[9px] font-black text-cyan-600 uppercase tracking-widest">{stepLabel || t.calculating}</span>

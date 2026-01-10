@@ -90,10 +90,6 @@ export class GeminiService {
               dailyUsage: { text: 0, images: 0, videos: 0 }
            };
            this.setSessionUser(newUser);
-           // Force reload to update UI if needed, or rely on App.tsx polling/context
-           // Usually App.tsx checks getCurrentUser() on mount/update.
-           // Since this is async, we might need a reactive way to update App.
-           // For now, this ensures subsequent reloads/navigation have the user.
         }
       }
     });
@@ -107,8 +103,6 @@ export class GeminiService {
           const user = await puter.auth.getUser();
           this.updateCurrentUser(user);
         }
-        // Note: The else block for localStorage was removed from here 
-        // because it's now handled synchronously in the constructor.
       }
     } catch (e) {
       console.warn("Puter delayed.");
@@ -211,7 +205,7 @@ export class GeminiService {
       if (!key) throw new AppError("API Key required.", 'auth');
       
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const modelName = 'gemini-3-flash-preview'; // Good for vision tasks
+      const modelName = 'gemini-3-flash-preview'; 
 
       const response = await ai.models.generateContent({
         model: modelName,
@@ -225,7 +219,6 @@ export class GeminiService {
       });
 
       let latex = response.text || "";
-      // Clean up markdown if model adds it despite instructions
       latex = latex.replace(/```latex/g, '').replace(/```/g, '').trim();
       return latex;
     } catch (e: any) {
@@ -266,7 +259,6 @@ export class GeminiService {
       if (!key) {
           if ((window as any).aistudio) {
               await (window as any).aistudio.openSelectKey();
-              // Re-check key after dialog interaction
               const retryKey = getEnvApiKey();
               if (!retryKey) throw new AppError("API Key required. Please select a key to continue.", 'auth');
           } else {
@@ -345,24 +337,25 @@ export class GeminiService {
       if (typeof puter !== 'undefined') {
         const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
         // Instruct not to use the main title word "Ayubowan" to avoid repetition
-        const prompt = `Give a short, friendly greeting in ${targetLang} based on the time ${context.time}. Do NOT use the word 'Ayubowan' or 'Welcome'. Be creative. Max 4 words.`;
+        const prompt = `Give a short, friendly greeting in ${targetLang} based on the time ${context.time}. Do NOT use the word 'Ayubowan', 'Ayubovan' or 'Welcome'. Be creative, professional and concise. Max 4 words.`;
         const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
         return response.toString().replace(/["\.]/g, '');
       }
       
-      // Fallback: Time-based greeting
+      // Fallback: Time-based greeting (Smart Fallback)
       const hour = new Date().getHours();
       if (context.lang === 'si') {
-          if (hour < 12) return "සුබ උදෑසනක්!";
-          if (hour < 18) return "සුබ දහවලක්!";
-          return "සුබ සැන්දෑවක්!";
+          if (hour < 12) return "සුබ උදෑසනක්!"; // Good morning
+          if (hour < 18) return "සුබ දහවලක්!"; // Good afternoon
+          return "සුබ සැන්දෑවක්!"; // Good evening
       } else {
           if (hour < 12) return "Good Morning!";
           if (hour < 18) return "Good Afternoon!";
           return "Good Evening!";
       }
     } catch { 
-        return context.lang === 'si' ? "සුබ දවසක්!" : "Good Day!"; 
+        // Ultimate fallback if logic fails
+        return context.lang === 'si' ? "සුබ දවසක්!" : "Greetings!"; 
     }
   }
 

@@ -24,7 +24,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   // Check for notification permission on mount
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
-      // Small delay to allow fade-in animations to start first
       setTimeout(() => setShowNotifPrompt(true), 1500);
     }
   }, []);
@@ -189,8 +188,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Features Grid - Clean Straight Line */}
-        <section className="w-full flex flex-row flex-wrap justify-center items-stretch gap-4 md:gap-6 z-10">
+        {/* Features Grid - Clean Straight Line - Updated to use strict Flex/Grid alignment */}
+        <section className="w-full flex flex-wrap justify-center items-stretch gap-4 md:gap-6 z-10 max-w-5xl">
           <FeatureCard icon="fa-message" title={t.reasoning} desc="Deep Logic" href="#chat" />
           <FeatureCard icon="fa-calculator" title={t.maths} desc="Solver" href="#math" isBeta />
           <FeatureCard icon="fa-palette" title={t.creative} desc="Studio" href="#art" />
@@ -221,13 +220,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 const FeatureCard: React.FC<{ icon: string; title: string; desc: string; href: string; isBeta?: boolean }> = ({ icon, title, desc, href, isBeta }) => (
   <a 
     href={href}
-    className="glass-panel p-4 md:p-6 rounded-[24px] md:rounded-[32px] space-y-3 md:space-y-4 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-36 md:w-40 relative overflow-hidden active:scale-95 flex flex-col items-center justify-center text-center shadow-md hover:shadow-xl shrink-0"
+    className="glass-panel p-4 md:p-6 rounded-[24px] md:rounded-[32px] space-y-3 md:space-y-4 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-[140px] md:w-44 h-full relative overflow-hidden active:scale-95 flex flex-col items-center justify-center text-center shadow-md hover:shadow-xl shrink-0"
   >
     {isBeta && (
       <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
     )}
-    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
-      <i className={`fa-solid ${icon} text-lg md:text-xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
+    <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
+      <i className={`fa-solid ${icon} text-lg md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
     </div>
     <div>
       <h4 className="text-[10px] md:text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
