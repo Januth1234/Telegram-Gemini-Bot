@@ -22,7 +22,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       icon: "fa-seedling",
       color: "blue",
       features: [
-        "200 Daily Neural Prompts", // Updated from 100 to 200
+        "200 Daily Neural Prompts",
         "Basic Reasoning Core",
         "Bilingual Support (SI/EN)",
         "Standard Web Grounding",
@@ -59,27 +59,27 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-hidden flex flex-col animate-reveal">
-      <header className="h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 animate-neural">
-            <i className="fa-solid fa-tags"></i>
+    <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
+      <div className="max-w-6xl mx-auto px-6 py-12 pb-32">
+        <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 animate-neural">
+              <i className="fa-solid fa-tags"></i>
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{t.pricing}</h2>
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">{t.pricingDesc}</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{t.pricing}</h2>
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">{t.pricingDesc}</p>
-          </div>
-        </div>
-        <button 
-          onClick={onClose} 
-          className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
-        >
-          <i className="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </header>
+          <button 
+            onClick={onClose} 
+            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </header>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-12">
-        <div className="max-w-6xl mx-auto space-y-20">
+        <div className="space-y-20">
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {plans.map((plan, i) => (

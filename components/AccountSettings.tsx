@@ -1,6 +1,7 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { geminiService } from '../services/geminiService';
+import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language } from '../types';
 import { translations } from '../translations';
 
@@ -15,101 +16,54 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
   const [loading, setLoading] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [fcmToken, setFcmToken] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  // Configuration
-  const CLIENT_ID = "989291286976-4fsle2vu6i7ik4273j6gfv8ii4futc7b.apps.googleusercontent.com";
-
-  // Helper: Securely parse JWT to get user info
-  const parseJwt = (token: string) => {
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(
-        window.atob(base64)
-          .split('')
-          .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-          .join('')
-      );
-      return JSON.parse(jsonPayload);
-    } catch (e) {
-      console.error("Token parsing failed", e);
-      return null;
-    }
-  };
-
-  // Handler: Process the Google response
-  const handleCallback = useCallback((response: any) => {
+  const handleGoogleLogin = async () => {
     setLoading(true);
+    setError(null);
     try {
-      const data = parseJwt(response.credential);
-      if (data) {
-        const newUser: UserAccount = {
-          id: data.sub,
-          name: data.name,
-          email: data.email,
-          avatar: data.picture,
-          tier: 'Verified Member',
-          dailyUsage: { text: 0, images: 0, videos: 0 }
-        };
-        geminiService.setSessionUser(newUser);
-        setUser(newUser);
-        onUserUpdate();
-      }
-    } catch (error) {
-      console.error("Login failed", error);
+      const googleUser = await firebaseService.loginWithGoogle();
+      
+      const newUser: UserAccount = {
+        id: googleUser.uid,
+        name: googleUser.displayName || "Orin User",
+        email: googleUser.email || "user@orin.ai",
+        avatar: googleUser.photoURL || undefined,
+        tier: 'Verified Member',
+        dailyUsage: { text: 0, images: 0, videos: 0 }
+      };
+
+      geminiService.setSessionUser(newUser);
+      setUser(newUser);
+      onUserUpdate();
+    } catch (err: any) {
+      console.error("Login failed", err);
+      // Friendly error mapping
+      let msg = "Connection to Google failed. Please try again.";
+      if (err.code === 'auth/popup-closed-by-user') msg = "Sign-in cancelled.";
+      if (err.code === 'auth/popup-blocked') msg = "Popup blocked. Please allow popups for this site.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
-  }, [onUserUpdate]);
+  };
 
-  // Effect: Initialize Google Button
-  useEffect(() => {
-    if (user) return; // Don't render button if already logged in
-
-    const initializeGoogle = () => {
-      const w = window as any;
-      if (w.google && w.google.accounts) {
-        w.google.accounts.id.initialize({
-          client_id: CLIENT_ID,
-          callback: handleCallback,
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
-
-        const btnContainer = document.getElementById('google-signin-btn');
-        if (btnContainer) {
-          w.google.accounts.id.renderButton(btnContainer, {
-            theme: 'filled_blue',
-            size: 'large',
-            shape: 'pill',
-            width: 280,
-            text: 'continue_with',
-            logo_alignment: 'left'
-          });
-        }
-      }
-    };
-
-    // Retry mechanism to ensure script is loaded
-    const timer = setInterval(() => {
-      if ((window as any).google) {
-        initializeGoogle();
-        clearInterval(timer);
-      }
-    }, 100);
-
-    return () => clearInterval(timer);
-  }, [user, handleCallback, CLIENT_ID]);
-
-  const confirmSignOut = () => {
-    const w = window as any;
-    if (w.google?.accounts?.id) {
-      w.google.accounts.id.disableAutoSelect();
-    }
-    geminiService.logout();
+  const confirmSignOut = async () => {
+    await geminiService.logout(); // This also calls firebaseService.logout() via update
     setUser(null);
     onUserUpdate();
     setShowSignOutConfirm(false);
+  };
+
+  const enableNotifications = async () => {
+    const token = await firebaseService.requestPermission();
+    if (token) {
+      setFcmToken(token);
+      alert(lang === 'si' ? "දැනුම්දීම් සක්‍රීයයි!" : "Notifications Enabled! Token generated.");
+    } else {
+      alert("Permission denied or failed to generate token.");
+    }
   };
 
   return (
@@ -199,11 +153,24 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                     <span className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">End-to-End Encrypted</span>
                   </div>
 
-                  {/* GOOGLE BUTTON CONTAINER */}
-                  <div id="google-signin-btn" className="min-h-[50px] flex justify-center w-full"></div>
+                  {/* FIREBASE AUTH BUTTON */}
+                  <button 
+                    onClick={handleGoogleLogin}
+                    disabled={loading}
+                    className="w-full max-w-sm py-5 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
+                  >
+                     <i className="fa-brands fa-google text-lg"></i>
+                     <span>Sign in with Google</span>
+                  </button>
+
+                  {error && (
+                    <div className="text-center animate-bounce-subtle">
+                       <p className="text-xs font-bold text-red-500">{error}</p>
+                    </div>
+                  )}
 
                   <p className="text-[9px] text-center font-bold text-slate-400 max-w-xs leading-relaxed">
-                    By continuing, you grant Orin access to your public profile and email for account identification purposes only.
+                    By continuing, you grant Orin access to your public profile and email for account identification purposes only via Firebase Authentication.
                   </p>
                </div>
             </div>
@@ -246,6 +213,20 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Creations</span>
                 </div>
               </div>
+              
+              <button
+                onClick={enableNotifications}
+                className="w-full py-5 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+              >
+                <i className="fa-solid fa-bell"></i>
+                Enable Notifications
+              </button>
+              
+              {fcmToken && (
+                  <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl break-all">
+                      <p className="text-[9px] font-mono text-slate-500">{fcmToken}</p>
+                  </div>
+              )}
 
               <button 
                 onClick={() => setShowSignOutConfirm(true)}

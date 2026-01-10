@@ -1,6 +1,7 @@
 
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
+import { firebaseService } from "./firebaseService";
 
 declare const puter: any;
 
@@ -161,6 +162,8 @@ export class GeminiService {
   async logout() {
     this.currentUser = null;
     this.saveUser();
+    // Clear external auth providers
+    try { await firebaseService.logout(); } catch(e) {}
     if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 

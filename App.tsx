@@ -13,6 +13,7 @@ import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation } from './types';
 import { geminiService } from './services/geminiService';
+import { firebaseService } from './services/firebaseService'; // Import Firebase Service
 import { translations } from './translations';
 
 const App: React.FC = () => {
@@ -31,12 +32,28 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>(getInitialView());
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => (localStorage.getItem('orin_active_module') as WorkspaceMode) || 'chat');
   
+  // Notification State
+  const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
+
   useEffect(() => {
     const handleHashChange = () => {
       const newView = getInitialView();
       setView(newView);
     };
     window.addEventListener('hashchange', handleHashChange);
+    
+    // Initialize Firebase Messaging Listener
+    firebaseService.onForegroundMessage((payload) => {
+      if (payload.notification) {
+        setNotification({
+          title: payload.notification.title,
+          body: payload.notification.body
+        });
+        // Auto dismiss
+        setTimeout(() => setNotification(null), 5000);
+      }
+    });
+
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
@@ -276,6 +293,24 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
       
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-20 right-6 z-[160] max-w-sm w-full animate-slide-in-right">
+          <div className="glass-panel p-4 rounded-2xl border border-cyan-500/30 shadow-2xl flex items-start gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl">
+             <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 shrink-0">
+               <i className="fa-solid fa-bell"></i>
+             </div>
+             <div className="flex-1">
+                <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white mb-1">{notification.title}</h4>
+                <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-tight">{notification.body}</p>
+             </div>
+             <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+               <i className="fa-solid fa-xmark"></i>
+             </button>
+          </div>
+        </div>
+      )}
+
       {isVoiceOpen && <VoiceAssistant onClose={() => setIsVoiceOpen(false)} lang={lang} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
     </div>
