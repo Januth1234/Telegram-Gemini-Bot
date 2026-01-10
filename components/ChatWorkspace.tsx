@@ -225,16 +225,16 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       <div className="hidden md:block absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none animate-soft-pulse" style={{animationDelay: '2s'}}></div>
 
 
-      {/* Mobile History Backdrop */}
+      {/* History Backdrop */}
       {isHistoryOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] md:hidden animate-fade" onClick={() => setIsHistoryOpen(false)} />
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />
       )}
       
-      {/* Sidebar - Desktop & Mobile */}
-      <div className={`fixed md:relative inset-y-0 left-0 z-[120] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full md:hidden'} flex flex-col shadow-2xl md:shadow-none`}>
+      {/* Sliding History Panel - Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-[120] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">{t.memoryHistory}</h3>
-          <button onClick={() => setIsHistoryOpen(false)} className="md:hidden text-slate-400 p-2"><i className="fa-solid fa-xmark"></i></button>
+          <button onClick={() => setIsHistoryOpen(false)} className="text-slate-400 p-2 hover:text-red-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="p-4 space-y-2">
           <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02] active:scale-95 transition-all">
@@ -257,6 +257,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </button>
             </div>
           ))}
+          {conversations.length === 0 && (
+             <div className="text-center p-8 text-slate-400">
+                <i className="fa-solid fa-folder-open text-2xl mb-2 opacity-30"></i>
+                <p className="text-[10px] uppercase tracking-widest opacity-50">No history found</p>
+             </div>
+          )}
         </div>
       </div>
 
@@ -265,10 +271,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* Navigation / Tab Bar */}
         <div className="shrink-0 h-16 md:h-20 glass-panel p-2 md:px-6 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm relative">
           
-          {/* Left: Mobile Menu */}
+          {/* Left: History Toggle (Visible on All Devices) */}
           <div className="flex items-center gap-4">
-             <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all md:hidden">
-              <i className="fa-solid fa-bars"></i>
+             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all hover:bg-slate-100 dark:hover:bg-white/5" title="Open History">
+              <i className="fa-solid fa-clock-rotate-left"></i>
             </button>
           </div>
 
@@ -342,6 +348,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       <div className="mt-6 rounded-[20px] md:rounded-[32px] overflow-hidden border border-slate-200 dark:border-black/10 shadow-xl">
                         <img src={msg.imageUrl} className="w-full h-auto" alt="Asset" />
                       </div>
+                    )}
+                    {msg.reasoning_details && (
+                        <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-black/20 text-xs text-slate-500 border border-slate-200 dark:border-white/5">
+                            <span className="font-bold uppercase tracking-wider block mb-1">Reasoning Logic:</span>
+                            {JSON.stringify(msg.reasoning_details).slice(0, 100)}...
+                        </div>
                     )}
                   </div>
                 </div>

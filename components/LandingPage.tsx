@@ -189,13 +189,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Features Grid - Improved spacing for mobile */}
-        <section className="w-full grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 z-10">
-          <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Deep Logic" href="#chat" />
-          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Solver" href="#math" isBeta />
-          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Studio" href="#art" />
-          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Vision" href="#camera" />
-          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Live" href="#voice" isBeta />
+        {/* Features Grid - Clean Straight Line */}
+        <section className="w-full flex flex-row flex-wrap justify-center items-stretch gap-4 md:gap-6 z-10">
+          <FeatureCard icon="fa-message" title={t.reasoning} desc="Deep Logic" href="#chat" />
+          <FeatureCard icon="fa-calculator" title={t.maths} desc="Solver" href="#math" isBeta />
+          <FeatureCard icon="fa-palette" title={t.creative} desc="Studio" href="#art" />
+          <FeatureCard icon="fa-camera" title={t.vision} desc="Vision" href="#camera" />
+          <FeatureCard icon="fa-microphone-lines" title={t.voiceBeta} desc="Live" href="#voice" isBeta />
         </section>
 
         {/* Navigation Cards */}
@@ -218,20 +218,20 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   );
 };
 
-const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; href: string; isBeta?: boolean }> = ({ icon, title, desc, index, href, isBeta }) => (
+const FeatureCard: React.FC<{ icon: string; title: string; desc: string; href: string; isBeta?: boolean }> = ({ icon, title, desc, href, isBeta }) => (
   <a 
     href={href}
-    className={`glass-panel p-4 md:p-8 rounded-[24px] md:rounded-[40px] space-y-3 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95 flex flex-col ${index === 4 ? 'col-span-2 md:col-span-1' : ''}`}
+    className="glass-panel p-4 md:p-6 rounded-[24px] md:rounded-[32px] space-y-3 md:space-y-4 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-36 md:w-40 relative overflow-hidden active:scale-95 flex flex-col items-center justify-center text-center shadow-md hover:shadow-xl shrink-0"
   >
     {isBeta && (
-      <div className="absolute top-3 right-3 md:top-4 md:right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
+      <div className="absolute top-2 right-2 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
     )}
-    <div className="w-10 h-10 md:w-14 md:h-14 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
-      <i className={`fa-solid ${icon} text-lg md:text-2xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
+    <div className="w-10 h-10 md:w-12 md:h-12 rounded-xl md:rounded-2xl bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 group-hover:text-cyan-600 transition-colors shadow-inner">
+      <i className={`fa-solid ${icon} text-lg md:text-xl transition-transform duration-500 group-hover:scale-110`} title={title}></i>
     </div>
     <div>
-      <h4 className="text-[10px] md:text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
-      <p className="text-[8px] md:text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 md:mt-2 font-medium leading-relaxed">{desc}</p>
+      <h4 className="text-[10px] md:text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
+      <p className="text-[8px] text-slate-500 dark:text-slate-400 mt-1 font-medium leading-relaxed">{desc}</p>
     </div>
   </a>
 );
