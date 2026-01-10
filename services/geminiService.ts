@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
@@ -343,11 +344,26 @@ export class GeminiService {
     try {
       if (typeof puter !== 'undefined') {
         const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
-        const response = await puter.ai.chat(`Give a 4-word greeting in ${targetLang}.`, { model: 'gemini-flash' });
-        return response.toString();
+        // Instruct not to use the main title word "Ayubowan" to avoid repetition
+        const prompt = `Give a short, friendly greeting in ${targetLang} based on the time ${context.time}. Do NOT use the word 'Ayubowan' or 'Welcome'. Be creative. Max 4 words.`;
+        const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
+        return response.toString().replace(/["\.]/g, '');
       }
-      return "Ayubowan!";
-    } catch { return "Ayubowan!"; }
+      
+      // Fallback: Time-based greeting
+      const hour = new Date().getHours();
+      if (context.lang === 'si') {
+          if (hour < 12) return "සුබ උදෑසනක්!";
+          if (hour < 18) return "සුබ දහවලක්!";
+          return "සුබ සැන්දෑවක්!";
+      } else {
+          if (hour < 12) return "Good Morning!";
+          if (hour < 18) return "Good Afternoon!";
+          return "Good Evening!";
+      }
+    } catch { 
+        return context.lang === 'si' ? "සුබ දවසක්!" : "Good Day!"; 
+    }
   }
 
   async translate(text: string, targetLang: Language): Promise<string> {

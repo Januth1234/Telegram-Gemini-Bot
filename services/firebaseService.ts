@@ -89,6 +89,7 @@ class FirebaseService {
     if (this.auth) {
       return onAuthStateChanged(this.auth, callback);
     }
+    return () => {};
   }
 
   // --- FIRESTORE HISTORY SYNC ---
@@ -100,7 +101,7 @@ class FirebaseService {
       const historyBlob = JSON.stringify(history);
       const userRef = doc(this.db, "users", uid);
       await setDoc(userRef, { historyBlob, lastUpdated: new Date() }, { merge: true });
-      console.log("Cloud Sync: History saved successfully.");
+      console.log("Cloud Sync: History saved to Google Account.");
     } catch (e) {
       console.error("Cloud Sync Error:", e);
     }
@@ -113,7 +114,12 @@ class FirebaseService {
       const snap = await getDoc(userRef);
       if (snap.exists() && snap.data().historyBlob) {
         const parsed = JSON.parse(snap.data().historyBlob);
-        return parsed;
+        // Revive dates (JSON.parse leaves them as strings)
+        return parsed.map((c: any) => ({
+            ...c,
+            timestamp: new Date(c.timestamp),
+            messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+        }));
       }
     } catch (e) {
       console.error("Cloud Fetch Error:", e);

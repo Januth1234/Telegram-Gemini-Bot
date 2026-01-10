@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
@@ -13,7 +12,7 @@ import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
 import MathsMode from './components/MathsMode';
-import { ChatMessage, Language, AppView, WorkspaceMode, Conversation } from './types';
+import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService'; // Import Firebase Service
 import { translations } from './translations';
@@ -72,6 +71,7 @@ const App: React.FC = () => {
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
 
   // Persistence: Conversations list
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -92,8 +92,41 @@ const App: React.FC = () => {
 
   // Local Storage Sync
   useEffect(() => {
-    localStorage.setItem('orin_history_v2', JSON.stringify(conversations));
+    try {
+      localStorage.setItem('orin_history_v2', JSON.stringify(conversations));
+    } catch (e) {
+      console.warn("Local storage limit reached or failed:", e);
+    }
   }, [conversations]);
+
+  // Auth State Listener to keep UI in sync with Firebase
+  useEffect(() => {
+    const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
+      if (authUser) {
+         // Create a UserAccount object from the Firebase User
+         const newUser: UserAccount = {
+            id: authUser.uid,
+            name: authUser.displayName || "User",
+            email: authUser.email || "user@orin.ai",
+            avatar: authUser.photoURL || undefined,
+            tier: 'Verified Member',
+            dailyUsage: { text: 0, images: 0, videos: 0 }
+         };
+         // Only update if ID changed to prevent loops
+         if (user?.id !== newUser.id) {
+           geminiService.setSessionUser(newUser);
+           setUser(newUser);
+         }
+      } else {
+        if (user) {
+           setUser(null);
+           geminiService.logout();
+        }
+        setHasSyncedWithCloud(false); // Reset sync status on logout
+      }
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   // Cloud Sync Logic
   // 1. Pull on login
@@ -103,46 +136,52 @@ const App: React.FC = () => {
       firebaseService.getHistory(user.id).then((cloudData) => {
         if (cloudData) {
           setConversations(prev => {
-            // Revive dates
+            // Revive dates just in case, though firebaseService.getHistory handles it now too.
+            // Double robustness.
             const revivedCloud = cloudData.map((c: any) => ({
                 ...c,
                 timestamp: new Date(c.timestamp),
                 messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
             }));
 
-            // Merge Logic: Combine local and cloud, deduplicating by ID
-            // Prefer cloud version if ID matches (assuming cloud is source of truth after login), 
-            // OR keep local if it's newer? For simplicity, we merge based on ID presence.
-            const localIds = new Set(prev.map(c => c.id));
-            const newFromCloud = revivedCloud.filter((c: Conversation) => !localIds.has(c.id));
+            // Merge Strategy: Combine Map by ID
+            const combined = new Map();
             
-            // If cloud has updated data for existing IDs, we might want to update.
-            // For this implementation, we prioritize local 'recent' changes but ensure nothing is lost.
-            // A simple strategy: Join them and sort by timestamp.
-            const all = [...prev];
-            newFromCloud.forEach((c: Conversation) => all.push(c));
+            // Add existing local conversations
+            prev.forEach(c => combined.set(c.id, c));
             
-            // Sort by newest first
-            return all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+            // Merge/Overwrite with Cloud conversations
+            revivedCloud.forEach((c: Conversation) => {
+                const local = combined.get(c.id);
+                // If cloud is newer (timestamp check), overwrite. 
+                // If it doesn't exist locally, add it.
+                if (!local || c.timestamp > local.timestamp) {
+                    combined.set(c.id, c);
+                }
+            });
+            
+            // Return sorted list
+            return Array.from(combined.values()).sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime());
           });
         }
         setIsSyncing(false);
+        setHasSyncedWithCloud(true); // Enable push sync only after successful pull
       });
     }
   }, [user?.id]);
 
   // 2. Push on change (Debounced)
   useEffect(() => {
-    if (user?.id && conversations.length > 0) {
+    if (user?.id && hasSyncedWithCloud) {
       const timeout = setTimeout(() => {
          setIsSyncing(true);
          firebaseService.saveHistory(user.id, conversations).then(() => {
             setIsSyncing(false);
          });
-      }, 5000); // Save after 5 seconds of inactivity to save writes
+      }, 5000); // Save after 5 seconds of inactivity
       return () => clearTimeout(timeout);
     }
-  }, [conversations, user?.id]);
+  }, [conversations, user?.id, hasSyncedWithCloud]);
 
 
   useEffect(() => {
@@ -236,7 +275,6 @@ const App: React.FC = () => {
       let targetView: AppView = 'chat';
       if (conv.mode === 'studio') targetView = 'art';
       else if (conv.mode === 'vision') targetView = 'camera';
-      // Voice, Math, Help usually don't have persistent chat history in the same way, but if they did:
       else if (conv.mode === 'maths') targetView = 'math';
       
       navigate(targetView);
@@ -350,7 +388,7 @@ const App: React.FC = () => {
         <div className="flex items-center gap-3">
           {isSyncing && (
              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
-                <i className="fa-solid fa-arrows-rotate animate-spin text-cyan-500 text-[10px]"></i>
+                <i className="fa-solid fa-cloud-arrow-up animate-pulse text-cyan-500 text-[10px]"></i>
                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t.syncing}</span>
              </div>
           )}
