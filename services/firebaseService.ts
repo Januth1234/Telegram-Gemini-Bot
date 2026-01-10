@@ -1,10 +1,9 @@
-
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User } from "firebase/auth";
 
-// Configuration using provided IDs
+// Configuration
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyB5rY4e-_GOkkl4qwDZuvHqwq0_IP9mFmA",
   authDomain: "orin-ai-f6798.firebaseapp.com",
@@ -65,18 +64,25 @@ class FirebaseService {
 
   // --- MESSAGING ---
   async requestPermission(): Promise<string | null> {
-    if (!this.messaging) return null;
+    if (!this.messaging) {
+      console.warn("Messaging not initialized (service workers not supported?).");
+      return null;
+    }
 
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
+        
+        // VAPID Key provided by user
+        const vapidKey = "BMz4Zssv3qb7H5GI-hEdYBGQ32QQ65Qj6gHwT1dTJy5NnPd38UrnRunrIWeFxDNsUJyard-mhXkur13D2fVlf48"; 
+
         const currentToken = await getToken(this.messaging, {
-          vapidKey: process.env.VAPID_KEY 
+          vapidKey: vapidKey
         });
         
         if (currentToken) {
           this.token = currentToken;
-          console.log("FCM Token:", currentToken);
+          console.log("FCM Token (Use this to send test messages):", currentToken);
           return currentToken;
         } else {
           console.warn("No registration token available. Request permission to generate one.");
