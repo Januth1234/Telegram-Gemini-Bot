@@ -173,7 +173,7 @@ export const translations = {
     reasoningMode: "හොඳින් සිතීම",
     search: "අන්තර්ජාලය",
     maps: "සිතියම්",
-    none: "සාමාන්‍ය",
+    none: "සාමාන්්‍ය",
     loginDesc: "පැරණි දේ සුරැකීමට පිවිසෙන්න.",
     protocol: "විස්තර",
     light: "දිවා",
