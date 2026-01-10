@@ -1,14 +1,10 @@
 
-// Fixed: Completed the GeminiService class and exported the geminiService instance.
-// Also updated API key handling to use process.env.API_KEY directly as per guidelines.
-
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
 
 declare const puter: any;
 
-// Safe environment access helper
 const getEnvApiKey = () => {
   try {
     return process.env.API_KEY || "";
@@ -32,22 +28,17 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a precision-focused intelligence assistant.
+  return `You are Orin AI, a helpful and simple assistant from Sri Lanka.
 
-CORE OPERATIONAL RULES:
-1. **NO INTRODUCTIONS:** Do NOT start responses with "I am Orin AI", "I am an AI assistant", or any introductory paragraph about yourself or your capabilities unless specifically asked "Who are you?" or "What can you do?".
-2. **IDENTITY PRIVACY:** Never mention your creator "Januth Nimnal" or "JN Productions" unless the user explicitly asks about your author, creator, or origin.
-3. **MATHEMATICAL PRECISION:** If the user provides a math problem or expression, provide a clear, structured, step-by-step solution. Use LaTeX for all mathematical notation.
-4. **DIRECTNESS:** Start answering the user's prompt immediately. Avoid "Sure, I can help with that" or "Here is the solution".
+RULES:
+1. BE SIMPLE: Use everyday language. No complex jargon or heavy words.
+2. BE DIRECT: Start answering immediately. Don't say "Hello" or "I am an AI" unless asked.
+3. LANGUAGE: If the user speaks Sinhala, use natural, simple Sinhala (not formal book language). If English, use simple English.
+4. MATH: Show math steps clearly using LaTeX.
+5. IDENTITY: Only mention you were made by Januth Nimnal if asked.
 
-LANGUAGE PROTOCOL:
-- If the user speaks Sinhala, respond in clear, natural Sinhala.
-- If the user speaks English, respond in English.
-- Maintain a helpful, professional, and technical tone.
-
-CONTEXT:
-Current time in Sri Lanka: ${timeStr}.
-Mode: High-Performance Reasoning Core.`;
+Context:
+Time in Sri Lanka: ${timeStr}.`;
 };
 
 export class GeminiService {
@@ -60,7 +51,7 @@ export class GeminiService {
       try {
         this.currentUser = JSON.parse(saved);
       } catch (e) {
-        console.warn("Corrupt user session cleared.");
+        console.warn("Session cleared.");
         localStorage.removeItem('orin_user');
       }
     }
@@ -75,7 +66,7 @@ export class GeminiService {
         if (!this.currentUser) {
            const newUser: UserAccount = {
               id: firebaseUser.uid,
-              name: firebaseUser.displayName || "Orin User",
+              name: firebaseUser.displayName || "User",
               email: firebaseUser.email || "user@orin.ai",
               avatar: firebaseUser.photoURL || undefined,
               tier: 'Verified Member',
@@ -118,7 +109,7 @@ export class GeminiService {
       id: user.id || 'anonymous',
       name: user.name || user.username || 'Friend',
       email: user.email || `${user.username || user.id}@puter.com`,
-      tier: 'Pro (BYO-Google)',
+      tier: 'Verified Member',
       avatar: user.avatar_url,
       dailyUsage: { text: 0, images: 0, videos: 0 }
     };
@@ -165,7 +156,7 @@ export class GeminiService {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (hasKey) return true;
         await (window as any).aistudio.openSelectKey();
-        return true; // Guideline: Assume successful key selection after opening dialog
+        return true;
     }
     return false;
   }
@@ -198,16 +189,13 @@ export class GeminiService {
           role: 'user',
           parts: [
             { inlineData: { data: base64Data, mimeType: mimeType } },
-            { text: "Output ONLY the LaTeX code for the mathematical expression in this image. Do not explain. Do not use markdown code blocks. Just the raw LaTeX string." }
+            { text: "Output ONLY the raw LaTeX for the math in this image." }
           ]
         }]
       });
-      let latex = response.text || "";
-      latex = latex.replace(/```latex/g, '').replace(/```/g, '').trim();
-      return latex;
+      return (response.text || "").replace(/```latex/g, '').replace(/```/g, '').trim();
     } catch (e: any) {
-      console.error("Math OCR Error:", e);
-      throw new AppError("Could not read math from image.", 'generic');
+      throw new AppError("Could not read math.", 'generic');
     }
   }
 
@@ -219,7 +207,7 @@ export class GeminiService {
     messageCount?: number;
     history?: ChatMessage[];
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
-    if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in for more.", "limit_reached");
+    if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in.", "limit_reached");
     
     const count = options.messageCount || 0;
     const isUserLoggedIn = !!this.currentUser;
@@ -234,7 +222,7 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        console.warn("Puter fallback triggered.");
+        console.warn("Puter fallback.");
       }
     }
 
@@ -284,18 +272,14 @@ export class GeminiService {
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (groundingChunks) {
         groundingChunks.forEach((chunk: any) => {
-          if (chunk.web) {
-            links.push({ title: chunk.web.title, uri: chunk.web.uri });
-          } else if (chunk.maps) {
-            links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
-          }
+          if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+          else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
         });
       }
 
       return { text: response.text || "", links };
     } catch (e: any) {
-      console.error("Chat Error:", e);
-      throw new AppError(e.message || "Failed to process request.", 'generic');
+      throw new AppError("Failed to process.", 'generic');
     }
   }
 
@@ -303,10 +287,9 @@ export class GeminiService {
     try {
       if (!await this.checkApiKey()) return "";
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Generate a very brief, poetic, one-line welcome message for Orin AI (a precision assistant).
-      Context: Date is ${options.date}, Time is ${options.time}. ${options.location ? `Location is ${options.location}.` : ''}
-      Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}.
-      Constraint: Max 10 words. No emojis. No "Welcome to...". Just a greeting.`;
+      const prompt = `Say a very brief, friendly hello. 
+      Context: Date is ${options.date}, Time is ${options.time}. Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}. 
+      Max 5 words.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -322,10 +305,7 @@ export class GeminiService {
     try {
       if (!await this.checkApiKey()) return "New Chat";
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Based on the following conversation and modes [${modes.join(',')}], generate a very short, 2-3 word title.
-      Conversation Summary: ${messages.slice(0, 3).map(m => m.content.substring(0, 50)).join(' | ')}
-      Language: ${lang === 'si' ? 'Sinhala' : 'English'}.
-      Constraint: No quotes. Just the title.`;
+      const prompt = `Title this chat in 2 words. Language: ${lang === 'si' ? 'Sinhala' : 'English'}.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -341,8 +321,7 @@ export class GeminiService {
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Translate the following text to ${targetLang === 'si' ? 'Sinhala' : 'English'}. Keep the tone professional.
-      Text: ${text}`;
+      const prompt = `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: ${text}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -371,19 +350,16 @@ export class GeminiService {
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-      throw new Error("No image generated.");
+      throw new Error("Failed.");
     } catch (e: any) {
-      console.error("Image Gen Error:", e);
-      throw new AppError(e.message || "Image synthesis failed.", 'generic');
+      throw new AppError("Failed to draw.", 'generic');
     }
   }
 
   async connectLive(callbacks: any) {
-    if (!await this.checkApiKey()) throw new AppError("API Key required for Live Mode.", 'auth');
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -401,7 +377,7 @@ export class GeminiService {
   }
 
   async connectTranslator(callbacks: any, options: { source: string, target: string }) {
-    if (!await this.checkApiKey()) throw new AppError("API Key required for Translator Mode.", 'auth');
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -413,11 +389,7 @@ export class GeminiService {
         },
         inputAudioTranscription: {},
         outputAudioTranscription: {},
-        systemInstruction: `You are a professional real-time interpreter. 
-        Your task is to translate speech between ${options.source} and ${options.target} seamlessly.
-        - Translate EVERYTHING immediately.
-        - Do not add your own thoughts.
-        - Use appropriate tone for both languages.`
+        systemInstruction: `You are a translator between ${options.source} and ${options.target}. Speak simply and naturally.`
       }
     });
   }

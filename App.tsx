@@ -15,7 +15,7 @@ import GetHelpMode from './components/GetHelpMode';
 import MathsMode from './components/MathsMode';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
 import { geminiService } from './services/geminiService';
-import { firebaseService } from './services/firebaseService'; // Import Firebase Service
+import { firebaseService } from './services/firebaseService';
 import { translations } from './translations';
 
 const App: React.FC = () => {
@@ -27,17 +27,12 @@ const App: React.FC = () => {
     const hash = window.location.hash.replace('#', '');
     const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing'];
     
-    if (validViews.includes(hash as AppView)) {
-      return hash as AppView;
-    }
-    // Backward compatibility
+    if (validViews.includes(hash as AppView)) return hash as AppView;
     if (hash === 'workspace') return 'chat';
     return 'landing';
   };
 
   const [view, setView] = useState<AppView>(getInitialView());
-  
-  // Notification State
   const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
 
   useEffect(() => {
@@ -47,14 +42,12 @@ const App: React.FC = () => {
     };
     window.addEventListener('hashchange', handleHashChange);
     
-    // Initialize Firebase Messaging Listener
     firebaseService.onForegroundMessage((payload) => {
       if (payload.notification) {
         setNotification({
           title: payload.notification.title,
           body: payload.notification.body
         });
-        // Auto dismiss
         setTimeout(() => setNotification(null), 5000);
       }
     });
@@ -72,11 +65,9 @@ const App: React.FC = () => {
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   
-  // Sync State Management
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
 
-  // Persistence: Conversations list
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     const saved = localStorage.getItem('orin_history_v2');
     if (!saved) return [];
@@ -93,21 +84,18 @@ const App: React.FC = () => {
     return localStorage.getItem('orin_active_conv_id');
   });
 
-  // Local Storage Sync - Filters out empty ones that aren't the active one
   useEffect(() => {
     try {
       const toSave = conversations.filter(c => c.messages.length > 0 || c.id === activeConversationId);
       localStorage.setItem('orin_history_v2', JSON.stringify(toSave));
     } catch (e) {
-      console.warn("Local storage limit reached or failed:", e);
+      console.warn("Storage error", e);
     }
   }, [conversations, activeConversationId]);
 
-  // Auth State Listener to keep UI in sync with Firebase
   useEffect(() => {
     const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
       if (authUser) {
-         // Create a UserAccount object from the Firebase User
          const newUser: UserAccount = {
             id: authUser.uid,
             name: authUser.displayName || "User",
@@ -116,7 +104,6 @@ const App: React.FC = () => {
             tier: 'Verified Member',
             dailyUsage: { text: 0, images: 0, videos: 0 }
          };
-         // Only update if ID changed to prevent loops
          if (user?.id !== newUser.id) {
            geminiService.setSessionUser(newUser);
            setUser(newUser);
@@ -126,69 +113,46 @@ const App: React.FC = () => {
            setUser(null);
            geminiService.logout();
         }
-        setHasSyncedWithCloud(false); // Reset sync status on logout
+        setHasSyncedWithCloud(false);
       }
     });
     return () => unsubscribe();
   }, [user]);
 
-  // Cloud Sync Logic
-  // 1. Pull on login
   useEffect(() => {
     if (user?.id) {
       setSyncStatus('syncing');
       firebaseService.getHistory(user.id).then((cloudData) => {
         if (cloudData) {
           setConversations(prev => {
-            const revivedCloud = cloudData.map((c: any) => ({
-                ...c,
-                timestamp: new Date(c.timestamp),
-                messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-            }));
-
-            // Merge Strategy: Combine Map by ID
             const combined = new Map();
-            
-            // Add existing local conversations
             prev.forEach(c => combined.set(c.id, c));
-            
-            // Merge/Overwrite with Cloud conversations
-            revivedCloud.forEach((c: Conversation) => {
+            cloudData.forEach((c: any) => {
                 const local = combined.get(c.id);
-                if (!local || c.timestamp > local.timestamp) {
-                    combined.set(c.id, c);
-                }
+                if (!local || c.timestamp > local.timestamp) combined.set(c.id, c);
             });
-            
             return Array.from(combined.values()).sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime());
           });
         }
         setSyncStatus('success');
         setTimeout(() => setSyncStatus('idle'), 3000);
-        setHasSyncedWithCloud(true); // Enable push sync only after successful pull
-      }).catch((err) => {
-        console.error("Cloud Pull Failed:", err);
-        setSyncStatus('error');
-      });
+        setHasSyncedWithCloud(true);
+      }).catch(() => setSyncStatus('error'));
     }
   }, [user?.id]);
 
-  // 2. Push on change (Debounced)
   useEffect(() => {
     if (user?.id && hasSyncedWithCloud) {
       const timeout = setTimeout(() => {
-         const conversationsWithMessages = conversations.filter(c => c.messages.length > 0);
-         if (conversationsWithMessages.length > 0) {
+         const withMsgs = conversations.filter(c => c.messages.length > 0);
+         if (withMsgs.length > 0) {
             setSyncStatus('syncing');
-            firebaseService.saveHistory(user.id, conversationsWithMessages).then(() => {
+            firebaseService.saveHistory(user.id, withMsgs).then(() => {
                setSyncStatus('success');
                setTimeout(() => setSyncStatus('idle'), 3000);
-            }).catch((err) => {
-               console.error("Cloud Push Failed:", err);
-               setSyncStatus('error');
-            });
+            }).catch(() => setSyncStatus('error'));
          }
-      }, 5000); // Wait 5 seconds of inactivity before pushing to cloud
+      }, 5000);
       return () => clearTimeout(timeout);
     }
   }, [conversations, user?.id, hasSyncedWithCloud]);
@@ -210,26 +174,17 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('orin_theme', theme);
-    if (theme === 'dark') {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    if (theme === 'dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
   }, [theme]);
 
-  const refreshUser = useCallback(() => {
-    setUser(geminiService.getCurrentUser());
-  }, []);
-
-  const handleLogin = async () => {
-    navigate('account');
-  };
+  const refreshUser = useCallback(() => setUser(geminiService.getCurrentUser()), []);
+  const handleLogin = async () => navigate('account');
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
-    // Check if there is already an active conversation that is empty, reuse it
     const emptyConv = conversations.find(c => c.id === activeConversationId && c.messages.length === 0);
     
     if (view === 'landing' && !emptyConv) {
@@ -245,7 +200,6 @@ const App: React.FC = () => {
       setConversations(prev => [newConv, ...prev]);
       setActiveConversationId(newId);
     } else if (emptyConv) {
-        // Update mode if reusing empty
         setConversations(prev => prev.map(c => c.id === emptyConv.id ? { ...c, mode, modesUsed: [mode] } : c));
     }
 
@@ -268,12 +222,7 @@ const App: React.FC = () => {
     if (!activeConversationId) return;
     setConversations(prev => prev.map(c => 
       c.id === activeConversationId 
-        ? { 
-            ...c, 
-            title: title || c.title, 
-            timestamp: new Date(),
-            modesUsed: modesUsed || c.modesUsed 
-          } 
+        ? { ...c, title: title || c.title, timestamp: new Date(), modesUsed: modesUsed || c.modesUsed } 
         : c
     ));
   };
@@ -284,12 +233,10 @@ const App: React.FC = () => {
       setActiveConversationId(id);
       setGlobalPrompt("");
       setShouldAutoSubmit(false);
-      
       let targetView: AppView = 'chat';
       if (conv.mode === 'studio') targetView = 'art';
       else if (conv.mode === 'vision') targetView = 'camera';
       else if (conv.mode === 'maths') targetView = 'math';
-      
       navigate(targetView);
     }
   };
@@ -323,19 +270,15 @@ const App: React.FC = () => {
   };
 
   const handleCloseWorkspace = useCallback(() => {
-    // If conversation is empty, remove it from list
     if (activeConversationId) {
       const active = conversations.find(c => c.id === activeConversationId);
-      if (active && active.messages.length === 0) {
-        handleDeleteConversation(activeConversationId);
-      }
+      if (active && active.messages.length === 0) handleDeleteConversation(activeConversationId);
     }
     navigate('landing');
     setShouldAutoSubmit(false);
   }, [activeConversationId, conversations, handleDeleteConversation]);
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
-
   const toggleLang = () => setLang(prev => prev === 'en' ? 'si' : 'en');
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
@@ -377,7 +320,6 @@ const App: React.FC = () => {
       case 'math': return <MathsMode onClose={() => navigate('landing')} lang={lang} />;
       case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
       case 'help': return <GetHelpMode onClose={() => navigate('landing')} lang={lang} />;
-      
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={refreshUser} />;
       case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
       case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
@@ -405,28 +347,21 @@ const App: React.FC = () => {
       <header className="h-16 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
         <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('landing')}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 dark:bg-cyan-500 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-            <i className="fa-solid fa-bolt orin-icon text-sm"></i>
+            <i className="fa-solid fa-bolt text-sm"></i>
           </div>
           <h1 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
 
         <div className="flex items-center gap-3">
           {syncStatus !== 'idle' && (
-             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5 animate-reveal">
-                {syncStatus === 'syncing' && <i className="fa-solid fa-cloud-arrow-up animate-pulse text-cyan-500 text-[10px]"></i>}
-                {syncStatus === 'success' && <i className="fa-solid fa-cloud-check text-emerald-500 text-[10px]"></i>}
-                {syncStatus === 'error' && <i className="fa-solid fa-cloud-exclamation text-red-500 text-[10px]"></i>}
-                <span className={`text-[9px] font-black uppercase tracking-widest ${
-                  syncStatus === 'error' ? 'text-red-500' : 
-                  syncStatus === 'success' ? 'text-emerald-500' : 'text-slate-500'
-                }`}>
-                  {syncStatus === 'syncing' ? t.syncing : 
-                   syncStatus === 'success' ? t.synced : t.syncError}
+             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                <span className={`text-[9px] font-black uppercase tracking-widest ${syncStatus === 'error' ? 'text-red-500' : syncStatus === 'success' ? 'text-emerald-500' : 'text-slate-500'}`}>
+                  {syncStatus === 'syncing' ? t.syncing : syncStatus === 'success' ? t.synced : t.syncError}
                 </span>
              </div>
           )}
-          <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
-            <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} orin-icon`}></i>
+          <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400">
+            <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
           </button>
           <button onClick={toggleLang} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 px-2">
             {t.langToggle}
@@ -435,8 +370,8 @@ const App: React.FC = () => {
             onClick={() => navigate('account')}
             className="flex items-center gap-3 px-4 h-10 rounded-xl bg-slate-200/50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all border border-black/5 dark:border-white/5"
           >
-            <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border border-black/5 dark:border-white/10">
-              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="User avatar" /> : <i className="fa-solid fa-user orin-icon text-[9px]"></i>}
+            <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
+              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="User" /> : <i className="fa-solid fa-user text-[9px]"></i>}
             </div>
             <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">
               {(user?.name || user?.email?.split('@')[0])?.split(' ')[0] || t.authenticate}
@@ -449,18 +384,14 @@ const App: React.FC = () => {
         {renderContent()}
       </main>
       
-      {/* Notification Toast */}
       {notification && (
         <div className="fixed top-20 right-6 z-[160] max-w-sm w-full animate-slide-in-right">
           <div className="glass-panel p-4 rounded-2xl border border-cyan-500/30 shadow-2xl flex items-start gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl">
-             <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-500 shrink-0">
-               <i className="fa-solid fa-bell"></i>
-             </div>
              <div className="flex-1">
                 <h4 className="text-xs font-black uppercase tracking-widest text-slate-900 dark:text-white mb-1">{notification.title}</h4>
                 <p className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-tight">{notification.body}</p>
              </div>
-             <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-900 dark:hover:text-white">
+             <button onClick={() => setNotification(null)} className="text-slate-400">
                <i className="fa-solid fa-xmark"></i>
              </button>
           </div>
