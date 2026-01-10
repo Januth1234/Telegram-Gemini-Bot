@@ -1,7 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
 
 // Configuration
 const firebaseConfig = {
@@ -29,6 +29,10 @@ class FirebaseService {
       if (typeof window !== 'undefined') {
         this.analytics = getAnalytics(this.app);
         this.auth = getAuth(this.app);
+        
+        // Ensure persistence is set to LOCAL to survive refreshes
+        setPersistence(this.auth, browserLocalPersistence)
+          .catch((error) => console.error("Auth Persistence Error:", error));
       }
 
       // Initialize Messaging
@@ -54,9 +58,12 @@ class FirebaseService {
     } catch (error: any) {
       console.error("Firebase Auth Error Full:", error);
       
-      // Handle specific error for Unauthorized Domain
       if (error.code === 'auth/unauthorized-domain') {
-        throw new Error(`Domain not authorized. Add "${window.location.hostname}" to Firebase Console > Authentication > Settings > Authorized Domains.`);
+        const hostname = window.location.hostname;
+        const host = window.location.host;
+        // Fallback to host if hostname is empty (can happen in some preview environments)
+        const currentDomain = hostname || host || window.location.href;
+        throw new Error(`Domain not authorized (${currentDomain}). Please add "${currentDomain}" to the Firebase Console.`);
       } else if (error.code === 'auth/popup-closed-by-user') {
         throw new Error("Sign-in cancelled by user.");
       } else if (error.code === 'auth/popup-blocked') {
@@ -70,6 +77,13 @@ class FirebaseService {
   async logout(): Promise<void> {
     if (this.auth) {
       await signOut(this.auth);
+    }
+  }
+
+  // Add listener for auth state changes
+  onAuthStateChanged(callback: (user: User | null) => void) {
+    if (this.auth) {
+      return onAuthStateChanged(this.auth, callback);
     }
   }
 
@@ -100,7 +114,6 @@ class FirebaseService {
           }
         } catch (tokenError) {
           console.error("Error fetching FCM token:", tokenError);
-          // Sometimes it fails if the SW isn't registered yet.
           throw new Error("Failed to generate token. Ensure Service Worker is registered.");
         }
       } else {
@@ -114,7 +127,6 @@ class FirebaseService {
     return null;
   }
 
-  // Use this to test if the notification UI works locally
   async simulateLocalNotification(title: string, body: string) {
     if (Notification.permission === 'granted') {
        new Notification(title, { body, icon: '/favicon.svg' });

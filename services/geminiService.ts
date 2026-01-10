@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
@@ -57,8 +56,46 @@ export class GeminiService {
   private freeUsageLimit = 200;
 
   constructor() {
+    // 1. Synchronous Restore: Immediate Local Storage Check
+    // This ensures data is available before the first React render cycle.
+    const saved = localStorage.getItem('orin_user');
+    if (saved) {
+      try {
+        this.currentUser = JSON.parse(saved);
+      } catch (e) {
+        console.warn("Corrupt user session cleared.");
+        localStorage.removeItem('orin_user');
+      }
+    }
+
+    // 2. Async Checks (Puter & Firebase)
     this.initPuter();
+    this.initFirebaseListener();
     this.checkAndResetUsage();
+  }
+
+  private initFirebaseListener() {
+    // Keep session in sync with Firebase Auth state
+    firebaseService.onAuthStateChanged((firebaseUser) => {
+      if (firebaseUser) {
+        // If Firebase says we are logged in, but local state is empty, restore it.
+        if (!this.currentUser) {
+           const newUser: UserAccount = {
+              id: firebaseUser.uid,
+              name: firebaseUser.displayName || "Orin User",
+              email: firebaseUser.email || "user@orin.ai",
+              avatar: firebaseUser.photoURL || undefined,
+              tier: 'Verified Member',
+              dailyUsage: { text: 0, images: 0, videos: 0 }
+           };
+           this.setSessionUser(newUser);
+           // Force reload to update UI if needed, or rely on App.tsx polling/context
+           // Usually App.tsx checks getCurrentUser() on mount/update.
+           // Since this is async, we might need a reactive way to update App.
+           // For now, this ensures subsequent reloads/navigation have the user.
+        }
+      }
+    });
   }
 
   private async initPuter() {
@@ -68,10 +105,9 @@ export class GeminiService {
         if (signedIn) {
           const user = await puter.auth.getUser();
           this.updateCurrentUser(user);
-        } else {
-          const saved = localStorage.getItem('orin_user');
-          if (saved) this.currentUser = JSON.parse(saved);
         }
+        // Note: The else block for localStorage was removed from here 
+        // because it's now handled synchronously in the constructor.
       }
     } catch (e) {
       console.warn("Puter delayed.");
