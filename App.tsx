@@ -71,7 +71,9 @@ const App: React.FC = () => {
   const [showAbout, setShowAbout] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Sync State Management
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
 
   // Persistence: Conversations list
@@ -134,7 +136,7 @@ const App: React.FC = () => {
   // 1. Pull on login
   useEffect(() => {
     if (user?.id) {
-      setIsSyncing(true);
+      setSyncStatus('syncing');
       firebaseService.getHistory(user.id).then((cloudData) => {
         if (cloudData) {
           setConversations(prev => {
@@ -153,19 +155,20 @@ const App: React.FC = () => {
             // Merge/Overwrite with Cloud conversations
             revivedCloud.forEach((c: Conversation) => {
                 const local = combined.get(c.id);
-                // If cloud is newer (timestamp check), overwrite. 
-                // If it doesn't exist locally, add it.
                 if (!local || c.timestamp > local.timestamp) {
                     combined.set(c.id, c);
                 }
             });
             
-            // Return sorted list
             return Array.from(combined.values()).sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime());
           });
         }
-        setIsSyncing(false);
+        setSyncStatus('success');
+        setTimeout(() => setSyncStatus('idle'), 3000);
         setHasSyncedWithCloud(true); // Enable push sync only after successful pull
+      }).catch((err) => {
+        console.error("Cloud Pull Failed:", err);
+        setSyncStatus('error');
       });
     }
   }, [user?.id]);
@@ -176,9 +179,13 @@ const App: React.FC = () => {
       const timeout = setTimeout(() => {
          const conversationsWithMessages = conversations.filter(c => c.messages.length > 0);
          if (conversationsWithMessages.length > 0) {
-            setIsSyncing(true);
+            setSyncStatus('syncing');
             firebaseService.saveHistory(user.id, conversationsWithMessages).then(() => {
-               setIsSyncing(false);
+               setSyncStatus('success');
+               setTimeout(() => setSyncStatus('idle'), 3000);
+            }).catch((err) => {
+               console.error("Cloud Push Failed:", err);
+               setSyncStatus('error');
             });
          }
       }, 5000); // Wait 5 seconds of inactivity before pushing to cloud
@@ -364,7 +371,7 @@ const App: React.FC = () => {
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={handleUpdateActiveConversation}
-            isSyncing={isSyncing}
+            isSyncing={syncStatus === 'syncing'}
           />
         );
       case 'math': return <MathsMode onClose={() => navigate('landing')} lang={lang} />;
@@ -404,10 +411,18 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          {isSyncing && (
-             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
-                <i className="fa-solid fa-cloud-arrow-up animate-pulse text-cyan-500 text-[10px]"></i>
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t.syncing}</span>
+          {syncStatus !== 'idle' && (
+             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5 animate-reveal">
+                {syncStatus === 'syncing' && <i className="fa-solid fa-cloud-arrow-up animate-pulse text-cyan-500 text-[10px]"></i>}
+                {syncStatus === 'success' && <i className="fa-solid fa-cloud-check text-emerald-500 text-[10px]"></i>}
+                {syncStatus === 'error' && <i className="fa-solid fa-cloud-exclamation text-red-500 text-[10px]"></i>}
+                <span className={`text-[9px] font-black uppercase tracking-widest ${
+                  syncStatus === 'error' ? 'text-red-500' : 
+                  syncStatus === 'success' ? 'text-emerald-500' : 'text-slate-500'
+                }`}>
+                  {syncStatus === 'syncing' ? t.syncing : 
+                   syncStatus === 'success' ? t.synced : t.syncError}
+                </span>
              </div>
           )}
           <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
