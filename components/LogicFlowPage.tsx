@@ -23,7 +23,6 @@ const InputIcon = ({ color }: { color: string }) => (
 
 const TranslateIcon = ({ color }: { color: string }) => (
   <svg viewBox="0 0 24 24" className={`w-8 h-8 text-${color}-500`} fill="none" stroke="currentColor" strokeWidth="2">
-    {/* Corrected strokeJoin to strokeLinejoin */}
     <path d="M5 8H14M14 8V11M14 8C14 5.23858 11.7614 3 9 3C6.23858 3 4 5.23858 4 8" strokeLinecap="round" strokeLinejoin="round" opacity="0.4" />
     <path d="M19 16H10M10 16V13M10 16C10 18.7614 12.2386 21 15 21C17.7614 21 20 18.7614 20 16" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M2 5L5 8L2 11" strokeLinecap="round" strokeLinejoin="round" opacity="0.4" />
@@ -34,7 +33,6 @@ const TranslateIcon = ({ color }: { color: string }) => (
 const ProcessIcon = ({ color }: { color: string }) => (
   <svg viewBox="0 0 24 24" className={`w-8 h-8 text-${color}-500`} fill="none" stroke="currentColor" strokeWidth="1.5">
     <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z" strokeDasharray="2 2" />
-    {/* Corrected strokeJoin to strokeLinejoin */}
     <path d="M12 8V12L15 15" strokeLinecap="round" strokeLinejoin="round" />
     <circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity="0.1" />
     <path d="M8 12H16M12 8V16" strokeLinecap="round" opacity="0.6" />
@@ -43,7 +41,6 @@ const ProcessIcon = ({ color }: { color: string }) => (
 
 const OutputIcon = ({ color }: { color: string }) => (
   <svg viewBox="0 0 24 24" className={`w-8 h-8 text-${color}-500`} fill="none" stroke="currentColor" strokeWidth="2">
-    {/* Corrected strokeJoin to strokeLinejoin */}
     <path d="M21 15C21 16.1046 20.1046 17 19 17H7L3 21V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V15Z" strokeLinecap="round" strokeLinejoin="round" />
     <path d="M7 8H17" strokeLinecap="round" opacity="0.4" />
     <path d="M7 12H13" strokeLinecap="round" opacity="0.4" />
@@ -83,32 +80,31 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
   );
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-hidden flex flex-col animate-reveal">
-      <header className="h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-            <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5">
-              {/* Corrected strokeJoin to strokeLinejoin */}
-              <path d="M12 2L2 7L12 12L22 7L12 2Z" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 17L12 22L22 17" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M2 12L12 17L22 12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+    <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
+      <div className="max-w-6xl mx-auto px-6 py-12 pb-32">
+        <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-indigo-600/10 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M12 2L2 7L12 12L22 7L12 2Z" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 17L12 22L22 17" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M2 12L12 17L22 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.logicFlow}</h2>
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">Neural Pipeline Visualization</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.logicFlow}</h2>
-            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">Neural Pipeline Visualization</p>
-          </div>
-        </div>
-        <button 
-          onClick={onClose} 
-          className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
-        >
-          <i className="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </header>
+          <button 
+            onClick={onClose} 
+            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </header>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-12">
-        <div className="max-w-6xl mx-auto space-y-16">
+        <div className="space-y-16">
           
           <div className="flex justify-center">
             <div className="p-1.5 bg-slate-200 dark:bg-slate-900 rounded-[20px] flex gap-1 shadow-inner">

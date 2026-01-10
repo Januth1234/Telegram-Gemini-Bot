@@ -271,7 +271,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
           {/* Center: Desktop Tabs (More Focused) */}
           <div className="flex-1 flex justify-center w-full overflow-hidden">
-            <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar mask-gradient-x px-2">
+            {/* Added py-1 to the scrolling container to prevent top clipping of badges */}
+            <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar mask-gradient-x px-2 py-1">
                 {(['chat', 'maths', 'studio', 'vision', 'voice', 'gethelp'] as WorkspaceMode[]).map(tab => (
                   <button
                     key={tab}
@@ -284,7 +285,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <span className="hidden md:inline">{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voiceBeta : t.getHelp}</span>
                     <span className="md:hidden">{tab === 'chat' ? 'Chat' : tab === 'maths' ? 'Math' : tab === 'studio' ? 'Art' : tab === 'vision' ? 'Cam' : tab === 'voice' ? 'Mic' : 'Help'}</span>
                     {(tab === 'voice' || tab === 'gethelp' || tab === 'maths') && (
-                      <span className="absolute -top-1 -right-1 px-1 bg-cyan-600 text-white text-[5px] font-black rounded-sm border border-white/20 scale-75 md:scale-100">BETA</span>
+                      <span className="absolute -top-1.5 -right-1 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-full border border-white/20 scale-75 md:scale-100 z-10 shadow-sm">BETA</span>
                     )}
                   </button>
                 ))}

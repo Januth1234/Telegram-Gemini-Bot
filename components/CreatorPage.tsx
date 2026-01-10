@@ -12,27 +12,27 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
 
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-slate-950 overflow-hidden flex flex-col animate-reveal">
-      <header className="h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
-            <i className="fa-solid fa-user-tie"></i>
+    <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
+      <div className="max-w-3xl mx-auto px-6 py-12 pb-32">
+        <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
+              <i className="fa-solid fa-user-tie"></i>
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.creator}</h2>
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">{t.creatorRole}</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.creator}</h2>
-            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">{t.creatorRole}</p>
-          </div>
-        </div>
-        <button 
-          onClick={onClose} 
-          className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
-        >
-          <i className="fa-solid fa-xmark text-lg"></i>
-        </button>
-      </header>
+          <button 
+            onClick={onClose} 
+            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 transition-all hover:rotate-90"
+          >
+            <i className="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </header>
 
-      <div className="flex-1 overflow-y-auto custom-scrollbar px-6 py-12">
-        <div className="max-w-3xl mx-auto space-y-12">
+        <div className="space-y-12">
           
           <div className="flex flex-col items-center text-center space-y-6">
              <div className="relative group">
@@ -85,4 +85,3 @@ const SocialLink: React.FC<{ href: string; icon: string; label: string; color: s
 );
 
 export default CreatorPage;
-    
