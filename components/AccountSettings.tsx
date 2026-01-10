@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
@@ -39,11 +38,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
       onUserUpdate();
     } catch (err: any) {
       console.error("Login failed", err);
-      // Friendly error mapping
-      let msg = "Connection to Google failed. Please try again.";
-      if (err.code === 'auth/popup-closed-by-user') msg = "Sign-in cancelled.";
-      if (err.code === 'auth/popup-blocked') msg = "Popup blocked. Please allow popups for this site.";
-      setError(msg);
+      // Use the specific message from the service if available
+      setError(err.message || "Connection to Google failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -57,13 +53,24 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   };
 
   const enableNotifications = async () => {
-    const token = await firebaseService.requestPermission();
-    if (token) {
-      setFcmToken(token);
-      alert(lang === 'si' ? "දැනුම්දීම් සක්‍රීයයි!" : "Notifications Enabled! Token generated.");
-    } else {
-      alert("Permission denied or failed to generate token.");
+    setError(null);
+    try {
+      const token = await firebaseService.requestPermission();
+      if (token) {
+        setFcmToken(token);
+        // Fire a test notification immediately to confirm it works
+        firebaseService.simulateLocalNotification(
+          lang === 'si' ? "දැනුම්දීම් සක්‍රීයයි!" : "Notifications Active!",
+          "Orin AI is now connected to your device."
+        );
+      }
+    } catch (e: any) {
+      setError(e.message || "Failed to enable notifications.");
     }
+  };
+
+  const testNotification = () => {
+    firebaseService.simulateLocalNotification("Test Alert", "This is a test notification from Orin AI.");
   };
 
   return (
@@ -164,8 +171,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   </button>
 
                   {error && (
-                    <div className="text-center animate-bounce-subtle">
-                       <p className="text-xs font-bold text-red-500">{error}</p>
+                    <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-bounce-subtle">
+                       <p className="text-xs font-bold text-red-500 text-center break-words">{error}</p>
                     </div>
                   )}
 
@@ -214,18 +221,35 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                 </div>
               </div>
               
-              <button
-                onClick={enableNotifications}
-                className="w-full py-5 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
-              >
-                <i className="fa-solid fa-bell"></i>
-                Enable Notifications
-              </button>
+              <div className="space-y-3">
+                <button
+                  onClick={enableNotifications}
+                  className="w-full py-5 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+                >
+                  <i className="fa-solid fa-bell"></i>
+                  {fcmToken ? "Re-Sync Notifications" : "Enable Notifications"}
+                </button>
+                
+                {fcmToken && (
+                  <button
+                    onClick={testNotification}
+                    className="w-full py-3 rounded-[24px] border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 font-black text-[9px] uppercase tracking-[0.2em] hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                  >
+                    Test Notification
+                  </button>
+                )}
+              </div>
               
               {fcmToken && (
                   <div className="p-4 bg-slate-100 dark:bg-white/5 rounded-2xl break-all">
                       <p className="text-[9px] font-mono text-slate-500">{fcmToken}</p>
                   </div>
+              )}
+              
+              {error && (
+                <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                   <p className="text-xs font-bold text-red-500 text-center break-words">{error}</p>
+                </div>
               )}
 
               <button 

@@ -11,40 +11,19 @@ const startApp = () => {
 
   // Register Service Worker for Firebase Messaging
   if ('serviceWorker' in navigator) {
-    const registerSW = async () => {
-      // Skip if not http/https (e.g. data: or file:)
-      if (window.location.protocol !== 'http:' && window.location.protocol !== 'https:') {
-        return;
-      }
+    // FIX: Explicitly construct the absolute URL using window.location.origin.
+    // This ignores any <base> tags injected by cloud environments (like ai.studio)
+    // that cause origin mismatch errors.
+    const swUrl = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '/')}/firebase-messaging-sw.js`.replace(/\/\//g, '/').replace(':/', '://');
 
-      try {
-        // Attempt to construct absolute URL to bypass potentially incorrect <base> tags
-        // injected by cloud environments.
-        let swUrl = './firebase-messaging-sw.js';
-        let options = { scope: './' };
-
-        try {
-          const baseUrl = window.location.href;
-          swUrl = new URL('firebase-messaging-sw.js', baseUrl).href;
-          options.scope = new URL('./', baseUrl).href;
-        } catch (e) {
-          // If URL construction fails (e.g. invalid base), fall back to relative path
-          console.warn("SW URL construction failed, using relative path:", e);
-        }
-        
-        const registration = await navigator.serviceWorker.register(swUrl, options);
+    navigator.serviceWorker
+      .register(swUrl)
+      .then((registration) => {
         console.log('Service Worker registration successful with scope: ', registration.scope);
-      } catch (err) {
-        // Log explicitly so we can debug if it persists
-        console.error('Service Worker registration failed:', err);
-      }
-    };
-
-    // Wait for full page load to ensure the environment is stable
-    window.addEventListener('load', () => {
-      // Small buffer to allow the iframe to settle
-      setTimeout(registerSW, 1500);
-    });
+      })
+      .catch((err) => {
+        console.warn('Service Worker registration failed:', err);
+      });
   }
 
   try {

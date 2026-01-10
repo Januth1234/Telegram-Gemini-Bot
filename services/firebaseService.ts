@@ -25,24 +25,25 @@ class FirebaseService {
     try {
       this.app = initializeApp(firebaseConfig);
       
-      // Initialize Analytics if in browser
+      // Initialize Analytics & Auth if in browser
       if (typeof window !== 'undefined') {
         this.analytics = getAnalytics(this.app);
         this.auth = getAuth(this.app);
       }
 
-      // Messaging is only supported in browser environments with Service Workers
+      // Initialize Messaging
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         this.messaging = getMessaging(this.app);
       }
     } catch (e) {
-      console.warn("Firebase initialization failed:", e);
+      console.warn("Firebase initialization warning:", e);
     }
   }
 
   // --- AUTHENTICATION ---
   async loginWithGoogle(): Promise<User> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
+    
     const provider = new GoogleAuthProvider();
     provider.addScope('profile');
     provider.addScope('email');
@@ -50,8 +51,18 @@ class FirebaseService {
     try {
       const result = await signInWithPopup(this.auth, provider);
       return result.user;
-    } catch (error) {
-      console.error("Firebase Auth Error:", error);
+    } catch (error: any) {
+      console.error("Firebase Auth Error Full:", error);
+      
+      // Handle specific error for Unauthorized Domain
+      if (error.code === 'auth/unauthorized-domain') {
+        throw new Error(`Domain not authorized. Add "${window.location.hostname}" to Firebase Console > Authentication > Settings > Authorized Domains.`);
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        throw new Error("Sign-in cancelled by user.");
+      } else if (error.code === 'auth/popup-blocked') {
+        throw new Error("Popup blocked. Please allow popups for this site.");
+      }
+      
       throw error;
     }
   }
@@ -65,41 +76,55 @@ class FirebaseService {
   // --- MESSAGING ---
   async requestPermission(): Promise<string | null> {
     if (!this.messaging) {
-      console.warn("Messaging not initialized (service workers not supported?).");
+      console.warn("Messaging not initialized (Service Workers not supported or blocked).");
       return null;
     }
 
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        
         // VAPID Key provided by user
         const vapidKey = "BMz4Zssv3qb7H5GI-hEdYBGQ32QQ65Qj6gHwT1dTJy5NnPd38UrnRunrIWeFxDNsUJyard-mhXkur13D2fVlf48"; 
 
-        const currentToken = await getToken(this.messaging, {
-          vapidKey: vapidKey
-        });
-        
-        if (currentToken) {
-          this.token = currentToken;
-          console.log("FCM Token (Use this to send test messages):", currentToken);
-          return currentToken;
-        } else {
-          console.warn("No registration token available. Request permission to generate one.");
+        try {
+          const currentToken = await getToken(this.messaging, {
+            vapidKey: vapidKey
+          });
+          
+          if (currentToken) {
+            this.token = currentToken;
+            console.log("FCM Token Generated:", currentToken);
+            return currentToken;
+          } else {
+            console.warn("No registration token available. Request permission to generate one.");
+          }
+        } catch (tokenError) {
+          console.error("Error fetching FCM token:", tokenError);
+          // Sometimes it fails if the SW isn't registered yet.
+          throw new Error("Failed to generate token. Ensure Service Worker is registered.");
         }
       } else {
         console.warn("Notification permission denied.");
+        throw new Error("Permission denied. Please enable notifications in browser settings.");
       }
     } catch (err) {
       console.error("An error occurred while retrieving token. ", err);
+      throw err;
     }
     return null;
+  }
+
+  // Use this to test if the notification UI works locally
+  async simulateLocalNotification(title: string, body: string) {
+    if (Notification.permission === 'granted') {
+       new Notification(title, { body, icon: '/favicon.svg' });
+    }
   }
 
   onForegroundMessage(callback: (payload: any) => void) {
     if (!this.messaging) return;
     return onMessage(this.messaging, (payload) => {
-      console.log("Message received. ", payload);
+      console.log("Foreground Message received: ", payload);
       callback(payload);
     });
   }
