@@ -91,14 +91,15 @@ const App: React.FC = () => {
     return localStorage.getItem('orin_active_conv_id');
   });
 
-  // Local Storage Sync
+  // Local Storage Sync - Filters out empty ones that aren't the active one
   useEffect(() => {
     try {
-      localStorage.setItem('orin_history_v2', JSON.stringify(conversations));
+      const toSave = conversations.filter(c => c.messages.length > 0 || c.id === activeConversationId);
+      localStorage.setItem('orin_history_v2', JSON.stringify(toSave));
     } catch (e) {
       console.warn("Local storage limit reached or failed:", e);
     }
-  }, [conversations]);
+  }, [conversations, activeConversationId]);
 
   // Auth State Listener to keep UI in sync with Firebase
   useEffect(() => {
@@ -137,8 +138,6 @@ const App: React.FC = () => {
       firebaseService.getHistory(user.id).then((cloudData) => {
         if (cloudData) {
           setConversations(prev => {
-            // Revive dates just in case, though firebaseService.getHistory handles it now too.
-            // Double robustness.
             const revivedCloud = cloudData.map((c: any) => ({
                 ...c,
                 timestamp: new Date(c.timestamp),
@@ -175,11 +174,14 @@ const App: React.FC = () => {
   useEffect(() => {
     if (user?.id && hasSyncedWithCloud) {
       const timeout = setTimeout(() => {
-         setIsSyncing(true);
-         firebaseService.saveHistory(user.id, conversations).then(() => {
-            setIsSyncing(false);
-         });
-      }, 2000); // Save after 2 seconds of inactivity (Faster for automatic feeling)
+         const conversationsWithMessages = conversations.filter(c => c.messages.length > 0);
+         if (conversationsWithMessages.length > 0) {
+            setIsSyncing(true);
+            firebaseService.saveHistory(user.id, conversationsWithMessages).then(() => {
+               setIsSyncing(false);
+            });
+         }
+      }, 5000); // Wait 5 seconds of inactivity before pushing to cloud
       return () => clearTimeout(timeout);
     }
   }, [conversations, user?.id, hasSyncedWithCloud]);
@@ -220,8 +222,10 @@ const App: React.FC = () => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
-    // Create new conversation on start if we are in landing
-    if (view === 'landing') {
+    // Check if there is already an active conversation that is empty, reuse it
+    const emptyConv = conversations.find(c => c.id === activeConversationId && c.messages.length === 0);
+    
+    if (view === 'landing' && !emptyConv) {
       const newId = Date.now().toString();
       const newConv: Conversation = {
         id: newId,
@@ -233,6 +237,9 @@ const App: React.FC = () => {
       };
       setConversations(prev => [newConv, ...prev]);
       setActiveConversationId(newId);
+    } else if (emptyConv) {
+        // Update mode if reusing empty
+        setConversations(prev => prev.map(c => c.id === emptyConv.id ? { ...c, mode, modesUsed: [mode] } : c));
     }
 
     if (!geminiService.getCurrentUser() && geminiService.hasReachedLimit()) { 
@@ -240,7 +247,6 @@ const App: React.FC = () => {
       return;
     } 
 
-    // Route to appropriate page based on mode
     let targetView: AppView = 'chat';
     if (mode === 'studio') targetView = 'art';
     else if (mode === 'vision') targetView = 'camera';
@@ -272,7 +278,6 @@ const App: React.FC = () => {
       setGlobalPrompt("");
       setShouldAutoSubmit(false);
       
-      // Navigate to the mode saved in the conversation
       let targetView: AppView = 'chat';
       if (conv.mode === 'studio') targetView = 'art';
       else if (conv.mode === 'vision') targetView = 'camera';
@@ -310,6 +315,18 @@ const App: React.FC = () => {
     });
   };
 
+  const handleCloseWorkspace = useCallback(() => {
+    // If conversation is empty, remove it from list
+    if (activeConversationId) {
+      const active = conversations.find(c => c.id === activeConversationId);
+      if (active && active.messages.length === 0) {
+        handleDeleteConversation(activeConversationId);
+      }
+    }
+    navigate('landing');
+    setShouldAutoSubmit(false);
+  }, [activeConversationId, conversations, handleDeleteConversation]);
+
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
 
   const toggleLang = () => setLang(prev => prev === 'en' ? 'si' : 'en');
@@ -320,11 +337,10 @@ const App: React.FC = () => {
       case 'chat':
       case 'art':
       case 'camera':
-        // Determine initial mode for ChatWorkspace
         const workspaceMode: WorkspaceMode = view === 'art' ? 'studio' : view === 'camera' ? 'vision' : 'chat';
         return (
           <ChatWorkspace 
-            onClose={() => { navigate('landing'); setShouldAutoSubmit(false); }} 
+            onClose={handleCloseWorkspace} 
             hwStatus={{ mode: 'GPU', label: t.neuralCore }} 
             initialPrompt={globalPrompt}
             initialMode={workspaceMode}

@@ -62,18 +62,23 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
+  // Sync continuity: Ensure initialPrompt carries over and focuses
   useEffect(() => {
-    setLocalInput(initialPrompt);
-  }, [activeConvId]);
+    if (initialPrompt !== undefined) {
+      setLocalInput(initialPrompt);
+    }
+  }, [initialPrompt]);
 
   useEffect(() => {
+    // Immediate focus on mount and active view change
     const timer = setTimeout(() => {
       if (inputRef.current) {
         inputRef.current.focus();
+        // Move cursor to end if text exists
         const len = inputRef.current.value.length;
         inputRef.current.setSelectionRange(len, len);
       }
-    }, 100);
+    }, 50);
     return () => clearTimeout(timer);
   }, [activeTab, activeConvId]);
 
@@ -83,6 +88,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   const handleClose = useCallback(() => {
+    // Check for draft prompt or unsent files
     if ((localInput.trim() || selectedFile) && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your current draft?")) {
       return;
     }
@@ -158,6 +164,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     setIsTyping(true);
     startProgress(activeTab);
+    // Clear landing page prompt state and local state immediately to signal processing
     handleInputChange('');
 
     if (activeTab === 'studio') {
@@ -252,12 +259,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   return (
     <div className="flex flex-row h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans transition-colors duration-500">
+      {/* Background blobs */}
       <div className="absolute top-[-20%] right-[-30%] w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none md:hidden"></div>
       <div className="hidden md:block absolute top-[-10%] right-[10%] w-[800px] h-[800px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none animate-soft-pulse"></div>
-      <div className="hidden md:block absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none animate-soft-pulse" style={{animationDelay: '2s'}}></div>
+      
       {isHistoryOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />
       )}
+
+      {/* History Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-[120] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
           <div className="flex items-center gap-3">
@@ -318,13 +328,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           <div className="h-12"></div>
         </div>
       </div>
+
       <div className="flex-1 flex flex-col min-w-0 h-full relative z-[50]">
+        {/* Fixed Header */}
         <div className="shrink-0 h-16 md:h-20 glass-panel p-2 md:px-6 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm relative">
           <div className="flex items-center gap-4">
-             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all hover:bg-slate-100 dark:hover:bg-white/5 relative" title="Open History">
+             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 relative transition-all hover:bg-slate-100 dark:hover:bg-white/5" title="Open History">
               <i className="fa-solid fa-clock-rotate-left"></i>
-              {/* Automatic Cloud Sync Indicator */}
-              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 transition-all ${isSyncing ? 'bg-cyan-500 animate-pulse' : 'bg-emerald-500 shadow-sm'}`} title={isSyncing ? "Syncing to Cloud..." : "Cloud Backup Active"}>
+              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 ${isSyncing ? 'bg-cyan-500 animate-pulse' : 'bg-emerald-500 shadow-sm'}`}>
                 <i className={`fa-solid ${isSyncing ? 'fa-cloud-arrow-up' : 'fa-cloud'} text-[6px] text-white`}></i>
               </div>
             </button>
@@ -342,89 +353,68 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <i className={`fa-solid ${tab === 'chat' ? 'fa-message' : tab === 'maths' ? 'fa-calculator' : tab === 'studio' ? 'fa-palette' : tab === 'vision' ? 'fa-camera' : tab === 'voice' ? 'fa-microphone-lines' : 'fa-life-ring'} text-[9px]`}></i>
                     <span className="hidden md:inline">{tab === 'chat' ? t.reasoning : tab === 'maths' ? t.maths : tab === 'studio' ? t.creative : tab === 'vision' ? t.vision : tab === 'voice' ? t.voiceBeta : t.getHelp}</span>
                     <span className="md:hidden">{tab === 'chat' ? 'Chat' : tab === 'maths' ? 'Math' : tab === 'studio' ? 'Art' : tab === 'vision' ? 'Cam' : tab === 'voice' ? 'Mic' : 'Help'}</span>
-                    {(tab === 'voice' || tab === 'gethelp' || tab === 'maths') && (
-                      <span className="absolute -top-1.5 -right-1 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-full border border-white/20 scale-75 md:scale-100 z-10 shadow-sm">BETA</span>
-                    )}
                   </a>
                 ))}
             </div>
           </div>
-          <div className="flex items-center">
-            <button onClick={handleClose} className="w-10 h-10 rounded-xl hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors flex items-center justify-center" title="Close Workspace">
-               <i className="fa-solid fa-right-from-bracket"></i>
-            </button>
-          </div>
+          <button onClick={handleClose} className="w-10 h-10 rounded-xl hover:bg-red-50 hover:text-red-500 text-slate-400 flex items-center justify-center transition-colors" title="Close Workspace">
+             <i className="fa-solid fa-right-from-bracket"></i>
+          </button>
           {progress > 0 && (
             <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-200 dark:bg-slate-800 overflow-hidden">
                <div className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)] transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
-          {messages.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center animate-reveal px-6 text-center">
-              <div className="w-24 h-24 rounded-[36px] glass-panel flex items-center justify-center text-slate-400 dark:text-slate-600 mb-8 animate-soft-pulse border-slate-200 dark:border-white/10 shadow-xl">
-                <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : 'fa-camera'} text-4xl`}></i>
-              </div>
-              <p className="text-xs font-black uppercase tracking-[0.4em] text-slate-400 dark:text-slate-500 mb-8">{activeTab === 'chat' ? t.reasoning : activeTab === 'studio' ? t.creative : t.vision}</p>
-              <div className="flex flex-wrap justify-center gap-3 max-w-lg">
-                 {currentSuggestions.map(p => (
-                   <button key={p} onClick={() => handleInputChange(p)} className={`px-5 py-3 bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl text-[11px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all shadow-sm ${lang === 'si' ? 'sinhala-text' : ''}`}>{p}</button>
-                 ))}
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-4xl mx-auto space-y-6 md:space-y-12 pb-40 p-4 md:p-8">
-              {messages.map((msg) => (
-                <div key={msg.id} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                  <div className={`max-w-[95%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[40px] shadow-sm glass-panel border border-slate-200 dark:border-white/10 ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-sm' : 'rounded-tl-sm text-slate-800 dark:text-slate-200'}`}>
-                    <div className={`text-[14px] md:text-base leading-relaxed whitespace-pre-wrap ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                    {msg.links && msg.links.length > 0 && (
-                      <div className="mt-6 pt-4 border-t border-black/5 dark:border-black/5 flex flex-wrap gap-2">
-                        {msg.links.map((link, idx) => (
-                          <a key={idx} href={link.uri} target="_blank" className="px-3 py-1.5 bg-black/5 dark:bg-black/10 rounded-xl text-[9px] font-bold flex items-center gap-2 hover:bg-cyan-600 hover:text-white transition-all"><i className="fa-solid fa-link"></i> {link.title}</a>
-                        ))}
-                      </div>
-                    )}
-                    {msg.imageUrl && (
-                      <div className="mt-6 flex flex-col gap-4">
-                        <div className="group rounded-[20px] md:rounded-[32px] overflow-hidden border border-slate-200 dark:border-black/10 shadow-xl bg-black/5">
-                          <img 
-                            src={msg.imageUrl} 
-                            className="w-full h-auto transition-transform duration-700 ease-out group-hover:scale-[1.01]" 
-                            alt="Asset" 
-                          />
-                        </div>
-                        <button 
-                          onClick={() => handleDownloadImage(msg.imageUrl!)}
-                          className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-cyan-600 hover:text-white transition-all rounded-2xl text-[10px] font-black uppercase tracking-widest w-fit self-center md:self-start border border-black/5 dark:border-white/5 shadow-sm group"
-                        >
-                          <i className="fa-solid fa-cloud-arrow-down transition-transform group-hover:translate-y-0.5"></i>
-                          {t.downloadAsset}
-                        </button>
-                      </div>
-                    )}
-                    {msg.reasoning_details && (
-                        <div className="mt-4 p-4 rounded-xl bg-slate-50 dark:bg-black/20 text-xs text-slate-500 border border-slate-200 dark:border-white/5">
-                            <span className="font-bold uppercase tracking-wider block mb-1">Reasoning Logic:</span>
-                            {JSON.stringify(msg.reasoning_details).slice(0, 100)}...
-                        </div>
-                    )}
-                  </div>
+
+        {/* Stable Content Wrapper to prevent shifting */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative bg-slate-50/50 dark:bg-slate-950/50 transition-colors">
+          <div className="min-h-full flex flex-col">
+            {messages.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center animate-reveal px-6 text-center">
+                <div className="w-24 h-24 rounded-[36px] glass-panel flex items-center justify-center text-slate-400 dark:text-slate-600 mb-8 animate-soft-pulse border-slate-200 dark:border-white/10 shadow-xl">
+                  <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : 'fa-camera'} text-4xl`}></i>
                 </div>
-              ))}
-              {isTyping && (
-                <div className="w-full flex flex-col gap-2 animate-reveal items-start">
-                  <div className="flex items-center gap-3 bg-white/50 dark:bg-white/5 px-6 py-3 rounded-full w-fit animate-pulse border border-slate-200 dark:border-white/5">
-                    <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce"></div>
-                    <span className="text-[9px] font-black text-cyan-600 uppercase tracking-widest">{stepLabel || t.calculating}</span>
-                  </div>
+                <div className="flex flex-wrap justify-center gap-3 max-w-lg">
+                   {currentSuggestions.map(p => (
+                     <button key={p} onClick={() => handleSend(p)} className={`px-5 py-3 bg-white dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl text-[11px] font-bold text-slate-500 hover:text-cyan-600 transition-all shadow-sm ${lang === 'si' ? 'sinhala-text' : ''}`}>{p}</button>
+                   ))}
                 </div>
-              )}
-              <div ref={scrollRef} />
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="max-w-4xl mx-auto w-full space-y-6 md:space-y-12 pb-40 p-4 md:p-8 animate-fade">
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`w-full flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                    <div className={`max-w-[95%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[40px] shadow-sm glass-panel border border-slate-200 dark:border-white/10 ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-sm' : 'rounded-tl-sm text-slate-800 dark:text-slate-200'}`}>
+                      <div className={`text-[14px] md:text-base leading-relaxed whitespace-pre-wrap ${isSinhala(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                      {msg.imageUrl && (
+                        <div className="mt-6 flex flex-col gap-4">
+                          <div className="group rounded-[20px] md:rounded-[32px] overflow-hidden border border-slate-200 dark:border-white/10 shadow-xl bg-black/5">
+                            <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 ease-out group-hover:scale-[1.01]" alt="Asset" />
+                          </div>
+                          <button onClick={() => handleDownloadImage(msg.imageUrl!)} className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-cyan-600 hover:text-white transition-all rounded-2xl text-[10px] font-black uppercase tracking-widest w-fit self-center md:self-start border border-black/5 dark:border-white/5 shadow-sm">
+                            <i className="fa-solid fa-cloud-arrow-down"></i> {t.downloadAsset}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isTyping && (
+                  <div className="w-full flex flex-col gap-2 animate-reveal items-start">
+                    <div className="flex items-center gap-3 bg-white/50 dark:bg-white/5 px-6 py-3 rounded-full w-fit animate-pulse border border-slate-200 dark:border-white/5">
+                      <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce"></div>
+                      <span className="text-[9px] font-black text-cyan-600 uppercase tracking-widest">{stepLabel || t.calculating}</span>
+                    </div>
+                  </div>
+                )}
+                <div ref={scrollRef} />
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Input Bar */}
         <div className="shrink-0 p-4 md:p-8 bg-gradient-to-t from-slate-100 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent">
           <div className="max-w-4xl mx-auto">
             <div className="glass-panel p-2 md:p-3 rounded-[28px] md:rounded-[40px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-3 backdrop-blur-xl bg-white/80 dark:bg-slate-900/80 transition-all focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:border-cyan-500/30">
