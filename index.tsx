@@ -11,15 +11,10 @@ const startApp = () => {
 
   // Register Service Worker for Firebase Messaging
   if ('serviceWorker' in navigator) {
-    // FIX: Explicitly construct the absolute URL using window.location.origin.
-    // This ignores any <base> tags injected by cloud environments (like ai.studio)
-    // that cause origin mismatch errors.
-    const swUrl = `${window.location.origin}${window.location.pathname.replace(/\/[^/]*$/, '/')}/firebase-messaging-sw.js`.replace(/\/\//g, '/').replace(':/', '://');
-
     navigator.serviceWorker
-      .register(swUrl)
+      .register('/firebase-messaging-sw.js')
       .then((registration) => {
-        console.log('Service Worker registration successful with scope: ', registration.scope);
+        console.log('Service Worker registered with scope:', registration.scope);
       })
       .catch((err) => {
         console.warn('Service Worker registration failed:', err);

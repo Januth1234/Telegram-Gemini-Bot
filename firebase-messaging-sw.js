@@ -1,4 +1,4 @@
-// Give the service worker access to Firebase Messaging.
+// Firebase Service Worker
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
@@ -18,7 +18,6 @@ try {
 
   messaging.onBackgroundMessage((payload) => {
     console.log('[firebase-messaging-sw.js] Received background message ', payload);
-    
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
       body: payload.notification.body,
@@ -27,6 +26,6 @@ try {
 
     self.registration.showNotification(notificationTitle, notificationOptions);
   });
-} catch (e) {
-  console.log("Firebase SW Initialization Error (likely already initialized):", e);
+} catch (error) {
+  console.log("Service Worker Initialization Error:", error);
 }

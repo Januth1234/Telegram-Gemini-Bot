@@ -38,7 +38,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
       onUserUpdate();
     } catch (err: any) {
       console.error("Login failed", err);
-      // Use the specific message from the service if available
       setError(err.message || "Connection to Google failed. Please try again.");
     } finally {
       setLoading(false);
@@ -171,8 +170,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                   </button>
 
                   {error && (
-                    <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-bounce-subtle">
-                       <p className="text-xs font-bold text-red-500 text-center break-words">{error}</p>
+                    <div className="w-full p-5 bg-red-500/10 border border-red-500/20 rounded-2xl animate-bounce-subtle">
+                       <p className="text-xs font-bold text-red-500 text-center break-words leading-relaxed">{error}</p>
+                       {error.includes("Domain") && (
+                         <div className="mt-3 p-2 bg-white/50 dark:bg-black/20 rounded-lg text-center">
+                            <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase mb-1">Your current domain:</p>
+                            <code className="text-[10px] font-mono text-red-600 dark:text-red-400 select-all">{window.location.hostname || window.location.host || window.location.href}</code>
+                         </div>
+                       )}
                     </div>
                   )}
 
@@ -247,7 +252,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               )}
               
               {error && (
-                <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl">
+                <div className="w-full p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-bounce-subtle">
                    <p className="text-xs font-bold text-red-500 text-center break-words">{error}</p>
                 </div>
               )}
