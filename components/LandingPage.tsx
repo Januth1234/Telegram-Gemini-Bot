@@ -1,6 +1,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
+import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount } from '../types';
 
@@ -18,6 +19,24 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const t = translations[lang];
   const [contextGreeting, setContextGreeting] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false);
+
+  // Check for notification permission on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      // Small delay to allow fade-in animations to start first
+      setTimeout(() => setShowNotifPrompt(true), 1500);
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    setShowNotifPrompt(false);
+    try {
+      await firebaseService.requestPermission();
+    } catch (e) {
+      console.error("Notification setup failed", e);
+    }
+  };
 
   const handleLoginClick = async () => {
     setIsLoggingIn(true);
@@ -66,6 +85,36 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar bg-transparent flex flex-col items-center overscroll-contain relative z-10">
+      
+      {/* Startup Notification Prompt Modal */}
+      {showNotifPrompt && (
+        <div className="fixed inset-0 z-[200] flex items-end md:items-center justify-center p-4 md:p-0 bg-slate-950/60 backdrop-blur-sm animate-fade">
+          <div className="w-full max-w-sm glass-panel p-6 rounded-[32px] border border-cyan-500/30 shadow-2xl flex flex-col items-center gap-4 animate-scale-in bg-slate-900/90">
+             <div className="w-12 h-12 rounded-full bg-cyan-500/20 text-cyan-500 flex items-center justify-center animate-bounce-subtle">
+               <i className="fa-solid fa-bell text-xl"></i>
+             </div>
+             <div className="text-center space-y-1">
+               <h3 className="text-lg font-black text-white uppercase tracking-tight">Stay Connected</h3>
+               <p className="text-xs font-medium text-slate-400">Enable notifications to receive alerts when your background tasks complete.</p>
+             </div>
+             <div className="grid grid-cols-2 gap-3 w-full pt-2">
+               <button 
+                 onClick={() => setShowNotifPrompt(false)}
+                 className="py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:bg-white/5 transition-colors"
+               >
+                 Skip
+               </button>
+               <button 
+                 onClick={handleEnableNotifications}
+                 className="py-3 rounded-2xl bg-cyan-600 text-white text-[10px] font-black uppercase tracking-widest shadow-lg shadow-cyan-600/20 hover:scale-105 active:scale-95 transition-all"
+               >
+                 Allow
+               </button>
+             </div>
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-6xl px-6 py-12 md:py-32 flex flex-col items-center gap-12 md:gap-24">
         
         {/* Main Hero Area */}
@@ -142,11 +191,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
         {/* Features Grid - Improved spacing for mobile */}
         <section className="w-full grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-6 z-10">
-          <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Deep Logic" onClick={() => onStartChat(prompt, 'chat')} />
-          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Solver" onClick={() => onStartChat(prompt, 'maths')} isBeta />
-          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Studio" onClick={() => onStartChat(prompt, 'studio')} />
-          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Vision" onClick={() => onStartChat(prompt, 'vision')} />
-          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Live" onClick={onVoiceOpen} isBeta />
+          <FeatureCard index={0} icon="fa-message" title={t.reasoning} desc="Deep Logic" href="#chat" />
+          <FeatureCard index={1} icon="fa-calculator" title={t.maths} desc="Solver" href="#math" isBeta />
+          <FeatureCard index={2} icon="fa-palette" title={t.creative} desc="Studio" href="#art" />
+          <FeatureCard index={3} icon="fa-camera" title={t.vision} desc="Vision" href="#camera" />
+          <FeatureCard index={4} icon="fa-microphone-lines" title={t.voiceBeta} desc="Live" href="#voice" isBeta />
         </section>
 
         {/* Navigation Cards */}
@@ -154,7 +203,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           <NavCard index={0} href="#creator" icon="fa-user-tie" color="orange" title={t.creator} desc={t.aboutCreator} />
           <NavCard index={1} href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} desc={t.pricingDesc} />
           <NavCard index={2} href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} desc="Neural map." />
-          <NavCard index={3} href="#rocket" icon="fa-rocket" color="cyan" title={t.releases} desc="Changelogs." />
+          <NavCard index={3} href="#releases" icon="fa-rocket" color="cyan" title={t.releases} desc="Changelogs." />
           <NavCard index={4} href="#privacy" icon="fa-shield-halved" color="indigo" title={t.privacy} desc="Safety doc." />
           <NavCard index={5} href="#terms" icon="fa-file-contract" color="emerald" title={t.terms} desc="Agreement." />
         </section>
@@ -169,10 +218,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   );
 };
 
-const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; onClick: () => void; isBeta?: boolean }> = ({ icon, title, desc, index, onClick, isBeta }) => (
-  <button 
-    onClick={onClick}
-    className={`glass-panel p-4 md:p-8 rounded-[24px] md:rounded-[40px] space-y-3 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95 ${index === 4 ? 'col-span-2 md:col-span-1' : ''}`}
+const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: number; href: string; isBeta?: boolean }> = ({ icon, title, desc, index, href, isBeta }) => (
+  <a 
+    href={href}
+    className={`glass-panel p-4 md:p-8 rounded-[24px] md:rounded-[40px] space-y-3 md:space-y-6 hover:translate-y-[-4px] transition-all group border border-slate-200 dark:border-white/5 text-left w-full relative overflow-hidden active:scale-95 flex flex-col ${index === 4 ? 'col-span-2 md:col-span-1' : ''}`}
   >
     {isBeta && (
       <div className="absolute top-3 right-3 md:top-4 md:right-4 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-sm border border-white/20 shadow-sm animate-pulse">BETA</div>
@@ -184,7 +233,7 @@ const FeatureCard: React.FC<{ icon: string; title: string; desc: string; index: 
       <h4 className="text-[10px] md:text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h4>
       <p className="text-[8px] md:text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 md:mt-2 font-medium leading-relaxed">{desc}</p>
     </div>
-  </button>
+  </a>
 );
 
 const NavCard: React.FC<{ href: string; icon: string; title: string; desc: string; color: string; index: number }> = ({ href, icon, title, desc, color, index }) => (

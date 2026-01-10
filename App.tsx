@@ -11,6 +11,8 @@ import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
+import GetHelpMode from './components/GetHelpMode';
+import MathsMode from './components/MathsMode';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService'; // Import Firebase Service
@@ -23,14 +25,17 @@ const App: React.FC = () => {
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '');
-    if (['workspace', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing'].includes(hash)) {
+    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing'];
+    
+    if (validViews.includes(hash as AppView)) {
       return hash as AppView;
     }
+    // Backward compatibility
+    if (hash === 'workspace') return 'chat';
     return 'landing';
   };
 
   const [view, setView] = useState<AppView>(getInitialView());
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>(() => (localStorage.getItem('orin_active_module') as WorkspaceMode) || 'chat');
   
   // Notification State
   const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
@@ -64,7 +69,6 @@ const App: React.FC = () => {
 
   const [user, setUser] = useState(geminiService.getCurrentUser());
   const [showAbout, setShowAbout] = useState(false);
-  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
 
@@ -117,13 +121,11 @@ const App: React.FC = () => {
   }, []);
 
   const handleLogin = async () => {
-    // Navigates user to the Account Settings view where the official Google Sign-In button is rendered.
     navigate('account');
   };
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
-    setWorkspaceMode(mode);
     setShouldAutoSubmit(autoSubmit);
     
     // Create new conversation on start if we are in landing
@@ -143,9 +145,18 @@ const App: React.FC = () => {
 
     if (!geminiService.getCurrentUser() && geminiService.hasReachedLimit()) { 
       navigate('account'); 
-    } else { 
-      navigate('workspace'); 
-    }
+      return;
+    } 
+
+    // Route to appropriate page based on mode
+    let targetView: AppView = 'chat';
+    if (mode === 'studio') targetView = 'art';
+    else if (mode === 'vision') targetView = 'camera';
+    else if (mode === 'voice') targetView = 'voice';
+    else if (mode === 'maths') targetView = 'math';
+    else if (mode === 'gethelp') targetView = 'help';
+    
+    navigate(targetView);
   };
 
   const handleUpdateActiveConversation = (title?: string, modesUsed?: WorkspaceMode[]) => {
@@ -166,9 +177,17 @@ const App: React.FC = () => {
     const conv = conversations.find(c => c.id === id);
     if (conv) {
       setActiveConversationId(id);
-      setWorkspaceMode(conv.mode);
       setGlobalPrompt("");
       setShouldAutoSubmit(false);
+      
+      // Navigate to the mode saved in the conversation
+      let targetView: AppView = 'chat';
+      if (conv.mode === 'studio') targetView = 'art';
+      else if (conv.mode === 'vision') targetView = 'camera';
+      // Voice, Math, Help usually don't have persistent chat history in the same way, but if they did:
+      else if (conv.mode === 'maths') targetView = 'math';
+      
+      navigate(targetView);
     }
   };
 
@@ -184,9 +203,9 @@ const App: React.FC = () => {
     };
     setConversations(prev => [newConv, ...prev]);
     setActiveConversationId(newId);
-    setWorkspaceMode('chat');
     setGlobalPrompt("");
     setShouldAutoSubmit(false);
+    navigate('chat');
   };
 
   const handleDeleteConversation = (id: string) => {
@@ -207,7 +226,11 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (view) {
-      case 'workspace': 
+      case 'chat':
+      case 'art':
+      case 'camera':
+        // Determine initial mode for ChatWorkspace
+        const workspaceMode: WorkspaceMode = view === 'art' ? 'studio' : view === 'camera' ? 'vision' : 'chat';
         return (
           <ChatWorkspace 
             onClose={() => { navigate('landing'); setShouldAutoSubmit(false); }} 
@@ -236,6 +259,10 @@ const App: React.FC = () => {
             onUpdateTitle={handleUpdateActiveConversation}
           />
         );
+      case 'math': return <MathsMode onClose={() => navigate('landing')} lang={lang} />;
+      case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
+      case 'help': return <GetHelpMode onClose={() => navigate('landing')} lang={lang} />;
+      
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={refreshUser} />;
       case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
       case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
@@ -311,7 +338,6 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {isVoiceOpen && <VoiceAssistant onClose={() => setIsVoiceOpen(false)} lang={lang} />}
       {showAbout && <AboutModal onClose={() => setShowAbout(false)} lang={lang} />}
     </div>
   );

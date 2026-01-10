@@ -3,9 +3,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { geminiService, AppError } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
-import VoiceAssistant from './VoiceAssistant';
-import GetHelpMode from './GetHelpMode';
-import MathsMode from './MathsMode';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -32,7 +29,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle
 }) => {
   const t = translations[lang];
-  const [activeTab, setActiveTab] = useState<WorkspaceMode>(initialMode);
+  // activeTab is now driven by initialMode prop which is driven by URL hash in App.tsx
+  const activeTab = initialMode;
   const [isTyping, setIsTyping] = useState(false);
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState("");
@@ -51,16 +49,16 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const progressIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (activeTab !== 'voice' && activeTab !== 'gethelp' && activeTab !== 'maths') {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [activeTab]);
-
-  useEffect(() => {
+    // Sync local input if prompt changes externally
     if (initialPrompt && initialPrompt !== localInput) {
       setLocalInput(initialPrompt);
     }
   }, [initialPrompt]);
+
+  useEffect(() => {
+    // Focus input on mount or tab change
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, [activeTab]);
 
   const handleInputChange = (val: string) => {
     setLocalInput(val);
@@ -199,9 +197,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const isSinhala = (text: string) => /[^\u0000-\u007F]/.test(text);
 
-  const handleTabChange = (tab: WorkspaceMode) => {
-    setActiveTab(tab);
-    setModesUsed(prev => new Set([...Array.from(prev), tab]));
+  // Helper to map tab mode to URL hash
+  const getTabUrl = (tab: WorkspaceMode) => {
+    if (tab === 'studio') return '#art';
+    if (tab === 'vision') return '#camera';
+    if (tab === 'maths') return '#math';
+    if (tab === 'voice') return '#voice';
+    if (tab === 'gethelp') return '#help';
+    return '#chat';
   };
 
   const currentSuggestions = useMemo(() => {
@@ -262,7 +265,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* Navigation / Tab Bar */}
         <div className="shrink-0 h-16 md:h-20 glass-panel p-2 md:px-6 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm relative">
           
-          {/* Left: Mobile Menu & Breadcrumbs */}
+          {/* Left: Mobile Menu */}
           <div className="flex items-center gap-4">
              <button onClick={() => setIsHistoryOpen(!isHistoryOpen)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all md:hidden">
               <i className="fa-solid fa-bars"></i>
@@ -271,12 +274,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
           {/* Center: Desktop Tabs (More Focused) */}
           <div className="flex-1 flex justify-center w-full overflow-hidden">
-            {/* Added py-1 to the scrolling container to prevent top clipping of badges */}
             <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar mask-gradient-x px-2 py-1">
                 {(['chat', 'maths', 'studio', 'vision', 'voice', 'gethelp'] as WorkspaceMode[]).map(tab => (
-                  <button
+                  <a
                     key={tab}
-                    onClick={() => handleTabChange(tab)}
+                    href={getTabUrl(tab)}
                     className={`px-3 md:px-5 py-2 md:py-2.5 rounded-xl md:rounded-2xl text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center gap-2 relative shrink-0 ${
                       activeTab === tab ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 shadow-md transform scale-105' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-300 hover:bg-black/5 dark:hover:bg-white/5'
                     }`}
@@ -287,7 +289,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     {(tab === 'voice' || tab === 'gethelp' || tab === 'maths') && (
                       <span className="absolute -top-1.5 -right-1 px-1.5 py-0.5 bg-cyan-600 text-white text-[6px] font-black rounded-full border border-white/20 scale-75 md:scale-100 z-10 shadow-sm">BETA</span>
                     )}
-                  </button>
+                  </a>
                 ))}
             </div>
           </div>
@@ -311,13 +313,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
-          {activeTab === 'voice' ? (
-            <VoiceAssistant inline onClose={() => handleTabChange('chat')} lang={lang} />
-          ) : activeTab === 'gethelp' ? (
-            <GetHelpMode onClose={() => handleTabChange('chat')} lang={lang} />
-          ) : activeTab === 'maths' ? (
-            <MathsMode onClose={() => handleTabChange('chat')} lang={lang} />
-          ) : messages.length === 0 ? (
+          {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center animate-reveal px-6 text-center">
               <div className="w-24 h-24 rounded-[36px] glass-panel flex items-center justify-center text-slate-400 dark:text-slate-600 mb-8 animate-soft-pulse border-slate-200 dark:border-white/10 shadow-xl">
                 <i className={`fa-solid ${activeTab === 'chat' ? 'fa-message' : activeTab === 'studio' ? 'fa-palette' : 'fa-camera'} text-4xl`}></i>
@@ -363,46 +359,45 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
         </div>
 
-        {activeTab !== 'voice' && activeTab !== 'gethelp' && activeTab !== 'maths' && (
-          <div className="shrink-0 p-4 md:p-8 bg-gradient-to-t from-slate-100 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent">
-            <div className="max-w-4xl mx-auto">
-              {/* Premium Input Bar */}
-              <div className="glass-panel p-2 md:p-3 rounded-[28px] md:rounded-[40px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-3 backdrop-blur-xl bg-white/80 dark:bg-slate-900/80 transition-all focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:border-cyan-500/30">
-                <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-90 tooltip-trigger">
-                   <i className="fa-solid fa-paperclip text-lg"></i>
-                </button>
-                <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const r = new FileReader();
-                    r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
-                    r.readAsDataURL(file);
-                  }
-                }} />
-                
-                <input 
-                  ref={inputRef}
-                  value={localInput}
-                  onChange={e => handleInputChange(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleSend()}
-                  placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt}
-                  className={`flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-lg py-3 md:py-4 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`}
-                />
-                
-                <button 
-                   onClick={() => handleSend()} 
-                   disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} 
-                   className="w-12 h-12 md:w-14 md:h-14 rounded-[20px] md:rounded-[32px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100"
-                >
-                   <i className="fa-solid fa-paper-plane text-sm md:text-lg"></i>
-                </button>
-              </div>
-              <div className="text-center mt-3 hidden md:block">
-                 <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">Orin AI Neural Core v4.0 • Secure Transmission</p>
-              </div>
+        {/* Input Bar is only shown for these conversational modes */}
+        <div className="shrink-0 p-4 md:p-8 bg-gradient-to-t from-slate-100 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent">
+          <div className="max-w-4xl mx-auto">
+            {/* Premium Input Bar */}
+            <div className="glass-panel p-2 md:p-3 rounded-[28px] md:rounded-[40px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-3 backdrop-blur-xl bg-white/80 dark:bg-slate-900/80 transition-all focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:border-cyan-500/30">
+              <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-90 tooltip-trigger">
+                 <i className="fa-solid fa-paperclip text-lg"></i>
+              </button>
+              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const r = new FileReader();
+                  r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
+                  r.readAsDataURL(file);
+                }
+              }} />
+              
+              <input 
+                ref={inputRef}
+                value={localInput}
+                onChange={e => handleInputChange(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt}
+                className={`flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-lg py-3 md:py-4 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`}
+              />
+              
+              <button 
+                 onClick={() => handleSend()} 
+                 disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} 
+                 className="w-12 h-12 md:w-14 md:h-14 rounded-[20px] md:rounded-[32px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-lg hover:shadow-cyan-500/20 active:scale-95 transition-all disabled:opacity-20 disabled:scale-100"
+              >
+                 <i className="fa-solid fa-paper-plane text-sm md:text-lg"></i>
+              </button>
+            </div>
+            <div className="text-center mt-3 hidden md:block">
+               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">Orin AI Neural Core v4.0 • Secure Transmission</p>
             </div>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

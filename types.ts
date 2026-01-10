@@ -51,5 +51,5 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'workspace' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing';
+export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'help' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing';
 export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'gethelp' | 'maths';
