@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Language } from '../types';
+import { Language, GroundingLink } from '../types';
 import { translations } from '../translations';
 import { geminiService } from '../services/geminiService';
 
@@ -27,6 +27,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   // Search & Agent State
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<string | null>(null);
+  const [searchLinks, setSearchLinks] = useState<GroundingLink[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [activeTaskType, setActiveTaskType] = useState<TaskType>('search');
   
@@ -102,7 +103,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   };
 
   const parseCSV = (text: string): string[][] => {
-    // Basic CSV parser assuming standard format or pipe separated
     return text.split('\n')
       .filter(line => line.trim().length > 0)
       .map(line => line.split(/[,|]/).map(cell => cell.trim()));
@@ -112,7 +112,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     setDiscoveredItems([]);
     setAgentProgress(0);
     
-    // Step 1: Initialize
     let initMsg = "Initializing Autonomous Agent...";
     if (mode === 'presentation') initMsg = "Initializing Design Studio...";
     if (mode === 'database') initMsg = "Connecting to SQL Engine...";
@@ -123,7 +122,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     setAgentProgress(10);
     await new Promise(r => setTimeout(r, 600));
 
-    // Step 2: Planning
     let planMsg = `Querying Global Index: "${searchQuery}"`;
     if (mode === 'presentation') planMsg = "Structuring Presentation Outline...";
     if (mode === 'database') planMsg = "Analyzing Data Requirements...";
@@ -134,7 +132,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     setAgentProgress(25);
     await new Promise(r => setTimeout(r, 800));
 
-    // Step 3: Execution
     if (mode === 'presentation') {
         const rawSlides = parseSlides(response.text);
         for (let i = 0; i < rawSlides.length; i++) {
@@ -162,7 +159,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
         setAgentAction("Populating Cell Data...");
         setAgentProgress(80);
         await new Promise(r => setTimeout(r, 800));
-        // Simple heuristic to extract CSV-like data
         const rows = parseCSV(response.text);
         setSpreadsheetData(rows);
         setDiscoveredItems([`${rows.length} Rows Generated`, `${rows[0]?.length || 0} Columns Defined`]);
@@ -178,7 +174,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
         setDiscoveredItems(["Outline Created", "Draft Written", "Polished"]);
 
     } else {
-        // SEARCH SIMULATION
         const lines = response.text.split('\n');
         const items = lines
             .filter((line: string) => line.trim().match(/^[-*•]|\d+\./))
@@ -217,7 +212,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
         }
     }
 
-    // Step 4: Finalize
     setAgentUrl(null);
     setAgentAction("Task Completed Successfully.");
     setSearchResult(response.text);
@@ -227,7 +221,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   const handleSearch = async (forceVisual = false) => {
     if (!searchQuery.trim()) return;
     
-    // Detect Intent
     let detectedMode: TaskType = 'search';
     const q = searchQuery.toLowerCase();
     
@@ -240,6 +233,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     
     setIsSearching(true);
     setSearchResult(null);
+    setSearchLinks([]);
     setSlides([]);
     setSpreadsheetData([]);
     setAgentUrl(null);
@@ -248,7 +242,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     setCurrentSlideIndex(0);
     
     try {
-       // Capture visual context (Optional, only if active)
        let visualContext: string | null = null;
        const isVideoReady = videoRef.current && videoRef.current.srcObject;
 
@@ -285,7 +278,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
        } else {
           finalPrompt = `User Request: "${searchQuery}". 
           TASK: Act as an agent. Search real-world data (prices, items, news).
-          OUTPUT: A detailed list of findings.`;
+          OUTPUT: A detailed list of findings based on web research.`;
        }
 
        const options: any = { useThinking: true, grounding: 'search' };
@@ -297,6 +290,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
        }
 
        const response = await geminiService.chat(finalPrompt, options);
+       setSearchLinks(response.links || []);
 
        await simulateAgentWorkflow(response, detectedMode);
 
@@ -381,7 +375,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
 
       <div className="flex-1 p-6 md:p-12 overflow-y-auto custom-scrollbar flex flex-col items-center justify-start gap-8">
         
-        {/* Task Input */}
         <div className="w-full max-w-3xl space-y-4">
              <div className="relative group z-20">
                 <input 
@@ -389,7 +382,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !isSearching && handleSearch()}
-                  placeholder="Describe a task (e.g., 'Make a database for students' or 'Create an Excel budget')..."
+                  placeholder="Describe a task (e.g., 'Latest prices of iPhone 16' or 'Create an Excel budget')..."
                   disabled={isSearching}
                   className="w-full p-6 pl-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[24px] text-sm md:text-lg font-medium shadow-lg focus:ring-4 focus:ring-cyan-500/10 outline-none transition-all dark:text-white disabled:opacity-50"
                 />
@@ -405,11 +398,9 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                 )}
              </div>
 
-             {/* AGENT VISUALIZATION INTERFACE */}
              {(isSearching || searchResult || slides.length > 0) && (
                <div className="w-full max-w-4xl bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-white/10 animate-scale-in flex flex-col min-h-[500px]">
                   
-                  {/* Fake Browser Toolbar */}
                   <div className="h-14 bg-slate-800 flex items-center px-4 gap-4 border-b border-white/5 shrink-0">
                       <div className="flex gap-1.5 shrink-0">
                          <div className="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
@@ -417,7 +408,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                          <div className="w-2.5 h-2.5 rounded-full bg-green-500/50"></div>
                       </div>
                       
-                      {/* Address Bar */}
                       <div className="flex-1 h-8 bg-black/40 rounded-lg flex items-center px-3 gap-2 overflow-hidden">
                           {agentUrl ? (
                              <>
@@ -431,16 +421,13 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                           )}
                       </div>
                       
-                      {/* Loading Spinner */}
                       {isSearching && (
                           <div className="w-4 h-4 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
                       )}
                   </div>
 
-                  {/* Main Content Area */}
                   <div className="flex-1 bg-slate-950 relative overflow-hidden flex flex-col">
                       
-                      {/* 1. AGENT WORKING VIEW */}
                       {isSearching && (
                           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-fade">
                               <div className="w-24 h-24 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center relative">
@@ -456,10 +443,8 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                           </div>
                       )}
 
-                      {/* 2. RESULT VIEWS */}
                       {!isSearching && (
                           <>
-                              {/* PRESENTATION MODE */}
                               {activeTaskType === 'presentation' && slides.length > 0 && (
                                 <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-900">
                                    <div className="w-full aspect-video bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-8 md:p-12 flex flex-col relative overflow-hidden border border-white/10 animate-reveal">
@@ -488,7 +473,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                 </div>
                               )}
 
-                              {/* DATABASE MODE (SQL) */}
                               {activeTaskType === 'database' && searchResult && (
                                   <div className="flex-1 flex flex-col bg-[#1e1e1e] p-6 overflow-hidden">
                                       <div className="flex items-center justify-between mb-4 border-b border-white/10 pb-2">
@@ -501,7 +485,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                   </div>
                               )}
 
-                              {/* EXCEL MODE */}
                               {activeTaskType === 'excel' && spreadsheetData.length > 0 && (
                                   <div className="flex-1 flex flex-col bg-white dark:bg-slate-900 p-6 overflow-hidden">
                                       <div className="flex items-center justify-between mb-4">
@@ -534,7 +517,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                   </div>
                               )}
 
-                              {/* DOCUMENT MODE */}
                               {activeTaskType === 'document' && searchResult && (
                                   <div className="flex-1 flex flex-col bg-slate-100 dark:bg-black p-8 overflow-y-auto items-center">
                                       <div className="w-full max-w-2xl bg-white text-slate-900 p-12 shadow-xl min-h-[800px]">
@@ -551,22 +533,39 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                   </div>
                               )}
 
-                              {/* SEARCH MODE (Default) */}
                               {activeTaskType === 'search' && searchResult && (
                                   <div className="p-6 border-t border-white/5 bg-slate-900/50 flex-1 overflow-y-auto">
-                                      <div className="mb-4 flex items-center gap-2 text-emerald-400">
-                                         <i className="fa-solid fa-check-circle"></i>
-                                         <span className="text-xs font-black uppercase tracking-widest">Task Complete</span>
+                                      <div className="mb-4 flex items-center justify-between">
+                                         <div className="flex items-center gap-2 text-emerald-400">
+                                            <i className="fa-solid fa-check-circle"></i>
+                                            <span className="text-xs font-black uppercase tracking-widest">Intelligence Report Compiled</span>
+                                         </div>
                                       </div>
-                                      <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap">
+                                      <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap mb-8">
                                          {searchResult}
                                       </div>
+
+                                      {searchLinks.length > 0 && (
+                                         <div className="space-y-4 pt-6 border-t border-white/5">
+                                            <div className="flex items-center gap-2">
+                                                <i className="fa-solid fa-magnifying-glass text-[10px] text-cyan-400"></i>
+                                                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Verified Information Sources</h4>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                               {searchLinks.map((link, i) => (
+                                                  <a key={i} href={link.uri} target="_blank" rel="noopener noreferrer" className="p-3 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all flex flex-col gap-1 group">
+                                                     <span className="text-[10px] font-bold text-cyan-400 truncate group-hover:text-cyan-300">{link.title}</span>
+                                                     <span className="text-[8px] text-slate-500 truncate font-mono">{link.uri}</span>
+                                                  </a>
+                                               ))}
+                                            </div>
+                                         </div>
+                                      )}
                                   </div>
                               )}
                           </>
                       )}
 
-                      {/* Discovered Items Ticker (Shown during search) */}
                       {discoveredItems.length > 0 && isSearching && (
                          <div className="p-4 border-t border-white/5 bg-slate-900/80 backdrop-blur-sm absolute bottom-0 w-full z-10">
                             <div className="flex flex-col gap-2">
@@ -584,7 +583,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
              )}
         </div>
 
-        {/* Screen Share Preview - OPTIONAL, only shown if active */}
         {isSharing && platform === 'ios-pc' && (
           <div className="w-full max-w-md mt-4 animate-reveal">
             <div className="aspect-video rounded-[24px] overflow-hidden border-2 border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.1)] bg-black relative">
@@ -598,7 +596,6 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="w-full max-w-md mt-auto pt-8">
           {!isSharing ? (
             <button 
