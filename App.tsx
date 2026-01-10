@@ -71,6 +71,7 @@ const App: React.FC = () => {
   const [showAbout, setShowAbout] = useState(false);
   const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Persistence: Conversations list
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -89,9 +90,60 @@ const App: React.FC = () => {
     return localStorage.getItem('orin_active_conv_id');
   });
 
+  // Local Storage Sync
   useEffect(() => {
     localStorage.setItem('orin_history_v2', JSON.stringify(conversations));
   }, [conversations]);
+
+  // Cloud Sync Logic
+  // 1. Pull on login
+  useEffect(() => {
+    if (user?.id) {
+      setIsSyncing(true);
+      firebaseService.getHistory(user.id).then((cloudData) => {
+        if (cloudData) {
+          setConversations(prev => {
+            // Revive dates
+            const revivedCloud = cloudData.map((c: any) => ({
+                ...c,
+                timestamp: new Date(c.timestamp),
+                messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+            }));
+
+            // Merge Logic: Combine local and cloud, deduplicating by ID
+            // Prefer cloud version if ID matches (assuming cloud is source of truth after login), 
+            // OR keep local if it's newer? For simplicity, we merge based on ID presence.
+            const localIds = new Set(prev.map(c => c.id));
+            const newFromCloud = revivedCloud.filter((c: Conversation) => !localIds.has(c.id));
+            
+            // If cloud has updated data for existing IDs, we might want to update.
+            // For this implementation, we prioritize local 'recent' changes but ensure nothing is lost.
+            // A simple strategy: Join them and sort by timestamp.
+            const all = [...prev];
+            newFromCloud.forEach((c: Conversation) => all.push(c));
+            
+            // Sort by newest first
+            return all.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+          });
+        }
+        setIsSyncing(false);
+      });
+    }
+  }, [user?.id]);
+
+  // 2. Push on change (Debounced)
+  useEffect(() => {
+    if (user?.id && conversations.length > 0) {
+      const timeout = setTimeout(() => {
+         setIsSyncing(true);
+         firebaseService.saveHistory(user.id, conversations).then(() => {
+            setIsSyncing(false);
+         });
+      }, 5000); // Save after 5 seconds of inactivity to save writes
+      return () => clearTimeout(timeout);
+    }
+  }, [conversations, user?.id]);
+
 
   useEffect(() => {
     if (activeConversationId) localStorage.setItem('orin_active_conv_id', activeConversationId);
@@ -296,6 +348,12 @@ const App: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
+          {isSyncing && (
+             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                <i className="fa-solid fa-arrows-rotate animate-spin text-cyan-500 text-[10px]"></i>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500">{t.syncing}</span>
+             </div>
+          )}
           <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-colors">
             <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'} orin-icon`}></i>
           </button>
@@ -306,7 +364,7 @@ const App: React.FC = () => {
             onClick={() => navigate('account')}
             className="flex items-center gap-3 px-4 h-10 rounded-xl bg-slate-200/50 dark:bg-white/5 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all border border-black/5 dark:border-white/5"
           >
-            <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
+            <div className="w-6 h-6 rounded-full bg-slate-300 dark:bg-slate-800 overflow-hidden flex items-center justify-center border border border-black/5 dark:border-white/10">
               {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="User avatar" /> : <i className="fa-solid fa-user orin-icon text-[9px]"></i>}
             </div>
             <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">

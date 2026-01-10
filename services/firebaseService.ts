@@ -2,6 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirestore, doc, setDoc, getDoc, Firestore } from "firebase/firestore";
+import { Conversation } from "../types";
 
 // Configuration
 const firebaseConfig = {
@@ -20,6 +22,7 @@ class FirebaseService {
   private token: string | null = null;
   private analytics: any = null;
   private auth: Auth | null = null;
+  private db: Firestore | null = null;
 
   constructor() {
     try {
@@ -29,6 +32,7 @@ class FirebaseService {
       if (typeof window !== 'undefined') {
         this.analytics = getAnalytics(this.app);
         this.auth = getAuth(this.app);
+        this.db = getFirestore(this.app);
         
         // Ensure persistence is set to LOCAL to survive refreshes
         setPersistence(this.auth, browserLocalPersistence)
@@ -85,6 +89,36 @@ class FirebaseService {
     if (this.auth) {
       return onAuthStateChanged(this.auth, callback);
     }
+  }
+
+  // --- FIRESTORE HISTORY SYNC ---
+  async saveHistory(uid: string, history: Conversation[]) {
+    if (!this.db) return;
+    try {
+      // We store history as a JSON string blob to preserve structure and avoid
+      // Firestore recursion limits or field mapping issues with complex nested objects.
+      const historyBlob = JSON.stringify(history);
+      const userRef = doc(this.db, "users", uid);
+      await setDoc(userRef, { historyBlob, lastUpdated: new Date() }, { merge: true });
+      console.log("Cloud Sync: History saved successfully.");
+    } catch (e) {
+      console.error("Cloud Sync Error:", e);
+    }
+  }
+
+  async getHistory(uid: string): Promise<Conversation[] | null> {
+    if (!this.db) return null;
+    try {
+      const userRef = doc(this.db, "users", uid);
+      const snap = await getDoc(userRef);
+      if (snap.exists() && snap.data().historyBlob) {
+        const parsed = JSON.parse(snap.data().historyBlob);
+        return parsed;
+      }
+    } catch (e) {
+      console.error("Cloud Fetch Error:", e);
+    }
+    return null;
   }
 
   // --- MESSAGING ---
