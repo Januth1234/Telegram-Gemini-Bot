@@ -1,5 +1,8 @@
 
-import { GoogleGenAI, Modality } from "@google/genai";
+// Fixed: Completed the GeminiService class and exported the geminiService instance.
+// Also updated API key handling to use process.env.API_KEY directly as per guidelines.
+
+import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
 
@@ -8,7 +11,7 @@ declare const puter: any;
 // Safe environment access helper
 const getEnvApiKey = () => {
   try {
-    return process.env.API_KEY;
+    return process.env.API_KEY || "";
   } catch {
     return "";
   }
@@ -154,15 +157,17 @@ export class GeminiService {
     return this.getUsageCount() >= this.freeUsageLimit;
   }
 
-  private async getApiKey(): Promise<string> {
-    let key = getEnvApiKey() || "";
-    if (!key && (window as any).aistudio) {
+  private async checkApiKey(): Promise<boolean> {
+    const key = getEnvApiKey();
+    if (key) return true;
+    
+    if ((window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (hasKey) {
-            key = getEnvApiKey() || "";
-        }
+        if (hasKey) return true;
+        await (window as any).aistudio.openSelectKey();
+        return true; // Guideline: Assume successful key selection after opening dialog
     }
-    return key;
+    return false;
   }
 
   async loginWithGoogle(): Promise<UserAccount> {
@@ -185,12 +190,10 @@ export class GeminiService {
 
   async convertMathImageToLatex(base64Data: string, mimeType: string): Promise<string> {
     try {
-      const key = await this.getApiKey();
-      if (!key) throw new AppError("API Key required.", 'auth');
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const modelName = 'gemini-3-flash-preview'; 
       const response = await ai.models.generateContent({
-        model: modelName,
+        model: 'gemini-3-flash-preview',
         contents: [{
           role: 'user',
           parts: [
@@ -236,21 +239,12 @@ export class GeminiService {
     }
 
     try {
-      const key = await this.getApiKey();
-      if (!key) {
-          if ((window as any).aistudio) {
-              await (window as any).aistudio.openSelectKey();
-              const retryKey = getEnvApiKey();
-              if (!retryKey) throw new AppError("API Key required. Please select a key to continue.", 'auth');
-          } else {
-              throw new AppError("Neural Bridge inactive. Ensure API_KEY is set in your domain's environment variables.", 'auth');
-          }
-      }
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
 
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
-      let contents: any = [];
+      let contents: any[] = [];
       if (options.history && options.history.length > 0) {
           const recentHistory = options.history.slice(-10);
           for (const msg of recentHistory) {
@@ -268,148 +262,163 @@ export class GeminiService {
       currentParts.push({ text: prompt || "Explain this." });
       contents.push({ role: 'user', parts: currentParts });
 
-      const config: any = { systemInstruction: getSystemInstruction() };
-      if (options.useThinking) config.thinkingConfig = { thinkingBudget: 32768 };
-      if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
+      const config: any = { 
+        systemInstruction: getSystemInstruction(),
+      };
 
-      const response = await ai.models.generateContent({ model: modelName, contents, config });
+      if (options.grounding === 'search') {
+        config.tools = [{ googleSearch: {} }];
+      } else if (options.grounding === 'maps') {
+        config.tools = [{ googleMaps: {} }];
+      }
+
+      const response = await ai.models.generateContent({
+        model: modelName,
+        contents,
+        config
+      });
+
+      this.incrementUsage();
+
       const links: GroundingLink[] = [];
-      const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (chunks) {
-        chunks.forEach((chunk: any) => {
-          if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+      if (groundingChunks) {
+        groundingChunks.forEach((chunk: any) => {
+          if (chunk.web) {
+            links.push({ title: chunk.web.title, uri: chunk.web.uri });
+          } else if (chunk.maps) {
+            links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
+          }
         });
       }
 
-      this.incrementUsage();
-      return { text: response.text || "I'm sorry, I couldn't process that.", links };
+      return { text: response.text || "", links };
     } catch (e: any) {
-      const errorMsg = e.message || "";
-      if (errorMsg.includes("Requested entity was not found") || errorMsg.includes("API key not valid") || errorMsg.includes("API Key must be set")) {
-        throw new AppError("Neural Bridge connection failed. Verify your API Key configuration.", 'auth');
-      }
-      throw new AppError(errorMsg || "Connection failed.", 'generic');
+      console.error("Chat Error:", e);
+      throw new AppError(e.message || "Failed to process request.", 'generic');
     }
   }
 
-  async generateImagePro(prompt: string, aspectRatio: AspectRatio, imageSize: ImageSize): Promise<string> {
+  async generateWelcomeMessage(options: { date: string, time: string, location?: string, lang: Language }): Promise<string> {
     try {
-      const key = await this.getApiKey();
-      if (!key) throw new AppError("API Key required for Studio mode.", 'auth');
+      if (!await this.checkApiKey()) return "";
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const prompt = `Generate a very brief, poetic, one-line welcome message for Orin AI (a precision assistant).
+      Context: Date is ${options.date}, Time is ${options.time}. ${options.location ? `Location is ${options.location}.` : ''}
+      Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}.
+      Constraint: Max 10 words. No emojis. No "Welcome to...". Just a greeting.`;
+
       const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-image-preview',
-        contents: { parts: [{ text: prompt }] },
-        config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: imageSize as any } }
+        model: 'gemini-3-flash-preview',
+        contents: prompt
       });
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-      }
-      throw new Error("Empty image returned.");
-    } catch (e: any) {
-      throw new AppError(e.message || "Image creation failed.", 'generic');
+      return response.text?.trim() || "";
+    } catch {
+      return "";
     }
   }
 
-  async generateWelcomeMessage(context: { lang: Language; date?: string; time?: string; location?: string }): Promise<string> {
+  async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
-      if (typeof puter !== 'undefined') {
-        const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
-        const prompt = `Give a short, friendly greeting in ${targetLang} based on the time ${context.time}. Do NOT use the word 'Ayubowan', 'Ayubovan' or 'Welcome'. Be creative, professional and concise. Max 4 words.`;
-        const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
-        return response.toString().replace(/["\.]/g, '');
-      }
-      const hour = new Date().getHours();
-      if (context.lang === 'si') {
-          if (hour < 12) return "සුබ උදෑසනක්!";
-          if (hour < 18) return "සුබ දහවලක්!";
-          return "සුබ සැන්දෑවක්!";
-      } else {
-          if (hour < 12) return "Good Morning!";
-          if (hour < 18) return "Good Afternoon!";
-          return "Good Evening!";
-      }
-    } catch { 
-        return context.lang === 'si' ? "සුබ දවසක්!" : "Greetings!"; 
+      if (!await this.checkApiKey()) return "New Chat";
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const prompt = `Based on the following conversation and modes [${modes.join(',')}], generate a very short, 2-3 word title.
+      Conversation Summary: ${messages.slice(0, 3).map(m => m.content.substring(0, 50)).join(' | ')}
+      Language: ${lang === 'si' ? 'Sinhala' : 'English'}.
+      Constraint: No quotes. Just the title.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      return response.text?.trim() || "New Chat";
+    } catch {
+      return "New Chat";
     }
   }
 
   async translate(text: string, targetLang: Language): Promise<string> {
-    const target = targetLang === 'si' ? 'Sinhala' : 'English';
-    const prompt = `Translate to ${target}. Output ONLY translated text.\n\nText: ${text}`;
-    const result = await this.chat(prompt);
-    return result.text;
+    try {
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const prompt = `Translate the following text to ${targetLang === 'si' ? 'Sinhala' : 'English'}. Keep the tone professional.
+      Text: ${text}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt
+      });
+      return response.text || text;
+    } catch (e: any) {
+      throw new AppError("Translation failed.", 'generic');
+    }
   }
 
-  async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[], preferredLang: Language = 'en'): Promise<string> {
+  async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize): Promise<string> {
     try {
-      if (typeof puter !== 'undefined') {
-        const text = messages.map(m => m.content).join('\n').slice(0, 700);
-        const modesList = modesUsed || [];
-        const isMultiModal = modesList.length > 1;
-        
-        const prompt = `Task: Create a highly descriptive title (max 5 words) for this conversation.
-        Context: ${text}
-        Active Modules: ${modesList.join(', ')}
-        ${isMultiModal ? 'Note: This is a complex cross-functional session. Synthesize a title that reflects multiple capabilities.' : ''}
-        Rules:
-        1. Be specific to the topic.
-        2. If multiple modules used, include both intents (e.g., "AI Strategy + Studio Assets").
-        3. Output raw text, no quotes.`;
-        
-        const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
-        return response.toString().replace(/[".]/g, '').trim();
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-image-preview',
+        contents: { parts: [{ text: prompt }] },
+        config: {
+          imageConfig: {
+            aspectRatio: aspectRatio as any,
+            imageSize: size as any
+          }
+        }
+      });
+
+      for (const part of response.candidates?.[0]?.content?.parts || []) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
-      return "New Chat";
-    } catch { return "New Chat"; }
+      throw new Error("No image generated.");
+    } catch (e: any) {
+      console.error("Image Gen Error:", e);
+      throw new AppError(e.message || "Image synthesis failed.", 'generic');
+    }
   }
 
   async connectLive(callbacks: any) {
-    const key = await this.getApiKey();
-    if (!key && (window as any).aistudio) {
-        await (window as any).aistudio.openSelectKey();
-    }
+    if (!await this.checkApiKey()) throw new AppError("API Key required for Live Mode.", 'auth');
     const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { 
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } 
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
         },
-        systemInstruction: getSystemInstruction(),
-        outputAudioTranscription: {},
         inputAudioTranscription: {},
-      },
+        outputAudioTranscription: {},
+        systemInstruction: getSystemInstruction()
+      }
     });
   }
 
-  async connectTranslator(callbacks: any, languages: { source: string, target: string }) {
-    const key = await this.getApiKey();
-    if (!key && (window as any).aistudio) {
-        await (window as any).aistudio.openSelectKey();
-    }
+  async connectTranslator(callbacks: any, options: { source: string, target: string }) {
+    if (!await this.checkApiKey()) throw new AppError("API Key required for Translator Mode.", 'auth');
     const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-    const systemInstruction = `You are a professional simultaneous interpreter mediating between ${languages.source} and ${languages.target} speakers.
-    PROTOCOL:
-    1. Listen to input audio.
-    2. Auto-detect if it is ${languages.source} or ${languages.target}.
-    3. If input is ${languages.source}, translate to ${languages.target} and speak it out.
-    4. If input is ${languages.target}, translate to ${languages.source} and speak it out.
-    5. NEVER engage in conversation. ONLY translate.
-    6. Response must be immediate. Maintain the speaker's tone.`;
-
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
       callbacks,
       config: {
         responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Fenrir' } } },
-        systemInstruction: systemInstruction,
-        outputAudioTranscription: {},
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } }
+        },
         inputAudioTranscription: {},
-      },
+        outputAudioTranscription: {},
+        systemInstruction: `You are a professional real-time interpreter. 
+        Your task is to translate speech between ${options.source} and ${options.target} seamlessly.
+        - Translate EVERYTHING immediately.
+        - Do not add your own thoughts.
+        - Use appropriate tone for both languages.`
+      }
     });
   }
 }

@@ -21,9 +21,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Translator specific state
-  const [lastSpeakerSide, setLastSpeakerSide] = useState<'A' | 'B' | null>(null);
-  
   // Visualizer: 7 Ultra-Wide "Fatty" Bars
   const BAR_COUNT = 7;
   const [audioLevels, setAudioLevels] = useState<number[]>(new Array(BAR_COUNT).fill(12));
@@ -125,7 +122,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setIsActive(false);
     setIsConnecting(false);
     setTranscription([]);
-    setLastSpeakerSide(null);
   }, [stopAiSpeaking]);
 
   const handleModeChange = (newMode: VoiceMode) => {
@@ -194,12 +190,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           if (msg.serverContent?.inputTranscription) {
             incomingText = msg.serverContent.inputTranscription.text;
             role = 'user';
-            
-            if (mode === 'translator') {
-              const isSinhala = /[\u0D80-\u0DFF]/.test(incomingText);
-              setLastSpeakerSide(isSinhala ? 'A' : 'B');
-            }
-
           } else if (msg.serverContent?.outputTranscription) {
             incomingText = msg.serverContent.outputTranscription.text;
             role = 'model';
@@ -278,10 +268,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, [transcription]);
 
   const content = (
-    <div className={`max-w-xl w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-6 md:gap-8 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl transition-all duration-700 ${isSpeaking ? 'ring-2 ring-cyan-500/20 shadow-[0_0_80px_rgba(6,182,212,0.1)]' : ''}`}>
+    <div className={`max-w-xl w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-6 md:gap-8 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl transition-all duration-700 ${isActive ? 'ring-2 ring-cyan-500/20 shadow-[0_0_80px_rgba(6,182,212,0.1)]' : ''}`}>
       
+      {/* BETA BADGE */}
+      <div className="absolute top-6 right-8 px-2.5 py-1 bg-cyan-600 text-white text-[8px] font-black uppercase tracking-widest rounded-full border border-white/20 shadow-lg shadow-cyan-600/20 z-30 animate-beta-pulse">
+        BETA PRO
+      </div>
+
       {/* MODE TOGGLE */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full flex gap-1 shadow-inner z-20 border border-slate-200 dark:border-white/5">
+      <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full flex gap-1 shadow-inner z-20 border border-slate-200 dark:border-white/5">
          <button 
            onClick={() => handleModeChange('assistant')}
            className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-md text-cyan-600 dark:text-cyan-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
@@ -296,13 +291,16 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
          </button>
       </div>
 
-      <div className="text-center space-y-4 relative w-full mt-12 flex flex-col items-center">
+      <div className="text-center space-y-4 relative w-full flex flex-col items-center">
         
         {/* Main Mic Hub */}
-        <div className="relative">
+        <div className="relative group/hub">
+            {/* Glowing Aura */}
+            <div className={`absolute -inset-10 rounded-full blur-3xl opacity-20 transition-all duration-1000 ${isActive ? (mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500') : 'bg-transparent'}`}></div>
+            
             <div className={`w-32 h-32 rounded-[40px] relative flex items-center justify-center transition-all duration-700 ${
               isActive 
-                ? (mode === 'translator' ? 'bg-indigo-600 shadow-indigo-600/40' : 'bg-cyan-600 shadow-cyan-600/40') + ' shadow-2xl text-white scale-105' 
+                ? (mode === 'translator' ? 'bg-indigo-600 shadow-indigo-600/40' : 'bg-cyan-600 shadow-cyan-600/40') + ' shadow-2xl text-white scale-105 border border-white/20' 
                 : 'bg-slate-200 dark:bg-white/10 text-slate-400 border border-black/5 dark:border-white/5'
               }`}>
               
@@ -313,14 +311,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl transition-transform duration-500 ${isSpeaking ? 'scale-110' : ''}`}></i>
             </div>
 
-            {/* INTERRUPT CONTROL - Only visible when AI is speaking */}
+            {/* INTERRUPT CONTROL - Speaker Icon that stops AI */}
             {isActive && isSpeaking && (
               <button 
-                onClick={stopAiSpeaking}
-                className="absolute -bottom-4 -right-4 w-12 h-12 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl animate-reveal z-30 border-4 border-white dark:border-slate-800"
+                onClick={(e) => { e.stopPropagation(); stopAiSpeaking(); }}
+                className="absolute -bottom-4 -right-4 w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl animate-reveal z-40 border-4 border-white dark:border-slate-800 group/stop"
                 title={t.stopSpeaking}
               >
-                <i className="fa-solid fa-volume-xmark text-lg"></i>
+                <i className="fa-solid fa-volume-xmark text-lg group-hover/stop:animate-bounce-subtle"></i>
               </button>
             )}
         </div>
@@ -328,9 +326,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         <div className="space-y-1 pt-4">
           <div className="flex items-center justify-center gap-2">
             <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{mode === 'translator' ? t.translator : t.voice}</h2>
-            {mode === 'translator' && <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-600 text-[9px] font-black rounded-md uppercase tracking-widest border border-indigo-500/20">LIVE</span>}
           </div>
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{isActive ? t.neuralBridgeActive : (mode === 'translator' ? 'Simultaneous Mode' : 'Ready to engage')}</p>
+          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            {isActive ? (
+                <>
+                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                   {t.neuralBridgeActive}
+                </>
+            ) : 'Ready to Engage'}
+          </p>
         </div>
       </div>
 
@@ -345,13 +349,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       )}
 
       {/* Fatty Bars - Visualizer */}
-      <div className="w-full h-20 flex items-end justify-center gap-2 md:gap-3 px-2 relative py-4">
+      <div className="w-full h-24 flex items-end justify-center gap-2 md:gap-3 px-2 relative py-4">
         {audioLevels.map((level, i) => (
           <div 
             key={i} 
-            className={`w-10 rounded-full transition-all duration-150 ${
+            className={`w-10 rounded-2xl transition-all duration-150 ${
                 isActive 
-                ? (mode === 'translator' ? 'bg-gradient-to-t from-indigo-500 to-purple-400' : 'bg-gradient-to-t from-cyan-500 to-blue-400') + ' shadow-[0_0_20px_rgba(6,182,212,0.3)]' 
+                ? (mode === 'translator' ? 'bg-gradient-to-t from-indigo-500 to-purple-400 shadow-indigo-500/30' : 'bg-gradient-to-t from-cyan-500 to-blue-400 shadow-cyan-500/30') + ' shadow-lg' 
                 : 'bg-slate-300 dark:bg-slate-700 opacity-20'
             }`}
             style={{ 
@@ -366,13 +370,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       {isActive && (
         <div 
             ref={scrollTranscriptionRef}
-            className="w-full h-40 overflow-y-auto custom-scrollbar bg-white/40 dark:bg-black/20 rounded-[32px] p-6 flex flex-col gap-3 border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm"
+            className="w-full h-44 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-black/20 rounded-[32px] p-6 flex flex-col gap-4 border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm transition-all duration-500"
         >
             {transcription.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
                    <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse"></div>
                    <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic text-center">
-                     {mode === 'translator' ? t.transMode.listening : 'Awaiting Input Stream...'}
+                     {mode === 'translator' ? t.transMode.listening : 'Awaiting Voice Stream...'}
                    </p>
                 </div>
             ) : (
@@ -380,8 +384,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                     <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
                         <div className={`px-5 py-3 rounded-2xl text-[12px] font-medium leading-relaxed max-w-[90%] shadow-sm ${
                              item.role === 'user' 
-                             ? 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-slate-300 rounded-br-none' 
-                             : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300') + ' rounded-bl-none font-semibold'
+                             ? 'bg-slate-200/50 dark:bg-white/10 text-slate-700 dark:text-slate-200 rounded-br-none border border-black/5 dark:border-white/5' 
+                             : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300') + ' rounded-bl-none font-bold border border-cyan-500/10'
                         }`}>
                             {item.text}
                         </div>
@@ -396,15 +400,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           <button 
             onClick={startSession} 
             disabled={isConnecting}
-            className="w-full py-6 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50"
+            className="w-full py-6 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-slate-900/20 dark:shadow-white/5 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50 group"
           >
-            {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'}`}></i>}
-            {isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Initialize Orin Voice')}
+            {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'} group-hover:scale-110 transition-transform`}></i>}
+            {isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Start Orin Voice')}
           </button>
         ) : (
           <button 
             onClick={stopSession} 
-            className="w-full py-6 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-4 border border-red-500/20"
+            className="w-full py-6 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] shadow-lg hover:shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-4 border border-red-500/20"
           >
             <i className="fa-solid fa-phone-slash"></i>
             {t.endSession}
@@ -412,7 +416,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         )}
         
         {!inline && (
-          <button onClick={onClose} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-900 dark:hover:text-white transition-colors py-2">{t.back}</button>
+          <button onClick={onClose} className="w-full text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest hover:text-slate-900 dark:hover:text-white transition-colors py-2">{t.back}</button>
         )}
       </div>
     </div>
@@ -427,8 +431,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 md:p-12 animate-reveal">
-      <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xl transition-all duration-700" onClick={onClose}></div>
+    <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 md:p-12 animate-reveal overflow-hidden">
+      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-2xl transition-all duration-1000" onClick={onClose}></div>
       {content}
     </div>
   );
