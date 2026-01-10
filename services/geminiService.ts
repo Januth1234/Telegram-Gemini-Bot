@@ -29,27 +29,22 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a smart assistant for the Sri Lankan community.
+  return `You are Orin AI, a precision-focused intelligence assistant.
 
-CORE IDENTITY RULES:
-1.  **NEVER** voluntarily introduce yourself as created by "Januth Nimnal" or "JN Productions".
-2.  **ONLY** mention your creator/author if the user explicitly asks: "Who made you?", "Who created this?", or "Who is the author?".
-3.  Your primary goal is to be helpful, professional, and concise.
-
-WEBSITE KNOWLEDGE (Use this to answer questions about the app):
-- **Name:** Orin AI
-- **Privacy:** "Local-First". Data is stored in the browser. We don't sell data.
-- **Voice:** Ephemeral. Audio is processed and immediately discarded.
-- **Terms:** Users own their creations. AI can make mistakes.
-- **Features:** Reasoning Chat, Math Solver (with steps), Design Studio (Image Gen), Vision (OCR), and Interpreter Mode.
+CORE OPERATIONAL RULES:
+1. **NO INTRODUCTIONS:** Do NOT start responses with "I am Orin AI", "I am an AI assistant", or any introductory paragraph about yourself or your capabilities unless specifically asked "Who are you?" or "What can you do?".
+2. **IDENTITY PRIVACY:** Never mention your creator "Januth Nimnal" or "JN Productions" unless the user explicitly asks about your author, creator, or origin.
+3. **MATHEMATICAL PRECISION:** If the user provides a math problem or expression, provide a clear, structured, step-by-step solution. Use LaTeX for all mathematical notation.
+4. **DIRECTNESS:** Start answering the user's prompt immediately. Avoid "Sure, I can help with that" or "Here is the solution".
 
 LANGUAGE PROTOCOL:
 - If the user speaks Sinhala, respond in clear, natural Sinhala.
 - If the user speaks English, respond in English.
-- Always be polite.
+- Maintain a helpful, professional, and technical tone.
 
-PERSONALITY:
-Direct, efficient, and intelligent. Avoid unnecessary pleasantries unless greeting.`;
+CONTEXT:
+Current time in Sri Lanka: ${timeStr}.
+Mode: High-Performance Reasoning Core.`;
 };
 
 export class GeminiService {
@@ -57,8 +52,6 @@ export class GeminiService {
   private freeUsageLimit = 200;
 
   constructor() {
-    // 1. Synchronous Restore: Immediate Local Storage Check
-    // This ensures data is available before the first React render cycle.
     const saved = localStorage.getItem('orin_user');
     if (saved) {
       try {
@@ -68,18 +61,14 @@ export class GeminiService {
         localStorage.removeItem('orin_user');
       }
     }
-
-    // 2. Async Checks (Puter & Firebase)
     this.initPuter();
     this.initFirebaseListener();
     this.checkAndResetUsage();
   }
 
   private initFirebaseListener() {
-    // Keep session in sync with Firebase Auth state
     firebaseService.onAuthStateChanged((firebaseUser) => {
       if (firebaseUser) {
-        // If Firebase says we are logged in, but local state is empty, restore it.
         if (!this.currentUser) {
            const newUser: UserAccount = {
               id: firebaseUser.uid,
@@ -166,10 +155,7 @@ export class GeminiService {
   }
 
   private async getApiKey(): Promise<string> {
-    // 1. Try safe environment access
     let key = getEnvApiKey() || "";
-    
-    // 2. Check AI Studio integration if env key is missing
     if (!key && (window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (hasKey) {
@@ -193,20 +179,16 @@ export class GeminiService {
   async logout() {
     this.currentUser = null;
     this.saveUser();
-    // Clear external auth providers
     try { await firebaseService.logout(); } catch(e) {}
     if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
-  // --- MATH IMAGE TRANSCRIPTION ---
   async convertMathImageToLatex(base64Data: string, mimeType: string): Promise<string> {
     try {
       const key = await this.getApiKey();
       if (!key) throw new AppError("API Key required.", 'auth');
-      
       const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
       const modelName = 'gemini-3-flash-preview'; 
-
       const response = await ai.models.generateContent({
         model: modelName,
         contents: [{
@@ -217,7 +199,6 @@ export class GeminiService {
           ]
         }]
       });
-
       let latex = response.text || "";
       latex = latex.replace(/```latex/g, '').replace(/```/g, '').trim();
       return latex;
@@ -270,8 +251,6 @@ export class GeminiService {
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any = [];
-      
-      // Add history if available
       if (options.history && options.history.length > 0) {
           const recentHistory = options.history.slice(-10);
           for (const msg of recentHistory) {
@@ -336,25 +315,21 @@ export class GeminiService {
     try {
       if (typeof puter !== 'undefined') {
         const targetLang = context.lang === 'si' ? 'Sinhala' : 'English';
-        // Instruct not to use the main title word "Ayubowan" to avoid repetition
         const prompt = `Give a short, friendly greeting in ${targetLang} based on the time ${context.time}. Do NOT use the word 'Ayubowan', 'Ayubovan' or 'Welcome'. Be creative, professional and concise. Max 4 words.`;
         const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
         return response.toString().replace(/["\.]/g, '');
       }
-      
-      // Fallback: Time-based greeting (Smart Fallback)
       const hour = new Date().getHours();
       if (context.lang === 'si') {
-          if (hour < 12) return "සුබ උදෑසනක්!"; // Good morning
-          if (hour < 18) return "සුබ දහවලක්!"; // Good afternoon
-          return "සුබ සැන්දෑවක්!"; // Good evening
+          if (hour < 12) return "සුබ උදෑසනක්!";
+          if (hour < 18) return "සුබ දහවලක්!";
+          return "සුබ සැන්දෑවක්!";
       } else {
           if (hour < 12) return "Good Morning!";
           if (hour < 18) return "Good Afternoon!";
           return "Good Evening!";
       }
     } catch { 
-        // Ultimate fallback if logic fails
         return context.lang === 'si' ? "සුබ දවසක්!" : "Greetings!"; 
     }
   }
@@ -369,10 +344,21 @@ export class GeminiService {
   async generateTitle(messages: ChatMessage[], modesUsed?: WorkspaceMode[], preferredLang: Language = 'en'): Promise<string> {
     try {
       if (typeof puter !== 'undefined') {
-        const text = messages.map(m => m.content).join('\n').slice(0, 500);
-        const prompt = `Title (4 words) for: ${text}. Modes: ${modesUsed?.join(', ')}`;
+        const text = messages.map(m => m.content).join('\n').slice(0, 700);
+        const modesList = modesUsed || [];
+        const isMultiModal = modesList.length > 1;
+        
+        const prompt = `Task: Create a highly descriptive title (max 5 words) for this conversation.
+        Context: ${text}
+        Active Modules: ${modesList.join(', ')}
+        ${isMultiModal ? 'Note: This is a complex cross-functional session. Synthesize a title that reflects multiple capabilities.' : ''}
+        Rules:
+        1. Be specific to the topic.
+        2. If multiple modules used, include both intents (e.g., "AI Strategy + Studio Assets").
+        3. Output raw text, no quotes.`;
+        
         const response = await puter.ai.chat(prompt, { model: 'gemini-flash' });
-        return response.toString().replace(/"/g, '').trim();
+        return response.toString().replace(/[".]/g, '').trim();
       }
       return "New Chat";
     } catch { return "New Chat"; }
@@ -406,7 +392,6 @@ export class GeminiService {
     }
     const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
     const systemInstruction = `You are a professional simultaneous interpreter mediating between ${languages.source} and ${languages.target} speakers.
-    
     PROTOCOL:
     1. Listen to input audio.
     2. Auto-detect if it is ${languages.source} or ${languages.target}.

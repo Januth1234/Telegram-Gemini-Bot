@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { geminiService } from '../services/geminiService';
 import { AspectRatio, ImageSize } from '../types';
@@ -139,7 +140,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="group relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-black/5 hover:border-cyan-500/30 transition-all duration-500 max-w-full">
                 <img 
                   src={result} 
-                  className="max-w-full max-h-[60vh] object-contain transition-transform duration-[1000ms] ease-out group-hover:scale-[1.025]" 
+                  className="max-w-full max-h-[60vh] object-contain transition-transform duration-700 ease-out group-hover:scale-[1.01]" 
                   alt="Generated Result" 
                 />
               </div>
