@@ -20,16 +20,16 @@ interface ChatWorkspaceProps {
   onDeleteConv: (id: string) => void;
   activeConvId: string;
   onUpdateTitle: (title: string, modes?: WorkspaceMode[]) => void;
+  isSyncing?: boolean; // New prop for cloud sync status
 }
 
-const ITEMS_PER_PAGE = 12;
+const ITEMS_PER_PAGE = 15;
 
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, hwStatus, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
-  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle
+  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, isSyncing = false
 }) => {
   const t = translations[lang];
-  // activeTab is now driven by initialMode prop which is driven by URL hash in App.tsx
   const activeTab = initialMode;
   const [isTyping, setIsTyping] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -39,26 +39,43 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [localInput, setLocalInput] = useState(initialPrompt);
   const [visibleHistoryCount, setVisibleHistoryCount] = useState(ITEMS_PER_PAGE);
 
-  const [modesUsed, setModesUsed] = useState<Set<WorkspaceMode>>(new Set([initialMode]));
+  const activeConversation = useMemo(() => 
+    conversations.find(c => c.id === activeConvId), 
+    [conversations, activeConvId]
+  );
+
+  const [modesUsed, setModesUsed] = useState<Set<WorkspaceMode>>(() => {
+    const modes = new Set(activeConversation?.modesUsed || []);
+    modes.add(initialMode);
+    return modes;
+  });
+
+  useEffect(() => {
+    const modes = new Set(activeConversation?.modesUsed || []);
+    modes.add(activeTab);
+    setModesUsed(modes);
+  }, [activeConversation?.id, activeTab]);
 
   const hasReachedLimit = geminiService.hasReachedLimit();
-
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
-    // Sync local input if prompt changes externally
-    if (initialPrompt && initialPrompt !== localInput) {
-      setLocalInput(initialPrompt);
-    }
-  }, [initialPrompt]);
+    setLocalInput(initialPrompt);
+  }, [activeConvId]);
 
   useEffect(() => {
-    // Focus input on mount or tab change
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }, [activeTab]);
+    const timer = setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const len = inputRef.current.value.length;
+        inputRef.current.setSelectionRange(len, len);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [activeTab, activeConvId]);
 
   const handleInputChange = (val: string) => {
     setLocalInput(val);
@@ -66,12 +83,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   const handleClose = useCallback(() => {
-    if (localInput.trim() && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your current draft?")) {
+    if ((localInput.trim() || selectedFile) && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your current draft?")) {
       return;
     }
-    onInputChange(''); 
+    onInputChange('');
     onClose();
-  }, [onClose, onInputChange, localInput, lang]);
+  }, [onClose, onInputChange, localInput, selectedFile, lang]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -90,17 +107,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           { threshold: 60, label: lang === 'si' ? "තර්කනය සකසමින්..." : "Processing reasoning flow..." },
           { threshold: 90, label: lang === 'si' ? "පිළිතුර සකසමින්..." : "Finalizing response..." }
         ];
-
     setStepLabel(steps[0].label);
-    
     let currentProgress = 0;
     progressIntervalRef.current = window.setInterval(() => {
       currentProgress += Math.random() * 5;
       if (currentProgress > 95) currentProgress = 95;
-      
       const activeStep = [...steps].reverse().find(s => currentProgress >= s.threshold);
       if (activeStep) setStepLabel(activeStep.label);
-      
       setProgress(currentProgress);
     }, 400);
   };
@@ -117,25 +130,47 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }, 500);
   };
 
+  const handleDownloadImage = async (url: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `orin-asset-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
+  };
+
   const handleSend = useCallback(async (overrideInput?: string) => {
     const text = overrideInput !== undefined ? overrideInput : localInput;
     if (!text.trim() && !selectedFile && activeTab !== 'studio') return;
     if (hasReachedLimit) return;
 
+    const previousModesCount = modesUsed.size;
     const currentModes = new Set([...Array.from(modesUsed), activeTab]);
     setModesUsed(currentModes);
 
     setIsTyping(true);
     startProgress(activeTab);
+    handleInputChange('');
 
     if (activeTab === 'studio') {
       try {
         const url = await geminiService.generateImagePro(text, "1:1", "1K");
         const studioMsg: ChatMessage = { id: Date.now().toString(), role: 'assistant', content: lang === 'si' ? "නිර්මාණය අවසන්." : "Synthesis complete.", imageUrl: url, timestamp: new Date(), type: 'image' };
         setMessages(prev => [...prev, studioMsg]);
-        handleInputChange('');
-        const title = await geminiService.generateTitle([studioMsg], Array.from(currentModes), lang);
-        onUpdateTitle(title, Array.from(currentModes));
+        
+        // Update title if NEW mode added OR conversation is short
+        if (currentModes.size > previousModesCount || messages.length < 4) {
+           const title = await geminiService.generateTitle([studioMsg], Array.from(currentModes), lang);
+           onUpdateTitle(title, Array.from(currentModes));
+        }
       } catch (e: any) {
         if (e instanceof AppError && e.type === 'auth') {
            if ((window as any).aistudio) (window as any).aistudio.openSelectKey();
@@ -150,7 +185,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text || "", timestamp: new Date(), type: 'text', fileName: selectedFile?.name };
     setMessages(prev => [...prev, userMsg]);
-    handleInputChange('');
 
     try {
       const messageCount = messages.filter(m => m.role === 'user').length;
@@ -173,7 +207,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       };
       setMessages(prev => [...prev, assistantMsg]);
       
-      if (messages.length < 4) {
+      // Update title if conversation is new OR a complex multi-mode transition occurred
+      if (messages.length < 6 || currentModes.size > previousModesCount) {
         const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], Array.from(currentModes), lang);
         onUpdateTitle(title, Array.from(currentModes));
       }
@@ -195,9 +230,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   }, []);
 
+  const handleLoadMoreHistory = () => {
+    setVisibleHistoryCount(prev => Math.min(prev + ITEMS_PER_PAGE, conversations.length));
+  };
+
   const isSinhala = (text: string) => /[^\u0000-\u007F]/.test(text);
 
-  // Helper to map tab mode to URL hash
   const getTabUrl = (tab: WorkspaceMode) => {
     if (tab === 'studio') return '#art';
     if (tab === 'vision') return '#camera';
@@ -214,71 +252,83 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   return (
     <div className="flex flex-row h-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans transition-colors duration-500">
-      
-      {/* --- Ambient Backgrounds --- */}
-      {/* Mobile Blob */}
       <div className="absolute top-[-20%] right-[-30%] w-[500px] h-[500px] bg-cyan-500/10 rounded-full blur-[80px] pointer-events-none md:hidden"></div>
-      
-      {/* Desktop Ambient Glow - Top Right */}
       <div className="hidden md:block absolute top-[-10%] right-[10%] w-[800px] h-[800px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none animate-soft-pulse"></div>
-      {/* Desktop Ambient Glow - Bottom Left */}
       <div className="hidden md:block absolute bottom-[-10%] left-[-5%] w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] pointer-events-none animate-soft-pulse" style={{animationDelay: '2s'}}></div>
-
-
-      {/* History Backdrop */}
       {isHistoryOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />
       )}
-      
-      {/* Sliding History Panel - Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-[120] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
-        <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">{t.memoryHistory}</h3>
-          <button onClick={() => setIsHistoryOpen(false)} className="text-slate-400 p-2 hover:text-red-500 transition-colors"><i className="fa-solid fa-xmark"></i></button>
-        </div>
-        <div className="p-4 space-y-2">
-          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02] active:scale-95 transition-all">
-            <i className="fa-solid fa-plus text-[10px]"></i> {t.newNeuralChat}
+        <div className="p-5 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+             <i className="fa-solid fa-clock-rotate-left text-slate-400"></i>
+             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{t.memoryHistory}</h3>
+          </div>
+          <button onClick={() => setIsHistoryOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-white/10 text-slate-400 hover:text-red-500 transition-colors">
+            <i className="fa-solid fa-xmark"></i>
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 overscroll-contain">
+        <div className="p-4 border-b border-slate-100 dark:border-white/5">
+          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg shadow-cyan-600/20 hover:scale-[1.02] active:scale-95 transition-all">
+            <i className="fa-solid fa-plus"></i> {t.newNeuralChat}
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 overscroll-contain pb-20">
           {conversations.slice(0, visibleHistoryCount).map(conv => (
             <div key={conv.id} className="group relative">
-               <button onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }} className={`w-full text-left p-4 rounded-2xl transition-all flex flex-col gap-1 border border-transparent ${activeConvId === conv.id ? 'bg-cyan-600/10 border-cyan-600/20' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}>
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <span className={`text-[11px] font-bold truncate max-w-[180px] ${activeConvId === conv.id ? 'text-cyan-600' : 'text-slate-700 dark:text-slate-300'} ${isSinhala(conv.title) ? 'sinhala-text' : ''}`}>
-                    {conv.title}
-                  </span>
+               <button 
+                 onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }} 
+                 className={`w-full text-left p-4 rounded-2xl transition-all flex flex-col gap-1.5 border ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-900/10 border-cyan-200 dark:border-cyan-500/20' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'}`}
+               >
+                <div className="flex items-center justify-between w-full">
+                   <div className="flex items-center gap-2 overflow-hidden flex-1">
+                     <i className={`fa-solid ${conv.mode === 'studio' ? 'fa-palette' : conv.mode === 'vision' ? 'fa-camera' : conv.mode === 'maths' ? 'fa-calculator' : 'fa-message'} text-[10px] ${activeConvId === conv.id ? 'text-cyan-600' : 'text-slate-400'}`}></i>
+                     <span className={`text-[11px] font-bold truncate w-full ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${isSinhala(conv.title) ? 'sinhala-text' : ''}`}>
+                       {conv.title}
+                     </span>
+                   </div>
                 </div>
-                <span className="text-[9px] text-slate-400">{conv.timestamp.toLocaleDateString()}</span>
+                <div className="flex items-center justify-between pl-5">
+                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">{conv.timestamp.toLocaleDateString()}</span>
+                   <span className="text-[8px] font-bold text-slate-300 dark:text-slate-600 uppercase tracking-widest">{conv.mode}</span>
+                </div>
               </button>
-              <button onClick={(e) => { e.stopPropagation(); onDeleteConv(conv.id); }} className="absolute right-3 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all">
+              <button 
+                onClick={(e) => { e.stopPropagation(); if(window.confirm('Delete this conversation permanently?')) onDeleteConv(conv.id); }} 
+                className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all z-10"
+                title="Delete Conversation"
+              >
                 <i className="fa-solid fa-trash-can text-[10px]"></i>
               </button>
             </div>
           ))}
           {conversations.length === 0 && (
-             <div className="text-center p-8 text-slate-400">
-                <i className="fa-solid fa-folder-open text-2xl mb-2 opacity-30"></i>
-                <p className="text-[10px] uppercase tracking-widest opacity-50">No history found</p>
+             <div className="flex flex-col items-center justify-center h-48 text-slate-400">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center mb-3">
+                    <i className="fa-solid fa-box-open text-xl opacity-50"></i>
+                </div>
+                <p className="text-[10px] uppercase tracking-widest opacity-50 font-bold">No history locally</p>
              </div>
           )}
+          {visibleHistoryCount < conversations.length && (
+            <button onClick={handleLoadMoreHistory} className="w-full py-4 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 rounded-2xl transition-all mt-4 border border-dashed border-slate-200 dark:border-white/10">
+              {t.olderMemories} ({conversations.length - visibleHistoryCount})
+            </button>
+          )}
+          <div className="h-12"></div>
         </div>
       </div>
-
       <div className="flex-1 flex flex-col min-w-0 h-full relative z-[50]">
-        
-        {/* Navigation / Tab Bar */}
         <div className="shrink-0 h-16 md:h-20 glass-panel p-2 md:px-6 flex items-center justify-between z-30 border-b border-slate-200 dark:border-white/5 shadow-sm relative">
-          
-          {/* Left: History Toggle (Visible on All Devices) */}
           <div className="flex items-center gap-4">
-             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all hover:bg-slate-100 dark:hover:bg-white/5" title="Open History">
+             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all hover:bg-slate-100 dark:hover:bg-white/5 relative" title="Open History">
               <i className="fa-solid fa-clock-rotate-left"></i>
+              {/* Automatic Cloud Sync Indicator */}
+              <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900 transition-all ${isSyncing ? 'bg-cyan-500 animate-pulse' : 'bg-emerald-500 shadow-sm'}`} title={isSyncing ? "Syncing to Cloud..." : "Cloud Backup Active"}>
+                <i className={`fa-solid ${isSyncing ? 'fa-cloud-arrow-up' : 'fa-cloud'} text-[6px] text-white`}></i>
+              </div>
             </button>
           </div>
-
-          {/* Center: Desktop Tabs (More Focused) */}
           <div className="flex-1 flex justify-center w-full overflow-hidden">
             <div className="flex items-center gap-1 md:gap-2 overflow-x-auto no-scrollbar mask-gradient-x px-2 py-1">
                 {(['chat', 'maths', 'studio', 'vision', 'voice', 'gethelp'] as WorkspaceMode[]).map(tab => (
@@ -299,25 +349,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 ))}
             </div>
           </div>
-          
-          {/* Right: Home Action */}
           <div className="flex items-center">
             <button onClick={handleClose} className="w-10 h-10 rounded-xl hover:bg-red-50 hover:text-red-500 text-slate-400 transition-colors flex items-center justify-center" title="Close Workspace">
                <i className="fa-solid fa-right-from-bracket"></i>
             </button>
           </div>
-
-          {/* Neural Progress Bar */}
           {progress > 0 && (
             <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-200 dark:bg-slate-800 overflow-hidden">
-               <div 
-                 className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)] transition-all duration-500 ease-out"
-                 style={{ width: `${progress}%` }}
-               ></div>
+               <div className="h-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)] transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
             </div>
           )}
         </div>
-
         <div className="flex-1 overflow-y-auto custom-scrollbar overscroll-contain relative">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center animate-reveal px-6 text-center">
@@ -345,8 +387,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       </div>
                     )}
                     {msg.imageUrl && (
-                      <div className="mt-6 rounded-[20px] md:rounded-[32px] overflow-hidden border border-slate-200 dark:border-black/10 shadow-xl">
-                        <img src={msg.imageUrl} className="w-full h-auto" alt="Asset" />
+                      <div className="mt-6 flex flex-col gap-4">
+                        <div className="group rounded-[20px] md:rounded-[32px] overflow-hidden border border-slate-200 dark:border-black/10 shadow-xl bg-black/5">
+                          <img 
+                            src={msg.imageUrl} 
+                            className="w-full h-auto transition-transform duration-700 ease-out group-hover:scale-[1.01]" 
+                            alt="Asset" 
+                          />
+                        </div>
+                        <button 
+                          onClick={() => handleDownloadImage(msg.imageUrl!)}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-slate-100 dark:bg-white/5 hover:bg-cyan-600 hover:text-white transition-all rounded-2xl text-[10px] font-black uppercase tracking-widest w-fit self-center md:self-start border border-black/5 dark:border-white/5 shadow-sm group"
+                        >
+                          <i className="fa-solid fa-cloud-arrow-down transition-transform group-hover:translate-y-0.5"></i>
+                          {t.downloadAsset}
+                        </button>
                       </div>
                     )}
                     {msg.reasoning_details && (
@@ -370,11 +425,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </div>
           )}
         </div>
-
-        {/* Input Bar is only shown for these conversational modes */}
         <div className="shrink-0 p-4 md:p-8 bg-gradient-to-t from-slate-100 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent">
           <div className="max-w-4xl mx-auto">
-            {/* Premium Input Bar */}
             <div className="glass-panel p-2 md:p-3 rounded-[28px] md:rounded-[40px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-3 backdrop-blur-xl bg-white/80 dark:bg-slate-900/80 transition-all focus-within:ring-4 focus-within:ring-cyan-500/10 focus-within:border-cyan-500/30">
               <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-90 tooltip-trigger">
                  <i className="fa-solid fa-paperclip text-lg"></i>
@@ -387,7 +439,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   r.readAsDataURL(file);
                 }
               }} />
-              
               <input 
                 ref={inputRef}
                 value={localInput}
@@ -396,7 +447,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt}
                 className={`flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-lg py-3 md:py-4 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`}
               />
-              
               <button 
                  onClick={() => handleSend()} 
                  disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} 
@@ -406,7 +456,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </button>
             </div>
             <div className="text-center mt-3 hidden md:block">
-               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">Orin AI Neural Core v4.0 • Secure Transmission</p>
+               <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-600">Orin AI Neural Core v4.6 • Secure Multi-Task Protocol</p>
             </div>
           </div>
         </div>

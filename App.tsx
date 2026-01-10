@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
@@ -178,7 +179,7 @@ const App: React.FC = () => {
          firebaseService.saveHistory(user.id, conversations).then(() => {
             setIsSyncing(false);
          });
-      }, 5000); // Save after 5 seconds of inactivity
+      }, 2000); // Save after 2 seconds of inactivity (Faster for automatic feeling)
       return () => clearTimeout(timeout);
     }
   }, [conversations, user?.id, hasSyncedWithCloud]);
@@ -347,6 +348,7 @@ const App: React.FC = () => {
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={handleUpdateActiveConversation}
+            isSyncing={isSyncing}
           />
         );
       case 'math': return <MathsMode onClose={() => navigate('landing')} lang={lang} />;
