@@ -9,6 +9,6 @@ export const APP_CONFIG = {
   sloganSi: "ශ්‍රී ලාංකිකයෙකුගෙන් ශ්‍රී ලාංකිකයන්ට. ඔරින් AI ඔබගේ සේවයට.",
   owner: "JN Productions",
   legalEntity: "JN Productions Global",
-  deploymentLink: "https://aura-neural.com",
+  deploymentLink: "https://www.orinai.org",
   githubRepo: "nimnal-januth/aura-neural-workspace"
 };
