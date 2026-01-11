@@ -25,6 +25,24 @@ const App: React.FC = () => {
 
   const t = translations[lang];
 
+  // Dynamic Viewport Height System
+  // Fixes "part viewing" issues on mobile browsers by calculating exact visible height
+  useEffect(() => {
+    const setViewportHeight = () => {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    setViewportHeight();
+    window.addEventListener('resize', setViewportHeight);
+    window.addEventListener('orientationchange', setViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', setViewportHeight);
+      window.removeEventListener('orientationchange', setViewportHeight);
+    };
+  }, []);
+
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0];
     const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
@@ -207,7 +225,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`h-screen w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950`}>
+    <div 
+      className={`w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}
+      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('landing')}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-sm"></i></div>
@@ -235,7 +256,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
-      <main className="flex-1 overflow-hidden relative">{renderContent()}</main>
+      <main className="flex-1 overflow-hidden relative flex flex-col">{renderContent()}</main>
     </div>
   );
 };
