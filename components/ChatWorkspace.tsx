@@ -84,7 +84,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   const handleClose = useCallback(() => {
-    if ((localInput.trim() || selectedFile) && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your current draft?")) {
+    if ((localInput.trim() || selectedFile) && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your draft?")) {
       return;
     }
     onInputChange('');
@@ -94,8 +94,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const startProgress = (mode: WorkspaceMode) => {
     setProgress(0);
     const steps = mode === 'studio' 
-      ? [{ threshold: 20, label: lang === 'si' ? "සූදානම්..." : "Init..." }, { threshold: 50, label: lang === 'si' ? "සකසමින්..." : "Mapping..." }, { threshold: 85, label: lang === 'si' ? "අඳිමින්..." : "Rendering..." }]
-      : [{ threshold: 30, label: lang === 'si' ? "විග්‍රහ කරමින්..." : "Analyzing..." }, { threshold: 60, label: lang === 'si' ? "සිතමින්..." : "Thinking..." }, { threshold: 90, label: lang === 'si' ? "සකසමින්..." : "Finalizing..." }];
+      ? [{ threshold: 20, label: lang === 'si' ? "සූදානම්..." : "Waiting..." }, { threshold: 50, label: lang === 'si' ? "අඳිමින්..." : "Drawing..." }, { threshold: 85, label: lang === 'si' ? "අවසන් කරමින්..." : "Finishing..." }]
+      : [{ threshold: 30, label: lang === 'si' ? "බලමින්..." : "Reading..." }, { threshold: 60, label: lang === 'si' ? "සිතමින්..." : "Thinking..." }, { threshold: 90, label: lang === 'si' ? "ලියමින්..." : "Writing..." }];
     setStepLabel(steps[0].label);
     let currentProgress = 0;
     progressIntervalRef.current = window.setInterval(() => {
@@ -145,7 +145,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         const studioMsg: ChatMessage = { 
           id: Date.now().toString(), 
           role: 'assistant', 
-          content: lang === 'si' ? "ඔබේ නිර්මාණය සූදානම්." : "Your creation is ready.", 
+          content: lang === 'si' ? "පින්තූරය සූදානම්." : "Your picture is ready.", 
           imageUrl: url, 
           timestamp: new Date(), 
           type: 'image' 
@@ -155,7 +155,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         onUpdateTitle(title, Array.from(currentModes));
       } catch (e: any) {
         if (e.name === 'AbortError') return;
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `System Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
+        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
       } finally { setIsTyping(false); stopProgress(); }
       return;
     }
@@ -164,7 +164,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setMessages(prev => [...prev, userMsg]);
 
     try {
-      const res = await geminiService.chat(text || "Explain.", { 
+      const res = await geminiService.chat(text || "Continue.", { 
         fileData: selectedFile || undefined, grounding: 'search', messageCount: messages.filter(m => m.role === 'user').length,
         useThinking: activeTab === 'chat', history: messages, signal
       });
@@ -177,7 +177,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
     } catch (e: any) {
       if (e.name === 'AbortError') return;
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Neural Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
+      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
     } finally { setIsTyping(false); setSelectedFile(null); stopProgress(); }
   }, [localInput, selectedFile, activeTab, onInputChange, setMessages, lang, messages, onUpdateTitle, modesUsed]);
 
@@ -198,16 +198,16 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   }, [activeTab, t.prompts]);
 
   return (
-    <div className="flex h-full w-full bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans safe-pb">
+    <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans safe-pb">
       
       {isHistoryOpen && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />}
 
-      {/* Improved History Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-[120] w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl safe-pt`}>
+      {/* History Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-[120] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl safe-pt`}>
         <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-             <i className="fa-solid fa-memory text-cyan-600"></i>
-             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Neural Memory</h3>
+             <i className="fa-solid fa-clock-rotate-left text-cyan-600"></i>
+             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">History</h3>
           </div>
           <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
         </div>
@@ -215,21 +215,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <div className="p-4">
           <button 
             onClick={() => { onNewConv(); setIsHistoryOpen(false); }} 
-            className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:bg-slate-800 dark:hover:bg-slate-100 transition-all"
+            className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest flex items-center justify-center gap-3 shadow-lg hover:scale-[1.02] transition-all"
           >
-            <i className="fa-solid fa-plus-circle"></i> {t.newNeuralChat}
+            <i className="fa-solid fa-plus"></i> New Chat
           </button>
         </div>
 
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 pb-32">
           {conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 opacity-20 grayscale">
-              <i className="fa-solid fa-box-open text-4xl mb-4"></i>
-              <p className="text-[10px] font-bold uppercase tracking-widest">No Archived Cycles</p>
+            <div className="flex flex-col items-center justify-center py-20 opacity-20">
+              <i className="fa-solid fa-folder-open text-4xl mb-4"></i>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-center">No past chats</p>
             </div>
           ) : (
             conversations.map(conv => {
-              const lastMsg = conv.messages[conv.messages.length - 1]?.content || "Empty Terminal";
+              const lastMsg = conv.messages[conv.messages.length - 1]?.content || "Empty Chat";
               const isActive = activeConvId === conv.id;
               return (
                 <div key={conv.id} className="group">
@@ -264,18 +264,18 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0 relative">
-        {/* Refined Header */}
-        <header className="h-16 md:h-20 glass-panel border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/80 dark:bg-slate-950/80 backdrop-blur-2xl">
+      <div className="flex-1 flex flex-col min-w-0 relative h-full">
+        {/* Workspace Header */}
+        <header className="h-16 md:h-20 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/90 dark:bg-slate-950/90 backdrop-blur-2xl">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsHistoryOpen(true)} 
               className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all active:scale-95"
             >
-              <i className="fa-solid fa-sidebar text-sm"></i>
+              <i className="fa-solid fa-bars-staggered text-sm"></i>
             </button>
             <div className="hidden tiny:block">
-              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Workspace Mode</h4>
+              <h4 className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">Mode</h4>
               <p className="text-[11px] font-black uppercase tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
                  <i className={`fa-solid ${getTabIcon(activeTab)} text-cyan-600`}></i>
                  {activeTab}
@@ -283,14 +283,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 md:gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
              {isTyping && (
                 <button onClick={handleStop} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all">
                   <i className="fa-solid fa-stop text-sm"></i>
                 </button>
              )}
+             {isSyncing && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-cyan-500/10 rounded-full border border-cyan-500/20">
+                  <div className="w-1 h-1 rounded-full bg-cyan-500 animate-ping"></div>
+                  <span className="text-[8px] font-black text-cyan-600 uppercase tracking-widest">Sync</span>
+                </div>
+             )}
              <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all active:scale-95 border border-slate-200 dark:border-white/10">
-                <i className="fa-solid fa-arrow-right-from-bracket rotate-180"></i>
+                <i className="fa-solid fa-right-from-bracket rotate-180"></i>
              </button>
           </div>
 
@@ -301,17 +307,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
         </header>
 
-        {/* Improved Message Stream */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 p-4 md:p-10">
-          <div className="max-w-4xl mx-auto space-y-8 md:space-y-12 pb-48">
+        {/* Message Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50 dark:bg-slate-950/20">
+          <div className="max-w-3xl mx-auto space-y-8 md:space-y-12 pb-48">
             {messages.length === 0 ? (
-              <div className="py-20 text-center space-y-10 animate-reveal">
-                 <div className="w-24 h-24 rounded-[40px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
-                    <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
+              <div className="py-24 text-center space-y-8 animate-reveal min-h-[400px] flex flex-col justify-center">
+                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-[32px] md:rounded-[40px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
+                    <i className={`fa-solid ${getTabIcon(activeTab)} text-4xl md:text-5xl`}></i>
                  </div>
                  <div className="space-y-4">
-                    <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Neural Core {activeTab.toUpperCase()} Initialize</h2>
-                    <div className="flex flex-wrap justify-center gap-2">
+                    <h2 className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Draw' : activeTab === 'vision' ? 'See' : activeTab === 'maths' ? 'Solve' : 'Chat'}</h2>
+                    <div className="flex flex-wrap justify-center gap-2 px-4">
                        {currentSuggestions.map(s => (
                           <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-200 transition-all shadow-sm active:scale-95">{s}</button>
                        ))}
@@ -321,48 +327,47 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             ) : (
               messages.map(msg => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                   <div className={`max-w-[90%] md:max-w-[85%] p-5 md:p-8 rounded-3xl md:rounded-[40px] shadow-sm relative border ${
+                   <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[28px] md:rounded-[40px] shadow-sm relative border ${
                       msg.role === 'user' 
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-sm border-transparent' 
-                        : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-sm border-slate-200 dark:border-white/10'
+                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent shadow-lg' 
+                        : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'
                    }`}>
                       <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>
                         {msg.content}
                       </div>
 
                       {msg.imageUrl && (
-                        <div className="mt-6 space-y-6">
-                           <div className="rounded-[28px] md:rounded-[40px] overflow-hidden border-4 border-slate-100 dark:border-white/5 shadow-2xl group/img bg-slate-100 dark:bg-black relative">
-                              <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover/img:scale-105" alt="Neural Synthesis" />
-                              <div className="absolute inset-0 bg-cyan-600/0 group-hover/img:bg-cyan-600/5 transition-colors pointer-events-none"></div>
+                        <div className="mt-6 space-y-4">
+                           <div className="rounded-[24px] md:rounded-[36px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl group/img relative bg-slate-100 dark:bg-black">
+                              <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover/img:scale-[1.03]" alt="Result" />
                            </div>
                            <button 
                              onClick={() => geminiService.downloadImage(msg.imageUrl!)}
-                             className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-cyan-600/20 hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+                             className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all flex items-center justify-center gap-3"
                            >
                              <i className="fa-solid fa-download"></i>
-                             {t.downloadAsset}
+                             Save Image
                            </button>
                         </div>
                       )}
 
                       {msg.links && msg.links.length > 0 && (
                         <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 space-y-3">
-                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{t.knowledgeSources}</p>
+                           <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sources</p>
                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                               {msg.links.map((link, idx) => (
-                                <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 dark:text-cyan-400 truncate hover:bg-cyan-50 dark:hover:bg-cyan-500/10 transition-colors border border-transparent hover:border-cyan-100 dark:hover:border-cyan-500/20">
-                                   <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
+                                <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 dark:text-cyan-400 truncate hover:bg-cyan-50 transition-colors border border-black/5 dark:border-white/5">
+                                   <i className="fa-solid fa-link mr-2 opacity-50 text-[8px]"></i> {link.title}
                                 </a>
                               ))}
                            </div>
                         </div>
                       )}
                    </div>
-                   <div className="mt-2 px-4 flex items-center gap-2 opacity-40">
-                      <span className="text-[8px] font-black uppercase tracking-widest">{msg.role === 'user' ? 'Transmission' : 'Synthesis'}</span>
+                   <div className="mt-2 px-4 flex items-center gap-2 opacity-30">
+                      <span className="text-[8px] font-black uppercase tracking-widest">{msg.role === 'user' ? 'Sent' : 'Done'}</span>
                       <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                      <span className="text-[8px] font-bold uppercase">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="text-[8px] font-bold">{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                    </div>
                 </div>
               ))
@@ -371,27 +376,27 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             {isTyping && (
               <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 shadow-md w-fit">
                 <div className="flex gap-1">
-                  <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'0ms'}}></div>
-                  <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'150ms'}}></div>
-                  <div className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'300ms'}}></div>
+                  <div className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'0ms'}}></div>
+                  <div className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'150ms'}}></div>
+                  <div className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{animationDelay:'300ms'}}></div>
                 </div>
-                <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || t.calculating}</span>
+                <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
               </div>
             )}
-            <div ref={scrollRef} className="h-10" />
+            <div ref={scrollRef} className="h-4" />
           </div>
         </div>
 
-        {/* Refined Input Bar */}
-        <div className="absolute bottom-0 left-0 w-full p-4 md:p-10 pointer-events-none">
-           <div className="max-w-4xl mx-auto pointer-events-auto">
-              <div className="glass-panel p-2 md:p-4 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300/50 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95">
+        {/* Persistent Bottom Bar */}
+        <div className="absolute bottom-0 left-0 w-full p-4 md:p-8 pointer-events-none z-[80] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/50 dark:via-slate-950/50 to-transparent">
+           <div className="max-w-3xl mx-auto pointer-events-auto">
+              <div className="glass-panel p-2 md:p-3 rounded-[28px] md:rounded-[40px] shadow-2xl border border-slate-200 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
                  
                  <button 
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[36px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"
+                  className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"
                  >
-                   <i className="fa-solid fa-plus-circle text-xl"></i>
+                   <i className="fa-solid fa-paperclip text-lg"></i>
                  </button>
 
                  <input 
@@ -399,16 +404,16 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   value={localInput} 
                   onChange={e => handleInputChange(e.target.value)} 
                   onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                  placeholder={activeTab === 'studio' ? t.placeholderStudio : t.inputPrompt} 
-                  className={`flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl py-3 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
+                  placeholder={activeTab === 'studio' ? t.placeholderStudio : "Ask something..."} 
+                  className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                  />
 
                  <button 
                    onClick={() => handleSend()} 
                    disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')}
-                   className="w-12 h-12 md:w-16 md:h-16 rounded-2xl md:rounded-[36px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20 disabled:grayscale"
+                   className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"
                  >
-                   <i className="fa-solid fa-paper-plane text-sm md:text-lg"></i>
+                   <i className="fa-solid fa-arrow-up text-sm md:text-lg"></i>
                  </button>
 
                  <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
@@ -422,10 +427,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               </div>
 
               {selectedFile && (
-                <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 w-fit animate-reveal">
-                   <i className="fa-solid fa-file-shield text-emerald-600"></i>
-                   <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-400">{selectedFile.name}</span>
-                   <button onClick={() => setSelectedFile(null)} className="text-red-500"><i className="fa-solid fa-circle-xmark"></i></button>
+                <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0">
+                   <i className="fa-solid fa-file text-emerald-600 text-[10px]"></i>
+                   <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[150px]">{selectedFile.name}</span>
+                   <button onClick={() => setSelectedFile(null)} className="text-red-500"><i className="fa-solid fa-xmark"></i></button>
                 </div>
               )}
            </div>
