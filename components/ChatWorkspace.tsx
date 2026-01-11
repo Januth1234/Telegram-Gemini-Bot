@@ -5,6 +5,7 @@ import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } fr
 import { translations } from '../translations';
 import MathsMode from './MathsMode';
 import GetHelpMode from './GetHelpMode';
+import VoiceAssistant from './VoiceAssistant';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -137,12 +138,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text || "", timestamp: new Date(), type: 'text', fileName: selectedFile?.name };
+    const currentHistory = [...messages, userMsg];
     setMessages(prev => [...prev, userMsg]);
 
     try {
       const res = await geminiService.chat(text || "Continue.", { 
-        fileData: selectedFile || undefined, grounding: 'search', messageCount: messages.filter(m => m.role === 'user').length,
-        useThinking: activeTab === 'chat', history: messages, signal
+        fileData: selectedFile || undefined, 
+        grounding: 'search', 
+        messageCount: currentHistory.filter(m => m.role === 'user').length,
+        useThinking: true, 
+        history: messages, 
+        signal 
       });
       const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.text, timestamp: new Date(), type: 'text', links: res.links };
       setMessages(prev => [...prev, assistantMsg]);
@@ -168,17 +174,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
-  const getActivePrompts = () => {
-    if (activeTab === 'studio') return t.prompts.studio;
-    if (activeTab === 'vision') return t.prompts.vision;
-    if (activeTab === 'maths') return t.prompts.maths;
-    if (activeTab === 'gethelp') return t.prompts.chat; 
-    return t.prompts.chat;
-  };
-
   const renderBody = () => {
-    if (activeTab === 'maths') return <MathsMode onClose={handleClose} lang={lang} embedded />;
-    if (activeTab === 'gethelp') return <GetHelpMode onClose={handleClose} lang={lang} embedded />;
+    if (activeTab === 'voice') return <div className="flex-1 overflow-y-auto custom-scrollbar pb-32"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
+    if (activeTab === 'maths') return <MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} />;
+    if (activeTab === 'gethelp') return <GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} />;
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
@@ -189,9 +188,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Draw' : activeTab === 'vision' ? 'See' : activeTab === 'maths' ? 'Solve' : activeTab === 'gethelp' ? 'Explore' : 'Chat'}</h2>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : activeTab === 'vision' ? 'Camera' : 'Chat'}</h2>
                   <div className="flex flex-wrap justify-center gap-2 px-4">
-                     {getActivePrompts().map(s => (
+                     {(activeTab === 'studio' ? t.prompts.studio : activeTab === 'vision' ? t.prompts.vision : t.prompts.chat).map(s => (
                         <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
                      ))}
                   </div>
@@ -242,12 +241,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     );
   };
 
+  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice';
+
   return (
     <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
       
       {isHistoryOpen && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />}
 
-      {/* History Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-[120] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</h3>
@@ -273,39 +273,41 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        {/* Workspace Header - Persistent Switcher */}
         <header className="h-16 md:h-20 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl">
           <div className="flex items-center gap-4 flex-1">
             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all"><i className="fa-solid fa-bars-staggered"></i></button>
-            
             <nav className="flex items-center bg-slate-100 dark:bg-white/5 rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar max-w-full">
-              {(['chat', 'studio', 'vision', 'maths', 'gethelp'] as WorkspaceMode[]).map(m => (
+              {(['chat', 'maths', 'studio', 'vision', 'gethelp', 'voice'] as WorkspaceMode[]).map(m => (
                 <button 
                   key={m} 
                   onClick={() => handleModeChange(m)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeTab === m ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${activeTab === m ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
                 >
                   <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
                   <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
-                    {m === 'chat' ? 'Deep Chat' : m === 'maths' ? 'Math Solver' : m === 'studio' ? 'Draw Designer' : m === 'vision' ? 'Visual AI' : m === 'gethelp' ? 'Help Me' : m}
+                    {m === 'chat' ? 'Chat' : m === 'maths' ? 'Math' : m === 'studio' ? 'Create' : m === 'vision' ? 'Camera' : m === 'gethelp' ? 'Help Me' : 'Voice'}
                   </span>
+                  {isBETA(m) && (
+                    <span className="absolute -top-1 -right-1 flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                    </span>
+                  )}
                 </button>
               ))}
             </nav>
           </div>
-
           <div className="flex items-center gap-2">
              {isTyping && <button onClick={() => { abortControllerRef.current?.abort(); setIsTyping(false); stopProgress(); }} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-stop"></i></button>}
              <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all border border-slate-200 dark:border-white/10 shadow-sm"><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
           </div>
-          
           {progress > 0 && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-100 dark:bg-slate-900"><div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${progress}%` }}></div></div>}
         </header>
 
         {renderBody()}
 
-        {/* Fix: Bypassing unintentional comparison error due to complex type narrowing in this scope */}
-        {(activeTab as string) !== 'maths' && (activeTab as string) !== 'gethelp' && (
+        {/* Hide input bar for modes that use specialized interactions (Voice, Math) */}
+        {activeTab !== 'maths' && activeTab !== 'voice' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent">
              <div className="max-w-3xl mx-auto pointer-events-auto pb-[env(safe-area-inset-bottom)]">
                 <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
@@ -315,7 +317,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={activeTab === 'studio' ? t.placeholderStudio : "Type your message..."} 
+                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'vision' ? t.placeholderVision : activeTab === 'gethelp' ? "Ask for follow-ups..." : t.placeholderChat} 
                     className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
                    <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>

@@ -98,7 +98,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Feature Grid - Main Tools including Help Me */}
+        {/* Feature Grid - Re-labeled Tools */}
         <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
           <div className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
@@ -107,16 +107,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
           
           <div className="flex flex-wrap justify-center gap-4 md:gap-8">
-            <FeatureCard icon="fa-message" title={t.reasoning} desc="Deep Chat" onClick={() => onStartChat(prompt, 'chat')} color="cyan" />
-            <FeatureCard icon="fa-calculator" title={t.maths} desc="Math Solver" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
-            <FeatureCard icon="fa-palette" title={t.creative} desc="Draw Designer" onClick={() => onStartChat(prompt, 'studio')} color="purple" />
-            <FeatureCard icon="fa-camera" title={t.vision} desc="Camera Visual AI" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
+            <FeatureCard icon="fa-message" title={t.reasoning} desc="Chat" onClick={() => onStartChat(prompt, 'chat')} color="cyan" />
+            <FeatureCard icon="fa-calculator" title={t.maths} desc="Math" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
+            <FeatureCard icon="fa-palette" title={t.creative} desc="Create" onClick={() => onStartChat(prompt, 'studio')} color="purple" />
+            <FeatureCard icon="fa-camera" title={t.vision} desc="Camera" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
             <FeatureCard icon="fa-microphone-lines" title={t.voiceBeta} desc="Talk Voice" onClick={onVoiceOpen} color="blue" isBeta />
             <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc="AI Agent" onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta />
           </div>
         </section>
 
-        {/* Navigation Grid - Additional Section */}
+        {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
           <div className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
