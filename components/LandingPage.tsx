@@ -76,16 +76,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
 
           <div className="w-full max-w-2xl px-2">
-            <div className="relative group">
+            <div className="relative group w-full">
               <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[24px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
               <div className="relative glass-panel p-2 rounded-[24px] flex items-center shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10">
                 <input 
-                  type="text" value={prompt} onChange={(e) => onPromptChange(e.target.value)} 
+                  type="text" 
+                  value={prompt} 
+                  onChange={(e) => onPromptChange(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
-                  placeholder={t.howHelp} className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-2xl px-6 py-5 dark:text-white placeholder:text-slate-400 font-medium"
+                  placeholder={t.howHelp} 
+                  className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-2xl px-4 md:px-6 py-4 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
                 />
-                <button onClick={() => onStartChat(prompt, 'chat')} className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-8 md:px-12 rounded-[20px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
-                  {t.go}
+                <button 
+                  onClick={() => onStartChat(prompt, 'chat')} 
+                  className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-[20px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
+                >
+                  <span>{prompt.trim() ? t.go : (lang === 'si' ? "Orin අරඹන්න" : "Start Orin")}</span>
+                  {!prompt.trim() && <i className="fa-solid fa-arrow-right"></i>}
                 </button>
               </div>
             </div>

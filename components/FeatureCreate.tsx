@@ -1,42 +1,95 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { geminiService } from '../services/geminiService';
 import { AspectRatio, ImageSize } from '../types';
 
-interface GeneratedImage {
+interface GeneratedAsset {
   url: string;
   prompt: string;
   timestamp: number;
+  type: 'image' | 'video' | 'audio';
 }
 
-type StudioTab = 'image' | 'video';
+type ModalType = 'image' | 'video' | 'animate' | 'audio';
 
 const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<StudioTab>('image');
+  // Modals State
+  const [activeModal, setActiveModal] = useState<ModalType | null>(null);
+  
+  // Inputs
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [imageSize, setImageSize] = useState<ImageSize>('1K');
-  const [history, setHistory] = useState<GeneratedImage[]>([]);
+  const [selectedFile, setSelectedFile] = useState<{data: string, mimeType: string, name: string} | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Generation State
+  const [history, setHistory] = useState<GeneratedAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleGenerate = async (customPrompt?: string) => {
-    const finalPrompt = customPrompt || prompt;
-    if (!finalPrompt.trim()) return;
-    
+  // --- HELPER: Parse Data URL ---
+  const parseDataUrl = (url: string) => {
+    const arr = url.split(',');
+    const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
+    const bstr = atob(arr[1]);
+    const n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    let i = n;
+    while (i--) {
+        u8arr[i] = bstr.charCodeAt(i);
+    }
+    return { blob: new Blob([u8arr], { type: mime }), base64: arr[1], mime };
+  };
+
+  // --- ACTIONS ---
+
+  const handleTransferToAnimate = (imgUrl: string) => {
+    try {
+      const { base64, mime } = parseDataUrl(imgUrl);
+      setSelectedFile({ data: base64, mimeType: mime, name: 'Generated Asset' });
+      setActiveModal('animate');
+      setPrompt(''); // Clear prompt to let user describe movement
+    } catch (e) {
+      console.error("Failed to transfer image", e);
+    }
+  };
+
+  const executeGeneration = async () => {
+    if (!prompt.trim() && !selectedFile && activeModal !== 'animate') return;
     setIsLoading(true);
     setError(null);
+
     try {
-      const url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
-      const newImage: GeneratedImage = {
-        url,
-        prompt: finalPrompt,
-        timestamp: Date.now()
-      };
-      setHistory(prev => [newImage, ...prev]);
-      setPrompt(''); 
+      let url = "";
+      let type: 'image' | 'video' | 'audio' = 'image';
+
+      if (activeModal === 'image') {
+        url = await geminiService.generateImagePro(prompt, aspectRatio, imageSize);
+        type = 'image';
+      } else if (activeModal === 'video') {
+        url = await geminiService.generateVideo(prompt);
+        type = 'video';
+      } else if (activeModal === 'animate') {
+        if (!selectedFile) throw new Error("Image required for animation.");
+        const p = prompt.trim() || "Cinematic motion";
+        url = await geminiService.animateImage(p, selectedFile.data, selectedFile.mimeType);
+        type = 'video';
+      } else if (activeModal === 'audio') {
+        url = await geminiService.generateSpeech(prompt);
+        type = 'audio';
+      }
+
+      setHistory(prev => [{ url, prompt: prompt || "Auto-Motion", timestamp: Date.now(), type }, ...prev]);
+      
+      // Reset after success
+      if (activeModal !== 'image') {
+         setPrompt('');
+         setSelectedFile(null);
+         setActiveModal(null);
+      }
     } catch (e: any) {
-      setError(e.message || "Something went wrong. Please try again.");
+      setError(e.message || "Generation failed.");
     } finally {
       setIsLoading(false);
     }
@@ -47,229 +100,244 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `${filename}.png`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Download failed:", err);
     }
   };
 
-  const inputStyle = "w-full p-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl text-sm font-semibold focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const r = new FileReader();
+      r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
+      r.readAsDataURL(file);
+    }
+  };
+
+  const CardBtn = ({ icon, title, desc, color, onClick }: any) => {
+    const colorClasses: Record<string, string> = {
+        cyan: "bg-cyan-500/10 text-cyan-600 group-hover:scale-110",
+        indigo: "bg-indigo-500/10 text-indigo-600 group-hover:scale-110",
+        pink: "bg-pink-500/10 text-pink-600 group-hover:scale-110",
+        amber: "bg-amber-500/10 text-amber-600 group-hover:scale-110",
+    };
+
+    return (
+        <button onClick={onClick} className="glass-panel p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col items-center gap-4 text-center hover:scale-[1.02] transition-all group hover:bg-white dark:hover:bg-slate-900 shadow-sm relative overflow-hidden h-full justify-center">
+            <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center shadow-inner transition-transform duration-500 ${colorClasses[color]}`}>
+                <i className={`fa-solid ${icon} text-2xl`}></i>
+            </div>
+            <div className="space-y-1 relative z-10">
+                <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{title}</h3>
+                <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest opacity-80">{desc}</p>
+            </div>
+        </button>
+    );
+  };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-reveal pb-24 px-4 sm:px-6 lg:px-8 pt-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 border-b border-black/5 dark:border-white/5 pb-8">
+    <div className="max-w-7xl mx-auto space-y-8 animate-reveal pb-24 px-4 sm:px-6 lg:px-8 pt-6 relative h-full flex flex-col">
+      
+      {/* --- HEADER --- */}
+      <div className="flex items-center justify-between gap-6 border-b border-black/5 dark:border-white/5 pb-6 shrink-0">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 rounded-3xl bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900 shadow-2xl">
-            <i className="fa-solid fa-wand-magic-sparkles text-2xl"></i>
+          <div className="w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900 shadow-2xl">
+            <i className="fa-solid fa-layer-group text-xl"></i>
           </div>
-          <div className="text-center sm:text-left">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">Studio Create</h2>
-            <div className="flex items-center justify-center sm:justify-start gap-3 mt-4">
-              <button 
-                onClick={() => setActiveTab('image')}
-                className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full transition-all border ${activeTab === 'image' ? 'bg-cyan-600 text-white border-cyan-600 shadow-lg shadow-cyan-600/20' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
-              >
-                Neural Images
-              </button>
-              <button 
-                onClick={() => setActiveTab('video')}
-                className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full transition-all border ${activeTab === 'video' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
-              >
-                Motion Synth
-              </button>
-            </div>
+          <div>
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">Creative Studio</h2>
+            <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mt-1">Multimodal Engine</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <button onClick={onClose} className="w-12 h-12 rounded-2xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all shadow-sm border border-black/5 dark:border-white/5">
-            <i className="fa-solid fa-xmark text-lg"></i>
-          </button>
-        </div>
+        <button onClick={onClose} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-all shadow-sm border border-black/5 dark:border-white/5">
+           <i className="fa-solid fa-xmark text-lg"></i>
+        </button>
       </div>
 
-      {activeTab === 'video' ? (
-        <div className="flex flex-col items-center justify-center py-40 space-y-10 animate-reveal">
-           <div className="relative">
-              <div className="w-32 h-32 rounded-[48px] bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300 dark:text-slate-700 animate-beta-pulse">
-                <i className="fa-solid fa-clapperboard text-6xl"></i>
-              </div>
-              <div className="absolute -top-4 -right-4 px-3 py-1 bg-cyan-600 text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-lg border-2 border-white dark:border-slate-950">In Progress</div>
-           </div>
-           <div className="text-center space-y-3">
-             <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">AI Video Generation</h3>
-             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.5em] animate-pulse">Orin Neural Motion v5.0-Preview</p>
-             <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-sm pt-4 leading-relaxed mx-auto opacity-70">
-               We are calibrating the neural pipeline for cinematic motion synthesis. This feature will be deployed in the upcoming major Orin update.
-             </p>
-           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[440px,1fr] gap-10 items-start">
-          {/* Left Control Panel */}
-          <div className="space-y-6 lg:sticky lg:top-8 animate-reveal">
-            <div className="glass-panel p-10 rounded-[48px] border border-slate-200 dark:border-white/10 shadow-2xl relative overflow-hidden bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
-              <div className="space-y-8 relative z-10">
-                <div className="space-y-4">
-                  <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
-                    <i className="fa-solid fa-terminal text-cyan-500"></i>
-                    Neural Input Prompt
-                  </label>
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Describe your vision in high detail..."
-                    className={`${inputStyle} h-56 resize-none leading-relaxed text-base`}
-                  />
-                </div>
+      {/* --- DASHBOARD GRID --- */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 shrink-0">
+         <CardBtn icon="fa-palette" title="Neural Canvas" desc="Text to Image" color="cyan" onClick={() => { setActiveModal('image'); setPrompt(''); }} />
+         <CardBtn icon="fa-video" title="Veo Cinema" desc="Text to Video" color="indigo" onClick={() => { setActiveModal('video'); setPrompt(''); }} />
+         <CardBtn icon="fa-wand-magic-sparkles" title="Living Portrait" desc="Image to Video" color="pink" onClick={() => { setActiveModal('animate'); setPrompt(''); setSelectedFile(null); }} />
+         <CardBtn icon="fa-music" title="Sonic Lab" desc="Text to Audio" color="amber" onClick={() => { setActiveModal('audio'); setPrompt(''); }} />
+      </div>
 
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Aspect Ratio</label>
-                    <div className="relative group">
-                      <select 
-                        value={aspectRatio} 
-                        onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
-                        className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
-                      >
-                        {['1:1', '16:9', '9:16', '4:3', '21:9', '3:2'].map(r => <option key={r} value={r} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{r}</option>)}
-                      </select>
-                      <i className="fa-solid fa-shapes absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Synthesis Quality</label>
-                    <div className="relative group">
-                      <select 
-                        value={imageSize} 
-                        onChange={(e) => setImageSize(e.target.value as ImageSize)}
-                        className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
-                      >
-                        {['1K', '2K', '4K'].map(s => <option key={s} value={s} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{s}</option>)}
-                      </select>
-                      <i className="fa-solid fa-microchip absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
-                    </div>
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => handleGenerate()}
-                  disabled={isLoading || !prompt.trim()}
-                  className="w-full py-6 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-4 group relative overflow-hidden"
-                >
-                  {isLoading ? (
-                    <>
-                      <i className="fa-solid fa-dna animate-spin"></i>
-                      <span>Synthesizing...</span>
-                    </>
-                  ) : (
-                    <>
-                      <i className="fa-solid fa-sparkles transition-transform group-hover:rotate-45"></i>
-                      <span>Generate Asset</span>
-                    </>
-                  )}
-                </button>
-                
-                {error && (
-                  <div className="p-5 bg-red-500/10 border border-red-500/20 rounded-3xl animate-reveal">
-                    <p className="text-[10px] text-red-500 font-black uppercase tracking-widest text-center leading-relaxed">{error}</p>
-                  </div>
-                )}
-              </div>
+      {/* --- HISTORY FEED --- */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar pt-8">
+         <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mb-6 px-2">Recent Creations</h3>
+         
+         {history.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 opacity-40 border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[32px]">
+               <i className="fa-solid fa-photo-film text-4xl mb-4 text-slate-300"></i>
+               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Gallery Empty</p>
             </div>
+         ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-20">
+               {history.map((item, i) => (
+                  <div key={i} className="glass-panel p-4 rounded-[32px] border border-black/5 dark:border-white/5 space-y-4 animate-scale-in group">
+                     {/* Media Display */}
+                     <div className="aspect-square bg-slate-100 dark:bg-black/40 rounded-2xl overflow-hidden relative shadow-inner">
+                        {item.type === 'image' && <img src={item.url} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Generated" />}
+                        {item.type === 'video' && <video src={item.url} controls className="w-full h-full object-cover" />}
+                        {item.type === 'audio' && (
+                           <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-amber-500/5">
+                              <i className="fa-solid fa-music text-4xl text-amber-500 animate-bounce-subtle"></i>
+                              <audio src={item.url} controls className="w-10/12" />
+                           </div>
+                        )}
+                        <div className="absolute top-2 left-2 px-3 py-1 bg-black/50 backdrop-blur-md rounded-full text-[9px] font-black text-white uppercase tracking-widest border border-white/10">
+                           {item.type}
+                        </div>
+                     </div>
 
-            <div className="p-8 glass-panel rounded-[32px] border border-black/5 dark:border-white/5 opacity-80">
-               <div className="flex items-start gap-4">
-                  <i className="fa-solid fa-shield-halved text-cyan-600 text-lg mt-0.5"></i>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Neural Safety Core Active</p>
-                    <p className="text-[9px] text-slate-500 dark:text-slate-500 font-bold mt-1">All generated content is private and adheres to JN Global safety protocols.</p>
-                  </div>
-               </div>
-            </div>
-          </div>
-
-          {/* Right Preview Area */}
-          <div className="min-h-[700px] glass-panel rounded-[64px] overflow-hidden flex flex-col items-center justify-start p-6 md:p-14 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950 shadow-inner">
-            <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }}></div>
-            
-            {isLoading && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl animate-fade">
-                <div className="text-center space-y-8 animate-reveal">
-                  <div className="relative">
-                    <div className="w-32 h-32 rounded-full border-2 border-cyan-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
-                      <i className="fa-solid fa-layer-group text-3xl text-cyan-500/40"></i>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <p className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Neural Handshake Active</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] font-black animate-pulse">Mapping Latent Space...</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {history.length > 0 ? (
-              <div className="w-full space-y-28 relative z-10">
-                {history.map((img, idx) => (
-                  <div key={img.timestamp} className="w-full flex flex-col items-center gap-12 animate-scale-in max-w-4xl mx-auto group/item">
-                    <div className="relative group/img w-full">
-                      <div className="absolute -inset-4 bg-gradient-to-tr from-cyan-500/10 to-indigo-500/10 rounded-[56px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
-                      <div className="relative rounded-[48px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700">
-                        <img 
-                          src={img.url} 
-                          className="max-w-full max-h-[80vh] object-contain transition-transform duration-1000 ease-out group-hover/item:scale-[1.04]" 
-                          alt={img.prompt} 
-                        />
-                      </div>
-                    </div>
-
-                    <div className="w-full max-w-xl flex flex-col items-center gap-8">
-                      <div className="w-full">
-                        <button 
-                          onClick={() => handleDownload(img.url, `orin-asset-${img.timestamp}`)}
-                          className="w-full py-5 bg-cyan-600 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.3em] shadow-xl shadow-cyan-600/10 hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4"
-                        >
-                          <i className="fa-solid fa-download text-lg"></i>
-                          <span>Secure Download</span>
+                     {/* Actions */}
+                     <div className="flex items-center justify-between gap-2">
+                        <button onClick={() => handleDownload(item.url, `orin-${item.type}-${item.timestamp}`)} className="flex-1 py-2 bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all">
+                           Download
                         </button>
-                      </div>
-
-                      <div className="text-center px-10">
-                        <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Generation Script</p>
-                        <p className="text-base font-bold text-slate-800 dark:text-slate-200 italic leading-relaxed">"{img.prompt}"</p>
-                      </div>
-                    </div>
-                    {idx < history.length - 1 && <div className="w-32 h-[1px] bg-slate-200 dark:bg-white/5 rounded-full mt-10"></div>}
+                        {item.type === 'image' && (
+                           <button onClick={() => handleTransferToAnimate(item.url)} className="flex-1 py-2 bg-pink-500 hover:bg-pink-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-pink-500/20">
+                              <i className="fa-solid fa-wand-magic-sparkles mr-2"></i> Motion
+                           </button>
+                        )}
+                     </div>
+                     <p className="text-[10px] font-bold text-slate-400 line-clamp-2 px-1">"{item.prompt}"</p>
                   </div>
-                ))}
+               ))}
+            </div>
+         )}
+      </div>
+
+      {/* --- UNIFIED MODAL OVERLAY --- */}
+      {activeModal && (
+        <div className="fixed inset-0 z-[200] bg-slate-950/80 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
+           <div className="w-full max-w-lg glass-panel bg-white dark:bg-slate-950 rounded-[48px] p-8 border border-white/10 shadow-2xl relative animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+              
+              {/* Modal Header */}
+              <div className="flex items-center justify-between mb-8">
+                 <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white text-xl shadow-lg ${
+                       activeModal === 'image' ? 'bg-cyan-600' : activeModal === 'video' ? 'bg-indigo-600' : activeModal === 'animate' ? 'bg-pink-600' : 'bg-amber-500'
+                    }`}>
+                       <i className={`fa-solid ${activeModal === 'image' ? 'fa-palette' : activeModal === 'video' ? 'fa-video' : activeModal === 'animate' ? 'fa-wand-magic-sparkles' : 'fa-music'}`}></i>
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                          {activeModal === 'image' ? 'Neural Canvas' : activeModal === 'video' ? 'Veo Cinema' : activeModal === 'animate' ? 'Living Portrait' : 'Sonic Lab'}
+                       </h3>
+                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">
+                          {activeModal === 'image' ? 'Image Generation' : activeModal === 'video' ? 'Video Generation' : activeModal === 'animate' ? 'Image Animation' : 'Audio Synthesis'}
+                       </p>
+                    </div>
+                 </div>
+                 <button onClick={() => { setActiveModal(null); setError(null); setIsLoading(false); }} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:bg-red-500 hover:text-white transition-all">
+                    <i className="fa-solid fa-xmark"></i>
+                 </button>
               </div>
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-12 relative z-10 py-32 opacity-40">
-                <div className="w-28 h-28 bg-slate-100 dark:bg-white/5 rounded-[48px] flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-inner">
-                  <i className="fa-solid fa-cube text-5xl"></i>
-                </div>
-                <div className="space-y-4">
-                  <p className="text-xs font-black uppercase tracking-[0.8em] text-slate-400 dark:text-slate-500 translate-x-2">Idle Mode</p>
-                  <p className="text-sm font-bold text-slate-400/80 dark:text-slate-600 max-w-xs mx-auto leading-relaxed">Synthesis pipeline ready for neural instruction.</p>
-                </div>
+
+              <div className="space-y-6 overflow-y-auto custom-scrollbar px-1">
+                 
+                 {/* Image Upload Area for Animation */}
+                 {activeModal === 'animate' && (
+                    <div 
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`w-full h-40 rounded-3xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group ${selectedFile ? 'border-pink-500 bg-pink-500/5' : 'border-slate-300 dark:border-white/20 hover:border-pink-400'}`}
+                    >
+                       {selectedFile ? (
+                          <div className="relative w-full h-full flex items-center justify-center">
+                             <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-40 transition-opacity" alt="Preview" />
+                             <div className="z-10 bg-white/90 dark:bg-black/80 px-4 py-2 rounded-full flex items-center gap-2 shadow-lg">
+                                <i className="fa-solid fa-check-circle text-pink-500"></i>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-white">Ready</span>
+                             </div>
+                          </div>
+                       ) : (
+                          <div className="text-center text-slate-400">
+                             <i className="fa-solid fa-cloud-arrow-up text-2xl mb-2"></i>
+                             <p className="text-[10px] font-black uppercase tracking-widest">Upload Source Image</p>
+                          </div>
+                       )}
+                       <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept="image/*" className="hidden" />
+                    </div>
+                 )}
+
+                 {/* Prompt Input */}
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
+                       {activeModal === 'animate' ? 'Motion Prompt (Optional)' : 'Description'}
+                    </label>
+                    <textarea 
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      placeholder={activeModal === 'image' ? "A futuristic cyberpunk city..." : activeModal === 'video' ? "A cat driving a car..." : activeModal === 'animate' ? "Pan camera right..." : "What should I say?"}
+                      className="w-full h-32 p-5 bg-slate-50 dark:bg-black/20 rounded-3xl border border-slate-200 dark:border-white/10 outline-none resize-none text-sm font-medium focus:ring-2 focus:ring-cyan-500/20 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
+                    />
+                 </div>
+
+                 {/* Image Specific Controls */}
+                 {activeModal === 'image' && (
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Aspect Ratio</label>
+                          <select 
+                             value={aspectRatio} 
+                             onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
+                             className="w-full p-3 bg-slate-50 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/10 text-xs font-bold outline-none text-slate-700 dark:text-slate-300"
+                          >
+                             {['1:1', '16:9', '9:16', '4:3', '3:4'].map(r => <option key={r} value={r}>{r}</option>)}
+                          </select>
+                       </div>
+                       <div className="space-y-2">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Quality</label>
+                          <select 
+                             value={imageSize} 
+                             onChange={(e) => setImageSize(e.target.value as ImageSize)}
+                             className="w-full p-3 bg-slate-50 dark:bg-black/20 rounded-2xl border border-slate-200 dark:border-white/10 text-xs font-bold outline-none text-slate-700 dark:text-slate-300"
+                          >
+                             {['1K', '2K', '4K'].map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                       </div>
+                    </div>
+                 )}
+
+                 {error && (
+                   <div className="p-4 bg-red-500/10 rounded-2xl text-center border border-red-500/20">
+                      <p className="text-[10px] font-bold text-red-500 uppercase tracking-wide">{error}</p>
+                   </div>
+                 )}
+
+                 <button 
+                   onClick={executeGeneration}
+                   disabled={isLoading || ((!prompt.trim() && !selectedFile) && activeModal !== 'animate')}
+                   className={`w-full py-5 rounded-3xl text-white font-black text-xs uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mt-4 ${
+                      activeModal === 'image' ? 'bg-cyan-600 hover:bg-cyan-500' : 
+                      activeModal === 'video' ? 'bg-indigo-600 hover:bg-indigo-500' : 
+                      activeModal === 'animate' ? 'bg-pink-600 hover:bg-pink-500' : 'bg-amber-500 hover:bg-amber-400'
+                   }`}
+                 >
+                   {isLoading ? (
+                      <>
+                        <i className="fa-solid fa-circle-notch animate-spin"></i>
+                        <span>Synthesizing...</span>
+                      </>
+                   ) : (
+                      <>
+                        <i className="fa-solid fa-bolt"></i>
+                        <span>Generate</span>
+                      </>
+                   )}
+                 </button>
+                 
+                 {activeModal !== 'audio' && <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest opacity-60">AI Generation takes time. Please wait.</p>}
               </div>
-            )}
-            
-            {/* Aesthetic Borders */}
-            <div className="absolute top-12 left-12 w-16 h-16 border-t border-l border-slate-200 dark:border-white/5 rounded-tl-[40px] pointer-events-none"></div>
-            <div className="absolute top-12 right-12 w-16 h-16 border-t border-r border-slate-200 dark:border-white/5 rounded-tr-[40px] pointer-events-none"></div>
-            <div className="absolute bottom-12 left-12 w-16 h-16 border-b border-l border-slate-200 dark:border-white/5 rounded-bl-[40px] pointer-events-none"></div>
-            <div className="absolute bottom-12 right-12 w-16 h-16 border-b border-r border-slate-200 dark:border-white/5 rounded-br-[40px] pointer-events-none"></div>
-          </div>
+           </div>
         </div>
       )}
     </div>

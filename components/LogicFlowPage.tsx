@@ -88,7 +88,7 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
           </div>
 
           <div className="glass-panel py-20 px-6 md:py-32 md:px-16 rounded-[64px] border border-black/5 dark:border-white/5 flex flex-col items-center justify-center shadow-sm relative overflow-x-auto no-scrollbar bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.03),transparent_70%)]">
-            <div className="flex flex-col md:flex-row items-center justify-center w-full min-w-max md:min-w-0 transition-all duration-700 ${isSinhalaFlow ? 'gap-10 md:gap-20 lg:gap-32' : 'gap-10 md:gap-32 lg:gap-48'}">
+            <div className={`flex flex-col md:flex-row items-center justify-center w-full min-w-max md:min-w-0 transition-all duration-700 ${isSinhalaFlow ? 'gap-10 md:gap-20 lg:gap-32' : 'gap-10 md:gap-32 lg:gap-48'}`}>
                 {activeFlow === 'si' ? (
                   <>
                     <FlowStep icon="fa-keyboard" title={t.stepInput} label="Bilingual Capture" color="cyan" />
@@ -99,9 +99,9 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
                   </>
                 ) : (
                   <>
-                    <FlowStep icon="fa-keyboard" title={t.stepInput} label="Raw Data Capture" color="cyan" />
+                    <FlowStep icon="fa-terminal" title={t.stepInput} label="Raw Data Capture" color="cyan" />
                     <FlowStep icon="fa-microchip" title={t.stepProcess} label="Neural Cycle Alpha" color="violet" />
-                    <FlowStep icon="fa-comment-dots" title={t.stepOutput} label="Instant Manifest" color="emerald" isLast />
+                    <FlowStep icon="fa-bolt" title={t.stepOutput} label="Instant Manifest" color="emerald" isLast />
                   </>
                 )}
             </div>
