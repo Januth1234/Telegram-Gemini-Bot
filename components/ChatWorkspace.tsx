@@ -183,17 +183,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
 
+    const isEmpty = messages.length === 0;
+
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
-        <div className="max-w-3xl mx-auto space-y-10">
-          {messages.length === 0 ? (
-            <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
+      <div className={`flex-1 relative bg-slate-50/30 dark:bg-slate-950/30 ${isEmpty ? 'flex items-center justify-center overflow-hidden' : 'overflow-y-auto custom-scrollbar p-4 md:p-10 pb-48'}`}>
+        <div className={`max-w-3xl mx-auto w-full ${isEmpty ? 'px-6' : 'space-y-10'}`}>
+          {isEmpty ? (
+            <div className="text-center space-y-8 animate-reveal">
                <div className="w-20 h-20 md:w-24 md:h-24 rounded-[32px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : activeTab === 'vision' ? 'Camera' : 'Chat'}</h2>
-                  <div className="flex flex-wrap justify-center gap-2 px-4">
+                  <div className="flex flex-wrap justify-center gap-2">
                      {(activeTab === 'studio' ? t.prompts.studio : activeTab === 'vision' ? t.prompts.vision : t.prompts.chat).map(s => (
                         <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
                      ))}
@@ -201,45 +203,47 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                </div>
             </div>
           ) : (
-            messages.map(msg => (
-              <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                    {msg.imageUrl && (
-                      <div className="mt-6 space-y-4">
-                         <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
-                            <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
-                         </div>
-                         <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
-                      </div>
-                    )}
-                    {msg.links && msg.links.length > 0 && (
-                      <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
-                         {msg.links.map((link, idx) => (
-                           <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
-                              <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
-                           </a>
-                         ))}
-                      </div>
-                    )}
-                 </div>
-                 <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
-                    <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
-                    <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                    <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                 </div>
-              </div>
-            ))
+            <>
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                   <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                      <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                      {msg.imageUrl && (
+                        <div className="mt-6 space-y-4">
+                           <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
+                              <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
+                           </div>
+                           <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
+                        </div>
+                      )}
+                      {msg.links && msg.links.length > 0 && (
+                        <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                           {msg.links.map((link, idx) => (
+                             <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
+                                <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
+                             </a>
+                           ))}
+                        </div>
+                      )}
+                   </div>
+                   <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
+                      <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
+                      <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+                      <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                   </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
+                  <div className="flex gap-1">
+                    {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
+                  </div>
+                  <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
+                </div>
+              )}
+              <div ref={scrollRef} className="h-4" />
+            </>
           )}
-          {isTyping && (
-            <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
-              <div className="flex gap-1">
-                {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
-              </div>
-              <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
-            </div>
-          )}
-          <div ref={scrollRef} className="h-4" />
         </div>
       </div>
     );
