@@ -30,10 +30,11 @@ const getSystemInstruction = () => {
 
 RULES:
 1. BE SIMPLE: Use everyday language. No complex jargon or heavy words.
-2. BE DIRECT: Start answering immediately. Don't say "Hello" or "I am an AI" unless asked.
-3. LANGUAGE: If the user speaks Sinhala, use natural, simple Sinhala (not formal book language). If English, use simple English.
+2. BE DIRECT: Start answering immediately. 
+3. LANGUAGE: If the user speaks Sinhala, use natural, simple Sinhala. If English, use simple English.
 4. MATH: Show math steps clearly using LaTeX.
 5. IDENTITY: Only mention you were made by Januth Nimnal if asked.
+6. LENGTH: Keep responses helpful but concise.
 
 Context:
 Time in Sri Lanka: ${timeStr}.`;
@@ -78,7 +79,7 @@ export class GeminiService {
         }
       }
     } catch (e) {
-      console.warn("Puter delayed.");
+      console.warn("Puter connection delayed.");
     }
   }
 
@@ -158,7 +159,7 @@ export class GeminiService {
       this.updateCurrentUser(user);
       return this.currentUser!;
     } catch (e: any) {
-      throw new AppError("Sign in failed.", 'auth');
+      throw new AppError("Login failed.", 'auth');
     }
   }
 
@@ -169,7 +170,6 @@ export class GeminiService {
     if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async connectLive(callbacks: any) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -186,7 +186,6 @@ export class GeminiService {
     });
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async connectTranslator(callbacks: any, config: { source: string; target: string }) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -198,41 +197,35 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
         },
-        systemInstruction: `You are a real-time speech-to-speech translator between ${config.source} and ${config.target}. 
-        Listen to the audio input. If it is ${config.source}, translate it to ${config.target} and speak it. 
-        If it is ${config.target}, translate it to ${config.source} and speak it. 
-        Be accurate and natural. Do not say anything else.`,
+        systemInstruction: `You are a translator between ${config.source} and ${config.target}. Speak ONLY the translation.`,
       },
     });
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async generateWelcomeMessage(options: { date: string; time: string; location?: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a very short, friendly 1-sentence welcome message for a user.
-      Context: Time is ${options.time}, Date is ${options.date}${options.location ? `, Location: ${options.location}` : ''}.
-      Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}.
-      Keep it simple and warm. No emojis.`;
+      // Strict 3-5 word rule enforced in prompt
+      const prompt = `Generate a very short greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
+      It MUST be exactly 3 to 5 words. No more, no less.
+      Context: Time is ${options.time}. No emojis or jargon.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text || "";
+      return response.text?.trim() || (options.lang === 'si' ? "ඔබට සුබ දවසක් වේවා" : "Have a good day");
     } catch {
-      return "";
+      return options.lang === 'si' ? "ඔබට සුබ දවසක් වේවා" : "Have a good day";
     }
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async translate(text: string, targetLang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Translate the following text to ${targetLang === 'si' ? 'Sinhala' : 'English'}. Only provide the translation, no extra text.
-        Text: "${text}"`,
+        contents: `Translate this to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only the translation.`,
       });
       return response.text || text;
     } catch {
@@ -240,27 +233,30 @@ export class GeminiService {
     }
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const conversationSummary = messages.slice(0, 5).map(m => `${m.role}: ${m.content}`).join('\n');
-      const prompt = `Generate a very short (2-4 words) title for this conversation in ${lang === 'si' ? 'Sinhala' : 'English'}.
-      Modes used: ${modes.join(', ')}.
-      Conversation snippet:
-      ${conversationSummary}`;
+      const context = messages.slice(0, 3).map(m => m.content).join(' ');
+      const prompt = `Give this chat a name in ${lang === 'si' ? 'Sinhala' : 'English'}. 
+      Strict Rule: Use exactly 3 to 4 words. Max 5. 
+      Context: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : "New Chat");
+      
+      let title = response.text?.trim() || (lang === 'si' ? "නව සංවාදය" : "New Chat");
+      // Fallback trim if AI is too talkative
+      const words = title.split(' ');
+      if (words.length > 5) title = words.slice(0, 5).join(' ');
+      
+      return title;
     } catch {
-      return lang === 'si' ? "නව පිළිසඳර" : "New Chat";
+      return lang === 'si' ? "නව සංවාදය" : "New Chat";
     }
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
     grounding?: 'search' | 'maps'; 
@@ -270,7 +266,7 @@ export class GeminiService {
     history?: ChatMessage[];
     signal?: AbortSignal;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
-    if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in.", "limit_reached");
+    if (this.hasReachedLimit()) throw new AppError("Limit reached. Please login.", "limit_reached");
     
     const count = options.messageCount || 0;
     const isUserLoggedIn = !!this.currentUser;
@@ -285,7 +281,7 @@ export class GeminiService {
         this.incrementUsage();
         return { text: response.toString(), links: [] };
       } catch (e) {
-        console.warn("Puter fallback.");
+        console.warn("Puter fallback active.");
       }
     }
 
@@ -311,7 +307,7 @@ export class GeminiService {
       if (options.fileData) {
           currentParts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
       }
-      currentParts.push({ text: prompt || "Explain this." });
+      currentParts.push({ text: prompt || "Continue." });
       contents.push({ role: 'user', parts: currentParts });
 
       const config: any = { 
@@ -324,33 +320,12 @@ export class GeminiService {
         config.tools = [{ googleMaps: {} }];
       }
 
-      const generatePromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: modelName,
         contents,
         config
       });
 
-      if (options.signal) {
-        const result = await Promise.race([
-          generatePromise,
-          new Promise((_, reject) => {
-            options.signal?.addEventListener('abort', () => reject(new DOMException("Aborted", "AbortError")));
-          })
-        ]);
-        const response = result as any;
-        this.incrementUsage();
-        const links: GroundingLink[] = [];
-        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (groundingChunks) {
-          groundingChunks.forEach((chunk: any) => {
-            if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
-            else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
-          });
-        }
-        return { text: response.text || "", links };
-      }
-
-      const response = await generatePromise;
       this.incrementUsage();
 
       const links: GroundingLink[] = [];
@@ -365,15 +340,13 @@ export class GeminiService {
       return { text: response.text || "", links };
     } catch (e: any) {
       if (e.name === 'AbortError') throw e;
-      throw new AppError("Failed to process.", 'generic');
+      throw new AppError("Network Error", 'generic');
     }
   }
 
-  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const config: any = {
@@ -383,36 +356,23 @@ export class GeminiService {
         }
       };
 
-      const generatePromise = ai.models.generateContent({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
         config
       });
 
-      let response: any;
-      if (signal) {
-        response = await Promise.race([
-          generatePromise,
-          new Promise((_, reject) => {
-            signal.addEventListener('abort', () => reject(new DOMException("Aborted", "AbortError")));
-          })
-        ]);
-      } else {
-        response = await generatePromise;
-      }
-
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-      throw new Error("Failed.");
+      throw new Error("Empty Response");
     } catch (e: any) {
       if (e.name === 'AbortError') throw e;
-      throw new AppError("Failed to draw.", 'generic');
+      throw new AppError("Drawing Failed", 'generic');
     }
   }
 
-  // Method used to download generated assets, fix for error in components/ChatWorkspace.tsx
-  async downloadImage(url: string, filename: string = "orin-asset") {
+  async downloadImage(url: string, filename: string = "orin-image") {
     try {
       const response = await fetch(url);
       const blob = await response.blob();
@@ -425,7 +385,7 @@ export class GeminiService {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
-      console.error("Download failed:", err);
+      console.error("Save error:", err);
     }
   }
 }
