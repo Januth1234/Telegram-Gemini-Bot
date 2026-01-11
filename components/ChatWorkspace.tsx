@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { geminiService, AppError } from '../services/geminiService';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { geminiService } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
+import MathsMode from './MathsMode';
+import GetHelpMode from './GetHelpMode';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -34,7 +36,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [isModeSelectorOpen, setIsModeSelectorOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
 
@@ -65,7 +66,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const handleModeChange = (mode: WorkspaceMode) => {
     setActiveTab(mode);
-    setIsModeSelectorOpen(false);
     if (onModeSwitch) onModeSwitch(mode);
   };
 
@@ -159,12 +159,87 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const getTabIcon = (tab: WorkspaceMode) => {
     switch(tab) {
-      case 'studio': return 'fa-wand-magic-sparkles';
+      case 'studio': return 'fa-palette';
       case 'vision': return 'fa-camera';
       case 'maths': return 'fa-calculator';
+      case 'gethelp': return 'fa-wand-sparkles';
       case 'voice': return 'fa-microphone-lines';
-      default: return 'fa-comment-dots';
+      default: return 'fa-message';
     }
+  };
+
+  const getActivePrompts = () => {
+    if (activeTab === 'studio') return t.prompts.studio;
+    if (activeTab === 'vision') return t.prompts.vision;
+    if (activeTab === 'maths') return t.prompts.maths;
+    if (activeTab === 'gethelp') return t.prompts.chat; 
+    return t.prompts.chat;
+  };
+
+  const renderBody = () => {
+    if (activeTab === 'maths') return <MathsMode onClose={handleClose} lang={lang} embedded />;
+    if (activeTab === 'gethelp') return <GetHelpMode onClose={handleClose} lang={lang} embedded />;
+
+    return (
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
+        <div className="max-w-3xl mx-auto space-y-10">
+          {messages.length === 0 ? (
+            <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
+               <div className="w-20 h-20 md:w-24 md:h-24 rounded-[40px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
+                  <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
+               </div>
+               <div className="space-y-4">
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Draw' : activeTab === 'vision' ? 'See' : activeTab === 'maths' ? 'Solve' : activeTab === 'gethelp' ? 'Explore' : 'Chat'}</h2>
+                  <div className="flex flex-wrap justify-center gap-2 px-4">
+                     {getActivePrompts().map(s => (
+                        <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
+                     ))}
+                  </div>
+               </div>
+            </div>
+          ) : (
+            messages.map(msg => (
+              <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                    {msg.imageUrl && (
+                      <div className="mt-6 space-y-4">
+                         <div className="rounded-[24px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
+                            <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
+                         </div>
+                         <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
+                      </div>
+                    )}
+                    {msg.links && msg.links.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                         {msg.links.map((link, idx) => (
+                           <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
+                              <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
+                           </a>
+                         ))}
+                      </div>
+                    )}
+                 </div>
+                 <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
+                    <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
+                    <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+                    <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                 </div>
+              </div>
+            ))
+          )}
+          {isTyping && (
+            <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
+              <div className="flex gap-1">
+                {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
+              </div>
+              <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
+            </div>
+          )}
+          <div ref={scrollRef} className="h-4" />
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -173,10 +248,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {isHistoryOpen && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />}
 
       {/* History Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-[120] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 cubic-bezier(0.16, 1, 0.3, 1) transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
+      <div className={`fixed inset-y-0 left-0 z-[120] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</h3>
-          <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400"><i className="fa-solid fa-xmark"></i></button>
+          <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="p-4">
           <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg">
@@ -198,127 +273,65 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        {/* Workspace Header */}
+        {/* Workspace Header - Persistent Switcher */}
         <header className="h-16 md:h-20 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4 flex-1">
             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all"><i className="fa-solid fa-bars-staggered"></i></button>
-            <div className="relative">
-              <button 
-                onClick={() => setIsModeSelectorOpen(!isModeSelectorOpen)}
-                className="flex items-center gap-3 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 hover:border-cyan-500/30 transition-all"
-              >
-                <i className={`fa-solid ${getTabIcon(activeTab)} text-cyan-600`}></i>
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-white">{activeTab}</span>
-                <i className={`fa-solid fa-chevron-down text-[8px] transition-transform ${isModeSelectorOpen ? 'rotate-180' : ''}`}></i>
-              </button>
-              
-              {isModeSelectorOpen && (
-                <div className="absolute top-full left-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-reveal z-[100]">
-                  {(['chat', 'studio', 'vision', 'maths'] as WorkspaceMode[]).map(m => (
-                    <button key={m} onClick={() => handleModeChange(m)} className="w-full flex items-center gap-3 px-5 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors text-left">
-                       <i className={`fa-solid ${getTabIcon(m)} text-slate-400 w-5 text-center`}></i>
-                       <span className="text-[10px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-300">{m}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            
+            <nav className="flex items-center bg-slate-100 dark:bg-white/5 rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar max-w-full">
+              {(['chat', 'studio', 'vision', 'maths', 'gethelp'] as WorkspaceMode[]).map(m => (
+                <button 
+                  key={m} 
+                  onClick={() => handleModeChange(m)}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap ${activeTab === m ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+                >
+                  <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
+                  <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
+                    {m === 'chat' ? 'Deep Chat' : m === 'maths' ? 'Math Solver' : m === 'studio' ? 'Draw Designer' : m === 'vision' ? 'Visual AI' : m === 'gethelp' ? 'Help Me' : m}
+                  </span>
+                </button>
+              ))}
+            </nav>
           </div>
 
           <div className="flex items-center gap-2">
              {isTyping && <button onClick={() => { abortControllerRef.current?.abort(); setIsTyping(false); stopProgress(); }} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-stop"></i></button>}
-             <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all border border-slate-200 dark:border-white/10"><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
+             <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all border border-slate-200 dark:border-white/10 shadow-sm"><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
           </div>
           
           {progress > 0 && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-100 dark:bg-slate-900"><div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${progress}%` }}></div></div>}
         </header>
 
-        {/* Message Stream */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40">
-          <div className="max-w-3xl mx-auto space-y-10">
-            {messages.length === 0 ? (
-              <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
-                 <div className="w-20 h-20 md:w-24 md:h-24 rounded-[40px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
-                    <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
-                 </div>
-                 <div className="space-y-4">
-                    <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Draw' : activeTab === 'vision' ? 'See' : activeTab === 'maths' ? 'Solve' : 'Chat'}</h2>
-                    <div className="flex flex-wrap justify-center gap-2 px-4">
-                       {(t.prompts[activeTab === 'chat' ? 'chat' : activeTab === 'maths' ? 'maths' : activeTab === 'studio' ? 'studio' : 'vision'] || []).map(s => (
-                          <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 transition-all shadow-sm">{s}</button>
-                       ))}
-                    </div>
-                 </div>
-              </div>
-            ) : (
-              messages.map(msg => (
-                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                   <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                      <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                      {msg.imageUrl && (
-                        <div className="mt-6 space-y-4">
-                           <div className="rounded-[24px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black">
-                              <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 hover:scale-[1.03]" alt="Result" />
-                           </div>
-                           <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
-                        </div>
-                      )}
-                      {msg.links && msg.links.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
-                           {msg.links.map((link, idx) => (
-                             <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5">
-                                <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
-                             </a>
-                           ))}
-                        </div>
-                      )}
-                   </div>
-                   <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
-                      <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
-                      <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                      <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                   </div>
-                </div>
-              ))
-            )}
-            {isTyping && (
-              <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit">
-                <div className="flex gap-1">
-                  {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
-                </div>
-                <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
-              </div>
-            )}
-            <div ref={scrollRef} className="h-2" />
-          </div>
-        </div>
+        {renderBody()}
 
-        {/* Input Bar Fixed */}
-        <div className="fixed bottom-0 left-0 md:left-auto md:right-0 w-full md:w-[calc(100%-0px)] p-4 md:p-8 pointer-events-none z-[100]">
-           <div className="max-w-3xl mx-auto pointer-events-auto">
-              <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95">
-                 <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"><i className="fa-solid fa-paperclip text-lg"></i></button>
-                 <input 
-                  ref={inputRef} 
-                  value={localInput} 
-                  onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
-                  onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                  placeholder={activeTab === 'studio' ? t.placeholderStudio : "Type something..."} 
-                  className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
-                 />
-                 <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>
-                 <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      const r = new FileReader();
-                      r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
-                      r.readAsDataURL(file);
-                    }
-                 }} />
-              </div>
-              {selectedFile && <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0"><i className="fa-solid fa-file text-emerald-600 text-[10px]"></i><span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[150px]">{selectedFile.name}</span><button onClick={() => setSelectedFile(null)} className="text-red-500"><i className="fa-solid fa-xmark"></i></button></div>}
-           </div>
-        </div>
+        {/* Fix: Bypassing unintentional comparison error due to complex type narrowing in this scope */}
+        {(activeTab as string) !== 'maths' && (activeTab as string) !== 'gethelp' && (
+          <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent">
+             <div className="max-w-3xl mx-auto pointer-events-auto pb-[env(safe-area-inset-bottom)]">
+                <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
+                   <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[24px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"><i className="fa-solid fa-paperclip text-lg"></i></button>
+                   <input 
+                    ref={inputRef} 
+                    value={localInput} 
+                    onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
+                    onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
+                    placeholder={activeTab === 'studio' ? t.placeholderStudio : "Type your message..."} 
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
+                   />
+                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>
+                   <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const r = new FileReader();
+                        r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
+                        r.readAsDataURL(file);
+                      }
+                   }} />
+                </div>
+                {selectedFile && <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0 shadow-sm"><i className="fa-solid fa-file text-emerald-600 text-[10px]"></i><span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[150px]">{selectedFile.name}</span><button onClick={() => setSelectedFile(null)} className="text-red-500"><i className="fa-solid fa-xmark"></i></button></div>}
+             </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -168,7 +168,6 @@ export class GeminiService {
     });
   }
 
-  // Added connectTranslator method to handle real-time speech-to-speech translation
   async connectTranslator(callbacks: any, options: { source: string; target: string }) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -180,29 +179,29 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a professional real-time translator. 
-        Your task is to facilitate a conversation between two people speaking ${options.source} and ${options.target}.
-        Listen to audio input in either language and immediately provide the translation into the other language as audio.
-        Output only the translated speech. Keep the tone natural and preserve the original intent.`,
+        systemInstruction: `You are a real-time speech translator between ${options.source} and ${options.target}. Speak only the translation.`,
       },
     });
   }
 
-  async generateWelcomeMessage(options: { date: string; time: string; location?: string; lang: Language }): Promise<string> {
+  async generateWelcomeMessage(options: { timeOfDay: string; weather: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Updated word limit to 6-7 words
-      const prompt = `Generate a very short greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
-      It MUST be exactly 6 to 7 words. 
-      Context: Time is ${options.time}. Keep it friendly and simple.`;
+      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
+      Context: It is a ${options.weather} ${options.timeOfDay} in Sri Lanka.
+      STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text?.trim() || (options.lang === 'si' ? "ඔබට අද දවස සුබ එකක් වේවා" : "Have a very wonderful day today");
+      
+      let text = response.text?.trim() || "";
+      const words = text.split(/\s+/);
+      if (words.length > 7) text = words.slice(0, 7).join(' ');
+      return text;
     } catch {
-      return options.lang === 'si' ? "ඔබට අද දවස සුබ එකක් වේවා" : "Have a very wonderful day today";
+      return "";
     }
   }
 
@@ -211,7 +210,7 @@ export class GeminiService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only the translation.`,
+        contents: `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only output the translation.`,
       });
       return response.text || text;
     } catch {
@@ -223,7 +222,7 @@ export class GeminiService {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(0, 3).map(m => m.content).join(' ');
-      const prompt = `Short title (max 5 words) for this chat in ${lang === 'si' ? 'Sinhala' : 'English'}: ${context}`;
+      const prompt = `Short title (3-5 words) for this chat in ${lang === 'si' ? 'Sinhala' : 'English'}: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
