@@ -21,6 +21,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
+  // Translator Languages
+  const [langA, setLangA] = useState('English');
+  const [langB, setLangB] = useState('Sinhala');
+  const languages = ['English', 'Sinhala', 'Tamil'];
+
   // High-Performance Visualizer Settings
   const BAR_COUNT = 5; 
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
@@ -140,6 +145,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setMode(newMode);
   };
 
+  const cycleLang = (setter: React.Dispatch<React.SetStateAction<string>>, current: string) => {
+    if (isActive) return; // Prevent changing while active
+    const idx = languages.indexOf(current);
+    const next = languages[(idx + 1) % languages.length];
+    setter(next);
+  };
+
   const startSession = async () => {
     setErrorMessage(null);
     setIsConnecting(true);
@@ -240,7 +252,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       };
 
       const sessionPromise = mode === 'translator' 
-        ? geminiService.connectTranslator(callbacks, { source: 'English', target: 'Sinhala' })
+        ? geminiService.connectTranslator(callbacks, { source: langA, target: langB })
         : geminiService.connectLive(callbacks);
 
       sessionRef.current = await sessionPromise;
@@ -317,11 +329,27 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               </div>
            </div>
 
-           <div className="mt-6 md:mt-8 text-center space-y-2 z-10 min-h-[4rem]">
+           <div className="mt-6 md:mt-8 text-center space-y-2 z-10 min-h-[4rem] flex flex-col items-center">
               <h2 className={`text-2xl font-black uppercase tracking-tight transition-colors ${isActive ? (mode === 'translator' ? 'text-indigo-600 dark:text-indigo-400' : 'text-cyan-600 dark:text-cyan-400') : 'text-slate-900 dark:text-white'}`}>
                   {isActive ? (isSpeaking ? "Speaking..." : "Listening...") : (mode === 'translator' ? t.translator : t.voice)}
               </h2>
-              {!isActive && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready to Connect</p>}
+              {!isActive && mode !== 'translator' && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready to Connect</p>}
+              
+              {/* Language Selector for Translator Mode */}
+              {mode === 'translator' && !isActive && (
+                <div className="flex items-center gap-3 mt-2 bg-slate-100 dark:bg-white/5 rounded-2xl px-4 py-2 border border-black/5 dark:border-white/5 animate-reveal">
+                   <button onClick={() => cycleLang(setLangA, langA)} className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase w-14 text-center hover:text-indigo-500 transition-colors py-1">{langA}</button>
+                   <i className="fa-solid fa-arrow-right-arrow-left text-[10px] text-slate-400"></i>
+                   <button onClick={() => cycleLang(setLangB, langB)} className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase w-14 text-center hover:text-indigo-500 transition-colors py-1">{langB}</button>
+                </div>
+              )}
+              {mode === 'translator' && isActive && (
+                 <div className="flex items-center gap-2 mt-2 opacity-60">
+                    <span className="text-[10px] font-bold uppercase">{langA}</span>
+                    <i className="fa-solid fa-right-left text-[8px]"></i>
+                    <span className="text-[10px] font-bold uppercase">{langB}</span>
+                 </div>
+              )}
            </div>
         </div>
 

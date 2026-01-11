@@ -186,7 +186,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const isEmpty = messages.length === 0;
 
     return (
-      <div className={`flex-1 relative bg-slate-50/30 dark:bg-slate-950/30 ${isEmpty ? 'flex items-center justify-center overflow-hidden' : 'overflow-y-auto custom-scrollbar p-4 md:p-10 pb-48'}`}>
+      <div className={`flex-1 relative bg-slate-50/30 dark:bg-slate-950/30 ${isEmpty ? 'flex flex-col items-center justify-center pb-32 overflow-hidden' : 'overflow-y-auto custom-scrollbar p-4 md:p-10 pb-48'}`}>
         <div className={`max-w-3xl mx-auto w-full ${isEmpty ? 'px-6' : 'space-y-10'}`}>
           {isEmpty ? (
             <div className="text-center space-y-8 animate-reveal">

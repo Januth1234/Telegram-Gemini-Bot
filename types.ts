@@ -1,5 +1,5 @@
 
-export type Language = 'en' | 'si';
+export type Language = 'en' | 'si' | 'ta';
 export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
 
 export interface UserAccount {

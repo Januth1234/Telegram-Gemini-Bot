@@ -12,6 +12,59 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
   const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py'>('js');
 
+  const content = {
+    en: {
+      winTitle: "Windows Desktop",
+      winDesc: "Experience the full power of Orin Neural Workspace on your PC. Optimized for high-performance reasoning and creative tasks.",
+      winBtn: "Download 64-bit",
+      androidTitle: "Android",
+      androidSub: "Mobile Neural Assistant APK",
+      apkBtn: "Download APK",
+      iosTitle: "iPhone (iOS)",
+      iosSub: "TestFlight Package",
+      iosBtn: "Get Package",
+      macTitle: "macOS",
+      macSub: "Apple Silicon & Intel",
+      macBtn: "Download DMG",
+      devIntegration: "Orin Search Integration",
+      devDesc: "Add a search bar to your site that redirects users directly to Orin Chat."
+    },
+    si: {
+      winTitle: "Windows පරිගණක සඳහා",
+      winDesc: "ඔරින් Neural Workspace හි සම්පූර්ණ බලය ඔබේ පරිගණකයෙන් විඳගන්න. නිර්මාණාත්මක වැඩ සහ දත්ත විශ්ලේෂණය සඳහා විශේෂයෙන් සකසා ඇත.",
+      winBtn: "64-bit බාගත කරන්න",
+      androidTitle: "Android",
+      androidSub: "ජංගම දුරකථන සඳහා",
+      apkBtn: "APK බාගත කරන්න",
+      iosTitle: "iPhone (iOS)",
+      iosSub: "TestFlight පැකේජය",
+      iosBtn: "පැකේජය ලබාගන්න",
+      macTitle: "macOS",
+      macSub: "Apple Silicon සහ Intel සඳහා",
+      macBtn: "DMG බාගත කරන්න",
+      devIntegration: "ඔරින් සෙවුම් පද්ධතිය",
+      devDesc: "ඔබේ වෙබ් අඩවියට ඔරින් සෙවුම් තීරුවක් එක් කර ගන්න."
+    },
+    ta: {
+      winTitle: "Windows கணினிக்கு",
+      winDesc: "உங்கள் கணினியில் ஒரின் நியூரல் ஒர்க்ஸ்பேஸின் முழு ஆற்றலையும் அனுபவிக்கவும். ஆக்கபூர்வமான பணிகளுக்காக வடிவமைக்கப்பட்டது.",
+      winBtn: "64-bit பதிவிறக்க",
+      androidTitle: "Android",
+      androidSub: "மொபைல் செயலி (APK)",
+      apkBtn: "APK பதிவிறக்க",
+      iosTitle: "iPhone (iOS)",
+      iosSub: "TestFlight தொகுப்பு",
+      iosBtn: "தொகுப்பைப் பெறுக",
+      macTitle: "macOS",
+      macSub: "Apple Silicon & Intel",
+      macBtn: "DMG பதிவிறக்க",
+      devIntegration: "ஒரின் தேடல் ஒருங்கிணைப்பு",
+      devDesc: "உங்கள் தளத்தில் ஒரின் தேடல் பட்டியைச் சேர்க்கவும்."
+    }
+  };
+
+  const localT = content[lang];
+
   const handleDownload = (platform: string, arch?: string) => {
     // Simulate blob download
     const filename = `orin-setup-${platform.toLowerCase()}${arch ? '-' + arch : ''}.exe`;
@@ -30,97 +83,37 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   };
 
   const codeSnippets = {
-    js: `<!-- Orin AI Search Widget (HTML/JS) -->
-<div style="max-width: 600px; margin: 20px auto; font-family: system-ui, sans-serif;">
-  <!-- Search Bar -->
-  <form onsubmit="searchOrin(event)" style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); border-radius: 28px; padding: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-    <input type="text" id="orin-prompt" placeholder="How can I help you today?" required style="flex: 1; background: transparent; border: none; padding: 12px 20px; font-size: 16px; outline: none; color: #1e293b;" />
-    <button type="submit" style="background: #0f172a; color: white; border: none; padding: 12px 28px; border-radius: 20px; font-weight: 800; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer; transition: 0.2s;">GO</button>
-  </form>
-  
-  <!-- Footer -->
-  <div style="text-align: center; margin-top: 12px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">
-    Orin AI | JN Productions | Januth Nimnal
-  </div>
-</div>
-
+    js: `<!-- Orin AI Search Widget -->
+<form onsubmit="searchOrin(event)">
+  <input type="text" id="orin-prompt" placeholder="Ask Orin..." />
+  <button type="submit">GO</button>
+</form>
 <script>
   function searchOrin(e) {
     e.preventDefault();
-    const query = document.getElementById('orin-prompt').value;
-    if (query.trim()) {
-      // Redirects to Orin AI with the prompt carried over
-      window.location.href = "https://www.orinai.org/#chat?prompt=" + encodeURIComponent(query);
-    }
+    const q = document.getElementById('orin-prompt').value;
+    if(q) window.location.href = "https://www.orinai.org/#chat?prompt=" + encodeURIComponent(q);
   }
 </script>`,
-    ts: `// React / TypeScript Component
-import React, { useState } from 'react';
-
-export const OrinSearchWidget = () => {
-  const [query, setQuery] = useState('');
-
-  const handleSearch = (e: React.FormEvent) => {
+    ts: `// React Component
+const OrinWidget = () => {
+  const [q, setQ] = useState('');
+  const go = (e) => {
     e.preventDefault();
-    if (query.trim()) {
-      window.location.href = \`https://www.orinai.org/#chat?prompt=\${encodeURIComponent(query)}\`;
-    }
+    if(q) window.location.href = \`https://www.orinai.org/#chat?prompt=\${encodeURIComponent(q)}\`;
   };
-
-  const styles = {
-    container: { maxWidth: '600px', margin: '20px auto', fontFamily: 'system-ui, sans-serif' },
-    form: { display: 'flex', alignItems: 'center', background: 'rgba(255, 255, 255, 0.9)', backdropFilter: 'blur(10px)', border: '1px solid rgba(0,0,0,0.1)', borderRadius: '28px', padding: '6px', boxShadow: '0 4px 20px rgba(0,0,0,0.1)' },
-    input: { flex: 1, background: 'transparent', border: 'none', padding: '12px 20px', fontSize: '16px', outline: 'none', color: '#1e293b' },
-    button: { background: '#0f172a', color: 'white', border: 'none', padding: '12px 28px', borderRadius: '20px', fontWeight: 800, fontSize: '12px', letterSpacing: '1px', textTransform: 'uppercase' as const, cursor: 'pointer' },
-    footer: { textAlign: 'center' as const, marginTop: '12px', fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' as const, letterSpacing: '2px' }
-  };
-
   return (
-    <div style={styles.container}>
-      <form onSubmit={handleSearch} style={styles.form}>
-        <input 
-          type="text" 
-          value={query} 
-          onChange={(e) => setQuery(e.target.value)} 
-          placeholder="How can I help you today?" 
-          style={styles.input} 
-        />
-        <button type="submit" style={styles.button}>GO</button>
-      </form>
-      <div style={styles.footer}>
-        Orin AI | JN Productions | Januth Nimnal
-      </div>
-    </div>
+    <form onSubmit={go}>
+      <input value={q} onChange={e=>setQ(e.target.value)} />
+      <button type="submit">GO</button>
+    </form>
   );
 };`,
-    py: `# Python (Flask Example serving HTML)
-from flask import Flask
-
-app = Flask(__name__)
-
-@app.route('/orin-widget')
-def orin_widget():
-    # Returns the styled widget HTML
-    return """
-    <div style="max-width: 600px; margin: 20px auto; font-family: system-ui, sans-serif;">
-      <form onsubmit="event.preventDefault(); window.location.href='https://www.orinai.org/#chat?prompt='+encodeURIComponent(this.querySelector('input').value)" 
-            style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); border: 1px solid rgba(0,0,0,0.1); border-radius: 28px; padding: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.1);">
-        <input type="text" placeholder="How can I help you today?" required 
-               style="flex: 1; background: transparent; border: none; padding: 12px 20px; font-size: 16px; outline: none; color: #1e293b;" />
-        <button type="submit" 
-                style="background: #0f172a; color: white; border: none; padding: 12px 28px; border-radius: 20px; font-weight: 800; font-size: 12px; letter-spacing: 1px; text-transform: uppercase; cursor: pointer;">
-          GO
-        </button>
-      </form>
-      <div style="text-align: center; margin-top: 12px; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">
-        Orin AI | JN Productions | Januth Nimnal
-      </div>
-    </div>
-    """
-
-if __name__ == '__main__':
-    app.run(port=5000)
-`
+    py: `# Flask Route
+@app.route('/orin-redirect')
+def orin_redirect():
+    query = request.args.get('q')
+    return redirect(f"https://www.orinai.org/#chat?prompt={query}")`
   };
 
   return (
@@ -153,10 +146,10 @@ if __name__ == '__main__':
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
                   <i className="fa-brands fa-windows text-3xl text-cyan-600 dark:text-cyan-400"></i>
-                  <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">Windows Desktop</h3>
+                  <h3 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{localT.winTitle}</h3>
                 </div>
                 <p className="text-sm text-slate-600 dark:text-slate-300 font-medium max-w-md">
-                  Experience the full power of Orin Neural Workspace on your PC. Optimized for high-performance reasoning and creative tasks.
+                  {localT.winDesc}
                 </p>
                 <div className="flex flex-wrap gap-2 pt-2">
                    <span className="px-3 py-1 bg-slate-100 dark:bg-white/5 rounded-lg text-[10px] font-black uppercase tracking-widest text-slate-500">v4.0.1</span>
@@ -169,7 +162,7 @@ if __name__ == '__main__':
                   onClick={() => handleDownload('Windows', '64-bit')}
                   className="px-8 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl hover:scale-105 active:scale-95 transition-all flex items-center justify-between gap-6"
                 >
-                  <span>Download 64-bit</span>
+                  <span>{localT.winBtn}</span>
                   <i className="fa-solid fa-cloud-arrow-down"></i>
                 </button>
                 <div className="grid grid-cols-2 gap-3">
@@ -198,13 +191,13 @@ if __name__ == '__main__':
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-6 group-hover:scale-110 transition-transform">
               <i className="fa-brands fa-android text-2xl"></i>
             </div>
-            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">Android</h4>
-            <p className="text-xs text-slate-500 font-bold mb-6">Mobile Neural Assistant APK</p>
+            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{localT.androidTitle}</h4>
+            <p className="text-xs text-slate-500 font-bold mb-6">{localT.androidSub}</p>
             <button 
               onClick={() => handleDownload('Android')}
               className="w-full py-3 bg-slate-100 dark:bg-white/5 hover:bg-emerald-500 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              Download APK
+              {localT.apkBtn}
             </button>
           </div>
 
@@ -213,13 +206,13 @@ if __name__ == '__main__':
             <div className="w-12 h-12 rounded-2xl bg-slate-500/10 flex items-center justify-center text-slate-600 dark:text-slate-300 mb-6 group-hover:scale-110 transition-transform">
               <i className="fa-brands fa-apple text-2xl"></i>
             </div>
-            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">iPhone (iOS)</h4>
-            <p className="text-xs text-slate-500 font-bold mb-6">TestFlight Package</p>
+            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{localT.iosTitle}</h4>
+            <p className="text-xs text-slate-500 font-bold mb-6">{localT.iosSub}</p>
             <button 
               onClick={() => handleDownload('iOS')}
               className="w-full py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-900 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              Get Package
+              {localT.iosBtn}
             </button>
           </div>
 
@@ -228,13 +221,13 @@ if __name__ == '__main__':
             <div className="w-12 h-12 rounded-2xl bg-slate-500/10 flex items-center justify-center text-slate-600 dark:text-slate-300 mb-6 group-hover:scale-110 transition-transform">
               <i className="fa-solid fa-laptop text-2xl"></i>
             </div>
-            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">macOS</h4>
-            <p className="text-xs text-slate-500 font-bold mb-6">Apple Silicon & Intel</p>
+            <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{localT.macTitle}</h4>
+            <p className="text-xs text-slate-500 font-bold mb-6">{localT.macSub}</p>
             <button 
               onClick={() => handleDownload('macOS')}
               className="w-full py-3 bg-slate-100 dark:bg-white/5 hover:bg-slate-900 hover:text-white text-slate-600 dark:text-slate-300 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all"
             >
-              Download DMG
+              {localT.macBtn}
             </button>
           </div>
         </section>
@@ -249,28 +242,13 @@ if __name__ == '__main__':
            <div className="glass-panel rounded-[32px] border border-black/5 dark:border-white/5 overflow-hidden">
               <div className="bg-slate-100 dark:bg-white/5 p-4 border-b border-black/5 dark:border-white/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">Orin Search Integration</h4>
-                    <p className="text-[10px] font-medium text-slate-500 mt-1">Add a search bar to your site that redirects users directly to Orin Chat.</p>
+                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{localT.devIntegration}</h4>
+                    <p className="text-[10px] font-medium text-slate-500 mt-1">{localT.devDesc}</p>
                  </div>
                  <div className="flex p-1 bg-white dark:bg-black/20 rounded-lg">
-                    <button 
-                      onClick={() => setActiveCodeTab('js')}
-                      className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'js' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
-                    >
-                      JavaScript
-                    </button>
-                    <button 
-                      onClick={() => setActiveCodeTab('ts')}
-                      className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'ts' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
-                    >
-                      TypeScript
-                    </button>
-                    <button 
-                      onClick={() => setActiveCodeTab('py')}
-                      className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'py' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}
-                    >
-                      Python
-                    </button>
+                    <button onClick={() => setActiveCodeTab('js')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'js' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>JS</button>
+                    <button onClick={() => setActiveCodeTab('ts')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'ts' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>TS</button>
+                    <button onClick={() => setActiveCodeTab('py')} className={`px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'py' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'}`}>PY</button>
                  </div>
               </div>
               <div className="bg-[#1e1e1e] p-6 md:p-8 overflow-x-auto custom-scrollbar">
@@ -280,7 +258,6 @@ if __name__ == '__main__':
               </div>
            </div>
         </section>
-
       </div>
     </div>
   );

@@ -26,7 +26,6 @@ const App: React.FC = () => {
   const t = translations[lang];
 
   // Dynamic Viewport Height System
-  // Fixes "part viewing" issues on mobile browsers by calculating exact visible height
   useEffect(() => {
     const setViewportHeight = () => {
       const vh = window.innerHeight * 0.01;
@@ -88,7 +87,6 @@ const App: React.FC = () => {
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     else cacheService.remove(CacheKey.ACTIVE_CONV);
 
-    // Auto-sync to Firebase if logged in
     if (user?.id) {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = window.setTimeout(() => {
@@ -99,7 +97,7 @@ const App: React.FC = () => {
             setTimeout(() => setSyncStatus('idle'), 2000);
           })
           .catch(() => setSyncStatus('error'));
-      }, 3000); // 3-second debounce for cloud writes
+      }, 3000); 
     }
   }, [conversations, activeConversationId, user?.id]);
 
@@ -127,7 +125,6 @@ const App: React.FC = () => {
             prev.forEach(c => combined.set(c.id, c));
             cloudData.forEach((c: any) => {
                 const local = combined.get(c.id);
-                // Merge rule: keep the one with more messages or newer timestamp
                 if (!local || c.timestamp > local.timestamp || c.messages.length > local.messages.length) {
                   combined.set(c.id, c);
                 }
@@ -153,7 +150,7 @@ const App: React.FC = () => {
     const activeConv = conversations.find(c => c.id === activeConversationId);
     if (!activeConv || activeConv.messages.length > 0) {
       const newId = Date.now().toString();
-      setConversations(prev => [{ id: newId, title: lang === 'si' ? "නව පිළිසඳර" : "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+      setConversations(prev => [{ id: newId, title: lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
       setActiveConversationId(newId);
     } else {
       setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode } : c));
@@ -164,6 +161,9 @@ const App: React.FC = () => {
   };
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
+  
+  // Font Class handling based on language
+  const fontClass = lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans';
 
   const renderContent = () => {
     switch (view) {
@@ -212,8 +212,8 @@ const App: React.FC = () => {
         );
       case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
-      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
-      case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
+      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'terms': return <TermsPage onClose={() => navigate('landing')} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
@@ -226,7 +226,7 @@ const App: React.FC = () => {
 
   return (
     <div 
-      className={`w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}
+      className={`w-screen flex flex-col ${fontClass} bg-slate-50 dark:bg-slate-950 overflow-hidden transition-all duration-300`}
       style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
     >
       <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
@@ -238,11 +238,22 @@ const App: React.FC = () => {
           {syncStatus !== 'idle' && (
              <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
                 <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                <span className="text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Syncing' : syncStatus === 'success' ? 'Saved' : 'Error'}</span>
+                <span className="text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? t.syncing : syncStatus === 'success' ? t.synced : t.syncError}</span>
              </div>
           )}
           <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-10 h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
-          <button onClick={() => { const n = lang === 'en' ? 'si' : 'en'; setLang(n); cacheService.set(CacheKey.LANG, n); }} className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2">{t.langToggle}</button>
+          
+          {/* Language Toggle Cycle: EN -> SI -> TA */}
+          <button 
+            onClick={() => { 
+              const next = lang === 'en' ? 'si' : lang === 'si' ? 'ta' : 'en'; 
+              setLang(next); 
+              cacheService.set(CacheKey.LANG, next); 
+            }} 
+            className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2 min-w-[30px]"
+          >
+            {lang === 'en' ? 'EN' : lang === 'si' ? 'SI' : 'TA'}
+          </button>
           
           <div className="flex items-center gap-3 pl-2">
             {user && (
