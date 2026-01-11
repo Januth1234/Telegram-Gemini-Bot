@@ -314,6 +314,133 @@ export class GeminiService {
     }
   }
 
+  async generateVideo(prompt: string): Promise<string> {
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    // Using Veo fast generate preview
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt,
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: '16:9'
+      }
+    });
+
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      operation = await ai.operations.getVideosOperation({operation: operation});
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("Video generation failed.");
+    
+    // Must append API key to download
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async animateImage(prompt: string, imageBase64: string, mimeType: string): Promise<string> {
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-fast-generate-preview',
+      prompt: prompt, // Prompt is optional but helpful
+      image: {
+        imageBytes: imageBase64,
+        mimeType: mimeType
+      },
+      config: {
+        numberOfVideos: 1,
+        resolution: '720p',
+        aspectRatio: '16:9'
+      }
+    });
+
+    while (!operation.done) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      operation = await ai.operations.getVideosOperation({operation: operation});
+    }
+
+    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!downloadLink) throw new Error("Animation failed.");
+
+    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
+
+  async generateSpeech(text: string): Promise<string> {
+     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+     
+     const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore, Puck, Charon, Fenrir
+              },
+          },
+        },
+     });
+
+     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+     if (!base64Audio) throw new Error("Audio generation failed.");
+     return `data:audio/mp3;base64,${base64Audio}`; // Note: Raw PCM usually, but basic playback might need decoding. 
+     // For simple <audio src>, we might need WAV container or decode. 
+     // However, provided examples suggest client-side decoding. 
+     // For this UI feature, we will return base64 and let the UI handle it or just use it if browser supports it (unlikely for raw PCM).
+     // Wait, the API returns raw PCM. We need to wrap it in a WAV header to be playable by <audio> tag.
+     
+     return this.pcmToWav(base64Audio);
+  }
+
+  private pcmToWav(base64: string): string {
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    
+    // Create WAV header
+    const wavHeader = new ArrayBuffer(44);
+    const view = new DataView(wavHeader);
+    
+    // RIFF chunk descriptor
+    this.writeString(view, 0, 'RIFF');
+    view.setUint32(4, 36 + len, true);
+    this.writeString(view, 8, 'WAVE');
+    
+    // fmt sub-chunk
+    this.writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true); // PCM format
+    view.setUint16(22, 1, true); // Mono
+    view.setUint32(24, 24000, true); // Sample Rate
+    view.setUint32(28, 24000 * 2, true); // Byte Rate
+    view.setUint16(32, 2, true); // Block Align
+    view.setUint16(34, 16, true); // Bits per sample
+    
+    // data sub-chunk
+    this.writeString(view, 36, 'data');
+    view.setUint32(40, len, true);
+    
+    const blob = new Blob([view, bytes], { type: 'audio/wav' });
+    return URL.createObjectURL(blob);
+  }
+
+  private writeString(view: DataView, offset: number, string: string) {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  }
+
   async downloadImage(url: string, filename: string = "orin-image") {
     try {
       const response = await fetch(url);

@@ -290,7 +290,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
 
         {/* Center Hub - Interactive Orb */}
-        <div className="relative flex flex-col items-center justify-center flex-1 w-full my-4">
+        <div className="relative flex flex-col items-center justify-center flex-1 w-full my-2 md:my-4">
            <div className="relative">
               {/* Active State Glow */}
               <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-40' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
@@ -317,7 +317,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               </div>
            </div>
 
-           <div className="mt-8 text-center space-y-2 z-10 min-h-[4rem]">
+           <div className="mt-6 md:mt-8 text-center space-y-2 z-10 min-h-[4rem]">
               <h2 className={`text-2xl font-black uppercase tracking-tight transition-colors ${isActive ? (mode === 'translator' ? 'text-indigo-600 dark:text-indigo-400' : 'text-cyan-600 dark:text-cyan-400') : 'text-slate-900 dark:text-white'}`}>
                   {isActive ? (isSpeaking ? "Speaking..." : "Listening...") : (mode === 'translator' ? t.translator : t.voice)}
               </h2>
@@ -326,7 +326,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
 
         {/* Visualizer & Transcription */}
-        <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
+        <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none h-0 overflow-hidden'}`}>
             <div className="w-full h-8 flex items-end justify-center gap-2">
               {/* High-Performance Visualizer Bars */}
               {Array.from({ length: BAR_COUNT }).map((_, i) => (
@@ -365,7 +365,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 hover:bg-slate-800 dark:hover:bg-slate-200"
             >
               {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'}`}></i>}
-              <span>{isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Start Voice')}</span>
+              <span>{isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : (lang === 'si' ? "Orin හඬ අරඹන්න" : "Start Orin Voice"))}</span>
             </button>
           ) : (
             <button 
