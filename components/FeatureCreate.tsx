@@ -53,12 +53,14 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       const response = await fetch(url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
+      
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = `${filename}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
       window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Download failed:", err);
@@ -144,7 +146,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <button 
                 onClick={() => handleGenerate()}
                 disabled={isLoading || !prompt.trim()}
-                className="w-full py-5 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-3 group overflow-hidden relative"
+                className="w-full py-5 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-3xl font-black text-xs uppercase tracking-[0.2em] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-3 group overflow-hidden relative"
               >
                 {isLoading ? (
                   <>
@@ -184,7 +186,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           }}></div>
           
           {isLoading && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-sm animate-fade">
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/60 dark:bg-slate-950/60 backdrop-blur-md animate-fade">
               <div className="text-center space-y-6 animate-reveal">
                 <div className="relative">
                   <div className="w-24 h-24 rounded-full border-4 border-cyan-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center">
@@ -202,7 +204,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           {history.length > 0 ? (
             <div className="w-full space-y-20 relative z-10">
               {history.map((img, idx) => (
-                <div key={img.timestamp} className="w-full flex flex-col items-center gap-10 animate-scale-in max-w-4xl mx-auto">
+                <div key={img.timestamp} className="w-full flex flex-col items-center gap-8 animate-scale-in max-w-4xl mx-auto">
                   <div className="relative group/img w-full">
                     <div className="absolute -inset-2 bg-gradient-to-tr from-cyan-500/20 to-indigo-500/20 rounded-[48px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
                     <div className="relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-black/5 flex items-center justify-center transition-all duration-700 hover:scale-[1.005]">
@@ -214,22 +216,22 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </div>
                   </div>
 
-                  <div className="w-full max-w-xl space-y-6 flex flex-col items-center">
-                    <div className="text-center px-6">
-                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-2">Description</p>
-                      <p className="text-sm font-bold text-slate-600 dark:text-slate-300 italic leading-relaxed">"{img.prompt}"</p>
-                    </div>
-                    
+                  <div className="w-full max-w-xl flex flex-col items-center gap-6">
                     <button 
                       onClick={() => handleDownload(img.url, `orin-studio-${img.timestamp}`)}
-                      className="group/btn w-full py-5 bg-cyan-600 text-white rounded-3xl text-sm font-black uppercase tracking-[0.3em] shadow-xl hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 overflow-hidden"
+                      className="group/btn w-full py-4 bg-cyan-600 text-white rounded-3xl text-sm font-black uppercase tracking-[0.3em] shadow-xl hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3 overflow-hidden"
                     >
-                      <i className="fa-solid fa-arrow-down-to-bracket text-lg"></i>
-                      <span>Save Image</span>
+                      <i className="fa-solid fa-cloud-arrow-down text-lg"></i>
+                      <span>Download</span>
                     </button>
+
+                    <div className="text-center px-6">
+                      <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1">Prompt</p>
+                      <p className="text-xs font-bold text-slate-600 dark:text-slate-300 italic leading-relaxed">"{img.prompt}"</p>
+                    </div>
                     
                     {idx < history.length - 1 && (
-                      <div className="w-24 h-1 bg-slate-200 dark:bg-white/5 rounded-full mt-16 opacity-30"></div>
+                      <div className="w-24 h-1 bg-slate-200 dark:bg-white/5 rounded-full mt-12 opacity-30"></div>
                     )}
                   </div>
                 </div>

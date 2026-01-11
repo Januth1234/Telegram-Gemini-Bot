@@ -14,7 +14,7 @@ interface Slide {
   points: string[];
 }
 
-type TaskType = 'search' | 'presentation' | 'database' | 'excel' | 'document';
+type TaskType = 'search' | 'presentation' | 'database' | 'excel' | 'document' | 'coding';
 
 const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   const t = translations[lang];
@@ -35,6 +35,11 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [spreadsheetData, setSpreadsheetData] = useState<string[][]>([]);
+  
+  // Coding State
+  const [codeData, setCodeData] = useState<{ filename: string; lang: string; code: string } | null>(null);
+  const [streamedCode, setStreamedCode] = useState("");
+  const [showLivePreview, setShowLivePreview] = useState(false);
 
   // Agent Visualization State
   const [agentUrl, setAgentUrl] = useState<string | null>(null);
@@ -108,21 +113,106 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
       .map(line => line.split(/[,|]/).map(cell => cell.trim()));
   };
 
+  const parseCode = (text: string) => {
+    let filename = 'script.txt';
+    let lang = 'plaintext';
+    let code = text;
+
+    // 1. Try extraction via explicit tags (preferred)
+    const filenameMatch = text.match(/FILENAME:\s*(.+)/);
+    const langMatch = text.match(/LANGUAGE:\s*(.+)/);
+    
+    if (filenameMatch) filename = filenameMatch[1].trim();
+    if (langMatch) lang = langMatch[1].trim().toLowerCase();
+
+    // 2. Try extracting content between markers or backticks
+    const explicitBlock = text.match(/CODE_START\n([\s\S]*?)\nCODE_END/);
+    if (explicitBlock) {
+      code = explicitBlock[1];
+    } else {
+      // Fallback: Extract from markdown code blocks
+      const markdownBlock = text.match(/```[\w]*\n([\s\S]*?)```/);
+      if (markdownBlock) {
+        code = markdownBlock[1];
+      } else {
+        // Fallback: Clean up response if it has loose metadata lines at top
+        code = text.replace(/FILENAME:.*\n/, '').replace(/LANGUAGE:.*\n/, '').replace(/CODE_START\n/, '').replace(/CODE_END/, '').trim();
+      }
+    }
+
+    return { filename, lang, code: code.trim() };
+  };
+
+  const downloadArtifact = (content: string, filename: string, mimeType: string) => {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+  };
+
+  const handleDownload = () => {
+      if (activeTaskType === 'coding' && codeData) {
+          downloadArtifact(codeData.code, codeData.filename, 'text/plain');
+      } else if (activeTaskType === 'excel' && spreadsheetData.length > 0) {
+          // Robust CSV escaping: quote fields containing commas or quotes, escape quotes with double quotes
+          const csvContent = spreadsheetData.map(row => 
+            row.map(cell => {
+              if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+                return `"${cell.replace(/"/g, '""')}"`;
+              }
+              return cell;
+            }).join(",")
+          ).join("\n");
+          
+          downloadArtifact(csvContent, 'orin-data.csv', 'text/csv');
+      } else if (activeTaskType === 'database' && searchResult) {
+          // SQL Dump
+          const sqlContent = searchResult.replace(/```sql|```/g, '').trim();
+          downloadArtifact(sqlContent, 'orin-schema.sql', 'application/sql');
+      } else if (activeTaskType === 'presentation' && slides.length > 0) {
+          const content = slides.map(s => `Title: ${s.title}\n${s.points.map(p => `- ${p}`).join('\n')}`).join('\n\n');
+          downloadArtifact(content, 'orin-presentation.txt', 'text/plain');
+      } else if (activeTaskType === 'document' && searchResult) {
+          // Clean Word Doc HTML
+          const htmlContent = `
+            <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+            <head><meta charset='utf-8'><title>Orin Document</title></head>
+            <body>
+              <div style="font-family: Calibri, sans-serif; line-height: 1.5; font-size: 11pt;">
+                ${searchResult
+                  .replace(/# (.*)/g, '<h1>$1</h1>')
+                  .replace(/## (.*)/g, '<h2>$1</h2>')
+                  .replace(/\*\*(.*)\*\*/g, '<b>$1</b>')
+                  .replace(/\n/g, '<br/>')}
+              </div>
+            </body>
+            </html>`;
+          downloadArtifact(htmlContent, 'orin-document.doc', 'application/msword');
+      }
+  };
+
   const simulateAgentWorkflow = async (response: any, mode: TaskType) => {
     setDiscoveredItems([]);
     setAgentProgress(0);
+    setStreamedCode("");
     
     let initMsg = lang === 'si' ? "සූදානම් වෙමින්..." : "Starting helper...";
-    if (mode === 'presentation') initMsg = lang === 'si' ? "පිටු සකසමින්..." : "Making slides...";
-    if (mode === 'database') initMsg = lang === 'si' ? "සම්බන්ධ වෙමින්..." : "Connecting...";
-    if (mode === 'excel') initMsg = "Excel...";
-    if (mode === 'document') initMsg = lang === 'si' ? "ලියමින් සිටී..." : "Writing...";
+    if (mode === 'presentation') initMsg = lang === 'si' ? "පිටු සකසමින්..." : "Initializing Layout...";
+    if (mode === 'database') initMsg = lang === 'si' ? "සම්බන්ධ වෙමින්..." : "Connecting to SQL engine...";
+    if (mode === 'excel') initMsg = "Initializing Spreadsheet...";
+    if (mode === 'document') initMsg = lang === 'si' ? "ලියමින් සිටී..." : "Drafting Document...";
+    if (mode === 'coding') initMsg = "Booting Dev Environment...";
 
     setAgentAction(initMsg);
     setAgentProgress(10);
     await new Promise(r => setTimeout(r, 600));
 
-    let planMsg = lang === 'si' ? "සොයමින් සිටී..." : "Searching...";
+    let planMsg = lang === 'si' ? "සොයමින් සිටී..." : "Analyzing Request...";
     setAgentAction(planMsg);
     setAgentProgress(25);
     await new Promise(r => setTimeout(r, 800));
@@ -130,7 +220,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     if (mode === 'presentation') {
         const rawSlides = parseSlides(response.text);
         for (let i = 0; i < rawSlides.length; i++) {
-           setAgentAction(lang === 'si' ? `${i + 1} වන පිටුව ලියමින්...` : `Writing slide ${i + 1}...`);
+           setAgentAction(lang === 'si' ? `${i + 1} වන පිටුව ලියමින්...` : `Drafting Slide ${i + 1}...`);
            setAgentProgress(30 + ((i + 1) / rawSlides.length) * 60);
            await new Promise(r => setTimeout(r, 600));
            setDiscoveredItems(prev => [...prev, `Slide ${i+1}: ${rawSlides[i].title}`]);
@@ -138,33 +228,64 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
         setSlides(rawSlides);
 
     } else if (mode === 'database') {
-        setAgentAction(lang === 'si' ? "සැලසුම් කරමින්..." : "Designing...");
+        setAgentAction(lang === 'si' ? "සැලසුම් කරමින්..." : "Designing Schema...");
         setAgentProgress(40);
         await new Promise(r => setTimeout(r, 800));
+        setAgentAction(lang === 'si' ? "කේත සාදමින්..." : "Generating SQL...");
         setAgentProgress(70);
         await new Promise(r => setTimeout(r, 800));
-        setAgentAction(lang === 'si' ? "කේත සාදමින්..." : "Generating code...");
-        setDiscoveredItems(["Done"]);
+        setDiscoveredItems(["Schema Optimized", "Ready for Export"]);
 
     } else if (mode === 'excel') {
-        setAgentAction(lang === 'si' ? "ගණනය කරමින්..." : "Calculating...");
+        setAgentAction(lang === 'si' ? "ගණනය කරමින්..." : "Computing Formulas...");
         setAgentProgress(40);
         await new Promise(r => setTimeout(r, 800));
-        setAgentAction(lang === 'si' ? "වගුව පුරවමින්..." : "Filling table...");
+        setAgentAction(lang === 'si' ? "වගුව පුරවමින්..." : "Populating Cells...");
         setAgentProgress(80);
         await new Promise(r => setTimeout(r, 800));
         const rows = parseCSV(response.text);
         setSpreadsheetData(rows);
-        setDiscoveredItems([`${rows.length} Rows`]);
+        setDiscoveredItems([`${rows.length} Rows Generated`]);
 
     } else if (mode === 'document') {
-        setAgentAction(lang === 'si' ? "ලියමින් සිටී..." : "Writing content...");
+        setAgentAction(lang === 'si' ? "ලියමින් සිටී..." : "Writing Content...");
         setAgentProgress(40);
         await new Promise(r => setTimeout(r, 800));
-        setAgentAction(lang === 'si' ? "පරීක්ෂා කරමින්..." : "Checking...");
+        setAgentAction(lang === 'si' ? "පරීක්ෂා කරමින්..." : "Proofreading...");
         setAgentProgress(70);
         await new Promise(r => setTimeout(r, 800));
-        setDiscoveredItems(["Finished"]);
+        setDiscoveredItems(["Formatting Applied", "Ready for Word"]);
+
+    } else if (mode === 'coding') {
+        const parsed = parseCode(response.text);
+        setCodeData(parsed);
+        
+        // Auto-show Live Preview for HTML content
+        if (parsed.lang === 'html' || parsed.filename.endsWith('.html')) {
+          setShowLivePreview(true);
+        } else {
+          setShowLivePreview(false);
+        }
+
+        setAgentAction("Writing Code...");
+        const lines = parsed.code.split('\n');
+        // Typewriter effect simulation
+        let displayed = "";
+        for (let i = 0; i < lines.length; i++) {
+            displayed += lines[i] + "\n";
+            setStreamedCode(displayed);
+            setAgentProgress(30 + (i / lines.length) * 60);
+            
+            // Random typing speed variation - faster for large files
+            const speed = Math.max(2, 30 - (lines.length / 5));
+            await new Promise(r => setTimeout(r, speed)); 
+            
+            if (i % 10 === 0) {
+               setDiscoveredItems([`File: ${parsed.filename}`, `Lang: ${parsed.lang}`, `Lines: ${i+1}`]);
+            }
+        }
+        setStreamedCode(parsed.code); // Ensure full completion
+        setDiscoveredItems([`File: ${parsed.filename}`, `Lang: ${parsed.lang}`, "Build Success"]);
 
     } else {
         const lines = response.text.split('\n');
@@ -184,7 +305,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
             const domain = new URL(link.uri).hostname.replace('www.', '');
             
             setAgentUrl(link.uri);
-            setAgentAction(lang === 'si' ? `${domain} වෙත යමින්...` : `Going to ${domain}...`);
+            setAgentAction(lang === 'si' ? `${domain} වෙත යමින්...` : `Accessing ${domain}...`);
             setAgentProgress(30 + ((i + 1) / linksToVisit.length) * 50);
             await new Promise(r => setTimeout(r, 800));
             
@@ -195,7 +316,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
             }
           }
         } else {
-            setAgentAction(lang === 'si' ? "සොයමින් සිටී..." : "Checking sources...");
+            setAgentAction(lang === 'si' ? "සොයමින් සිටී..." : "Deep Searching...");
             setAgentProgress(60);
             await new Promise(r => setTimeout(r, 1000));
             setDiscoveredItems(items.slice(0, 5));
@@ -203,7 +324,7 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     }
 
     setAgentUrl(null);
-    setAgentAction(lang === 'si' ? "වැඩේ අවසන්." : "Done.");
+    setAgentAction(lang === 'si' ? "වැඩේ අවසන්." : "Task Complete.");
     setSearchResult(response.text);
     setAgentProgress(100);
   };
@@ -214,10 +335,11 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     let detectedMode: TaskType = 'search';
     const q = searchQuery.toLowerCase();
     
-    if (/(presentation|slides|deck|powerpoint)/i.test(q)) detectedMode = 'presentation';
-    else if (/(database|sql|schema|query|db)/i.test(q)) detectedMode = 'database';
-    else if (/(excel|spreadsheet|csv|sheet|table)/i.test(q)) detectedMode = 'excel';
-    else if (/(document|report|essay|article|letter|word doc)/i.test(q)) detectedMode = 'document';
+    if (/(presentation|slides|deck|powerpoint|ppt)/i.test(q)) detectedMode = 'presentation';
+    else if (/(database|sql|schema|query|db|dbms)/i.test(q)) detectedMode = 'database';
+    else if (/(excel|spreadsheet|csv|sheet|table|xlsx|exsx)/i.test(q)) detectedMode = 'excel';
+    else if (/(document|report|essay|article|letter|word doc|docx)/i.test(q)) detectedMode = 'document';
+    else if (/(code|program|app|website|script|function|html|css|python|javascript|react)/i.test(q)) detectedMode = 'coding';
     
     setActiveTaskType(detectedMode);
     
@@ -226,10 +348,13 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
     setSearchLinks([]);
     setSlides([]);
     setSpreadsheetData([]);
+    setCodeData(null);
+    setStreamedCode("");
     setAgentUrl(null);
-    setAgentAction(lang === 'si' ? "සොයමින් සිටී..." : "Searching...");
+    setAgentAction(lang === 'si' ? "සොයමින් සිටී..." : "Initializing Agent...");
     setDiscoveredItems([]);
     setCurrentSlideIndex(0);
+    setShowLivePreview(false);
     
     try {
        let visualContext: string | null = null;
@@ -245,11 +370,21 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
        if (detectedMode === 'presentation') {
           finalPrompt = `Request: "${searchQuery}". Task: Create slides. Format: SLIDE_TITLE: [Title] - Bullet points. 4-6 slides.`;
        } else if (detectedMode === 'database') {
-          finalPrompt = `Request: "${searchQuery}". Task: Create SQL schema.`;
+          finalPrompt = `Request: "${searchQuery}". Task: Create SQL schema (DBMS format). Return valid SQL statements only.`;
        } else if (detectedMode === 'excel') {
-          finalPrompt = `Request: "${searchQuery}". Task: Create CSV data.`;
+          finalPrompt = `Request: "${searchQuery}". Task: Create CSV data compatible with Excel. Format: Header1,Header2...`;
        } else if (detectedMode === 'document') {
-          finalPrompt = `Request: "${searchQuery}". Task: Write a report using Markdown.`;
+          finalPrompt = `Request: "${searchQuery}". Task: Write a professional document. Use clear paragraphs and headings.`;
+       } else if (detectedMode === 'coding') {
+          finalPrompt = `Request: "${searchQuery}". Task: Write complete, functional code. 
+          IMPORTANT FORMAT: 
+          FILENAME: <filename.extension>
+          LANGUAGE: <language_name>
+          CODE_START
+          <your_code_here>
+          CODE_END
+          If no language is specified, choose the most appropriate one for the task. 
+          If creating a website or app, prefer a single-file HTML structure with embedded CSS/JS for immediate portability.`;
        } else {
           finalPrompt = `Request: "${searchQuery}". Task: Search and find information.`;
        }
@@ -337,14 +472,14 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
 
       <div className="flex-1 p-6 md:p-12 overflow-y-auto custom-scrollbar flex flex-col items-center justify-start gap-8">
         
-        <div className="w-full max-w-3xl space-y-4">
+        <div className="w-full max-w-4xl space-y-4">
              <div className="relative group z-20">
                 <input 
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && !isSearching && handleSearch()}
-                  placeholder={lang === 'si' ? "ඔබට අවශ්‍ය දේ පවසන්න..." : "Tell me what you want to do..."}
+                  placeholder={lang === 'si' ? "ඔබට අවශ්‍ය දේ පවසන්න..." : "Tell me what to build (App, Doc, Excel, Code)..."}
                   disabled={isSearching}
                   className="w-full p-6 pl-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[24px] text-sm md:text-lg font-medium shadow-lg focus:ring-4 focus:ring-cyan-500/10 outline-none transition-all dark:text-white disabled:opacity-50"
                 />
@@ -361,39 +496,104 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
              </div>
 
              {(isSearching || searchResult || slides.length > 0) && (
-               <div className="w-full max-w-4xl bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-white/10 animate-scale-in flex flex-col min-h-[500px]">
+               <div className="w-full bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-white/10 animate-scale-in flex flex-col min-h-[500px]">
                   
-                  <div className="h-14 bg-slate-800 flex items-center px-4 gap-4 border-b border-white/5 shrink-0">
+                  <div className="h-14 bg-slate-800 flex items-center px-4 gap-4 border-b border-white/5 shrink-0 justify-between">
                       <div className="flex gap-1.5 shrink-0">
                          <div className="w-2.5 h-2.5 rounded-full bg-red-500/50"></div>
                          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50"></div>
                          <div className="w-2.5 h-2.5 rounded-full bg-green-500/50"></div>
                       </div>
                       
-                      <div className="flex-1 h-8 bg-black/40 rounded-lg flex items-center px-3 gap-2 overflow-hidden">
-                          <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest">
-                            {agentUrl || "Working..."}
+                      <div className="flex-1 max-w-sm h-8 bg-black/40 rounded-lg flex items-center px-3 gap-2 overflow-hidden mx-auto">
+                          <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-widest truncate w-full text-center">
+                            {agentAction || "Idle"}
                           </span>
                       </div>
+
+                      {/* Code Mode Toggles */}
+                      {activeTaskType === 'coding' && codeData && (codeData.lang === 'html' || codeData.filename.endsWith('.html')) && (
+                        <div className="flex bg-black/40 rounded-lg p-0.5">
+                           <button 
+                             onClick={() => setShowLivePreview(false)}
+                             className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${!showLivePreview ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                           >
+                             Code
+                           </button>
+                           <button 
+                             onClick={() => setShowLivePreview(true)}
+                             className={`px-3 py-1 text-[9px] font-black uppercase tracking-widest rounded-md transition-all ${showLivePreview ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                           >
+                             Preview
+                           </button>
+                        </div>
+                      )}
+
+                      {/* Download Button */}
+                      {(codeData || spreadsheetData.length > 0 || slides.length > 0 || (activeTaskType === 'document' && searchResult)) && !isSearching && (
+                        <button 
+                          onClick={handleDownload}
+                          className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-emerald-500 transition-all flex items-center gap-2"
+                        >
+                          <i className="fa-solid fa-download"></i>
+                          {activeTaskType === 'coding' ? 'Download Code' : 
+                           activeTaskType === 'excel' ? 'Download CSV' : 
+                           activeTaskType === 'database' ? 'Download SQL' : 
+                           activeTaskType === 'presentation' ? 'Download Outline' : 'Download Word Doc'}
+                        </button>
+                      )}
                   </div>
 
                   <div className="flex-1 bg-slate-950 relative overflow-hidden flex flex-col">
-                      {isSearching && (
+                      {isSearching ? (
                           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 animate-fade">
-                              <div className="w-20 h-20 rounded-2xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center">
-                                  <i className="fa-solid fa-spinner animate-spin text-4xl text-cyan-400"></i>
+                              <div className="relative">
+                                <div className="w-24 h-24 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                  <span className="text-xs font-black text-cyan-500">{Math.round(agentProgress)}%</span>
+                                </div>
                               </div>
                               <div className="space-y-2 max-w-md">
                                   <h3 className="text-lg font-bold text-white tracking-tight animate-pulse">{agentAction}</h3>
+                                  <p className="text-[10px] text-slate-500 uppercase tracking-widest">{activeTaskType.toUpperCase()} AGENT ACTIVE</p>
                               </div>
                           </div>
-                      )}
-
-                      {!isSearching && (
+                      ) : (
                           <>
+                              {/* Coding View */}
+                              {activeTaskType === 'coding' && (
+                                <div className="flex-1 flex flex-col bg-[#1e1e1e] text-slate-300 font-mono text-sm overflow-hidden">
+                                  {showLivePreview ? (
+                                    <iframe 
+                                      srcDoc={codeData?.code} 
+                                      className="w-full h-full bg-white border-none"
+                                      title="Live Preview"
+                                      sandbox="allow-scripts"
+                                    />
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-black/20 text-xs">
+                                         <div className="flex items-center gap-2">
+                                            <i className="fa-solid fa-file-code text-blue-400"></i>
+                                            <span className="text-emerald-400">{codeData?.filename || 'untitled'}</span>
+                                         </div>
+                                         <span className="text-slate-500 uppercase">{codeData?.lang}</span>
+                                      </div>
+                                      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                                        <pre className="whitespace-pre-wrap break-all">
+                                          <code>{streamedCode}</code>
+                                          <span className="inline-block w-2 h-4 bg-cyan-500 ml-1 animate-pulse align-middle"></span>
+                                        </pre>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Presentation View */}
                               {activeTaskType === 'presentation' && slides.length > 0 && (
                                 <div className="flex-1 flex flex-col items-center justify-center p-8 bg-slate-900">
-                                   <div className="w-full aspect-video bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-8 md:p-12 flex flex-col relative overflow-hidden animate-reveal">
+                                   <div className="w-full aspect-video bg-white dark:bg-slate-800 rounded-xl shadow-2xl p-8 md:p-12 flex flex-col relative overflow-hidden animate-reveal border border-white/5">
                                       <div className="absolute top-0 left-0 w-2 h-full bg-cyan-500"></div>
                                       <div className="mb-6 border-b border-black/10 dark:border-white/10 pb-4">
                                         <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{slides[currentSlideIndex].title}</h2>
@@ -406,6 +606,9 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                           </div>
                                         ))}
                                       </div>
+                                      <div className="absolute bottom-4 right-6 text-[10px] font-black text-slate-300 uppercase tracking-widest">
+                                         Slide {currentSlideIndex + 1} of {slides.length}
+                                      </div>
                                    </div>
                                    <div className="flex items-center gap-4 mt-6">
                                       <button onClick={() => setCurrentSlideIndex(Math.max(0, currentSlideIndex - 1))} disabled={currentSlideIndex === 0} className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center hover:bg-cyan-600 transition-all disabled:opacity-30"><i className="fa-solid fa-chevron-left"></i></button>
@@ -414,9 +617,10 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang }) => {
                                 </div>
                               )}
 
-                              {activeTaskType === 'search' && searchResult && (
-                                  <div className="p-6 border-t border-white/5 bg-slate-900/50 flex-1 overflow-y-auto">
-                                      <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap mb-8">
+                              {/* Document/Search/Excel/DB Default View */}
+                              {(activeTaskType === 'search' || activeTaskType === 'document' || activeTaskType === 'database' || activeTaskType === 'excel') && searchResult && (
+                                  <div className="p-8 border-t border-white/5 bg-slate-900 flex-1 overflow-y-auto custom-scrollbar">
+                                      <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap mb-8 font-mono">
                                          {searchResult}
                                       </div>
                                       {searchLinks.length > 0 && (
