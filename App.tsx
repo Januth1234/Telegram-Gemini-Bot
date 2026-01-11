@@ -10,7 +10,6 @@ import LogicFlowPage from './components/LogicFlowPage';
 import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import DownloadsPage from './components/DownloadsPage';
-import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
 import MathsMode from './components/MathsMode';
@@ -82,7 +81,6 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // History Sync Logic - Robust transition
   useEffect(() => {
     if (user?.id && !hasSyncedWithCloud) {
       setSyncStatus('syncing');
@@ -103,7 +101,7 @@ const App: React.FC = () => {
         setTimeout(() => setSyncStatus('idle'), 2000);
       }).catch(() => {
         setSyncStatus('error');
-        setHasSyncedWithCloud(true); // Don't loop errors
+        setHasSyncedWithCloud(true);
         setTimeout(() => setSyncStatus('idle'), 3000);
       });
     }
@@ -133,13 +131,22 @@ const App: React.FC = () => {
       case 'chat':
       case 'art':
       case 'camera':
-        const workspaceMode: WorkspaceMode = view === 'art' ? 'studio' : view === 'camera' ? 'vision' : 'chat';
+      case 'help':
+      case 'math':
+        const modeMapping: Record<AppView, WorkspaceMode> = {
+          'art': 'studio',
+          'camera': 'vision',
+          'help': 'gethelp',
+          'math': 'maths',
+          'chat': 'chat',
+          'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat'
+        };
         return (
           <ChatWorkspace 
             onClose={() => navigate('landing')} 
             hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
-            initialMode={workspaceMode}
+            initialMode={modeMapping[view]}
             autoSubmit={shouldAutoSubmit}
             onInputChange={setGlobalPrompt}
             messages={activeMessages}
@@ -164,9 +171,7 @@ const App: React.FC = () => {
             isSyncing={syncStatus === 'syncing'}
           />
         );
-      case 'math': return <MathsMode onClose={() => navigate('landing')} lang={lang} />;
       case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
-      case 'help': return <GetHelpMode onClose={() => navigate('landing')} lang={lang} />;
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
       case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
       case 'terms': return <TermsPage onClose={() => navigate('landing')} />;

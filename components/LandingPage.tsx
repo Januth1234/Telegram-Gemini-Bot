@@ -1,7 +1,6 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { geminiService } from '../services/geminiService';
-import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount } from '../types';
 
@@ -17,122 +16,182 @@ interface LandingPageProps {
 
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin }) => {
   const t = translations[lang];
-  const [contextGreeting, setContextGreeting] = useState(() => lang === 'si' ? "ඔබට අද දවස සුබ එකක් වේවා" : "Have a very wonderful day today");
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const fetchGreeting = useCallback(async () => {
-    const now = new Date();
-    const date = now.toLocaleDateString('en-US', { dateStyle: 'full' });
-    const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-    
-    try {
-      const msg = await geminiService.generateWelcomeMessage({ date, time, lang });
-      if (msg) setContextGreeting(msg);
-    } catch (e) {
-      console.warn("Greeting AI failed.");
+  const context = useMemo(() => {
+    const hour = new Date().getHours();
+    const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+    const weathers = ['sunny', 'cloudy', 'rainy', 'breezy'];
+    const weather = weathers[Math.floor(Math.random() * weathers.length)];
+    return { timeOfDay, weather };
+  }, []);
+
+  const getLocalGreeting = () => {
+    if (lang === 'si') {
+      const timeStr = context.timeOfDay === 'morning' ? 'සුබ උදෑසනක්' : context.timeOfDay === 'afternoon' ? 'සුබ දහවලක්' : 'සුබ සැන්දෑවක්';
+      return `${timeStr} වේවා ඔරින් AI වෙතින් ඔබට`;
+    } else {
+      return `Good ${context.timeOfDay} and welcome to Orin AI`;
     }
-  }, [lang]);
+  };
+
+  const [greeting, setGreeting] = useState(getLocalGreeting);
+
+  const fetchAiGreeting = useCallback(async () => {
+    try {
+      const aiGreeting = await geminiService.generateWelcomeMessage({
+        timeOfDay: context.timeOfDay,
+        weather: context.weather,
+        lang
+      });
+      if (aiGreeting) setGreeting(aiGreeting);
+    } catch (e) {}
+  }, [lang, context]);
 
   useEffect(() => {
-    fetchGreeting();
-    const interval = setInterval(fetchGreeting, 300000);
-    return () => clearInterval(interval);
-  }, [fetchGreeting]);
+    setGreeting(getLocalGreeting()); 
+    fetchAiGreeting();
+  }, [lang, fetchAiGreeting]);
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
-      <div className="w-full max-w-7xl px-4 md:px-8 py-12 md:py-20 flex flex-col items-center gap-16 md:gap-24">
+      <div className="w-full max-w-6xl px-6 py-12 md:py-24 flex flex-col items-center gap-16 md:gap-24 text-center">
         
-        <section className="w-full text-center flex flex-col items-center gap-8 md:gap-12 animate-fade max-w-4xl mx-auto">
-          <div className="flex flex-col items-center gap-6">
-            <div className="w-20 h-20 md:w-28 md:h-28 bg-cyan-600 rounded-[32px] flex items-center justify-center text-white shadow-2xl hover:scale-105 transition-transform duration-500">
-              <i className="fa-solid fa-bolt text-4xl md:text-6xl"></i>
+        {/* Hero Section */}
+        <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade">
+          <div className="flex flex-col items-center gap-8">
+            <div className="w-24 h-24 md:w-32 md:h-32 bg-cyan-600 rounded-[36px] flex items-center justify-center text-white shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
+              <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
+              <i className="fa-solid fa-bolt text-5xl md:text-7xl relative z-10"></i>
             </div>
             
-            <div className="space-y-4">
-              <h1 className="text-5xl md:text-8xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.9]">{t.welcome}</h1>
-              <div className="min-h-[3rem] flex items-center justify-center px-4">
-                  <h2 className="text-lg md:text-2xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal text-center leading-snug">
-                    {contextGreeting}
+            <div className="space-y-6">
+              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.85]">{t.welcome}</h1>
+              <div className="min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
+                  <h2 className="text-xl md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal max-w-2xl leading-snug">
+                    {greeting}
                   </h2>
+                  <p className="text-[10px] md:text-xs font-black tracking-[0.4em] uppercase text-slate-400 dark:text-slate-500">{t.slogan}</p>
               </div>
-              <p className="text-[10px] md:text-xs font-black tracking-[0.3em] uppercase text-slate-400 dark:text-slate-500">{t.slogan}</p>
             </div>
           </div>
 
           <div className="w-full max-w-2xl px-2">
-            <div className="relative group z-20">
-              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[32px] blur opacity-10 group-hover:opacity-20 transition duration-500"></div>
-              <div className="relative glass-panel p-2 rounded-[28px] flex items-center shadow-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-white/10 transition-all">
+            <div className="relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[32px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
+              <div className="relative glass-panel p-2 rounded-[32px] flex items-center shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10">
                 <input 
                   type="text" value={prompt} onChange={(e) => onPromptChange(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
-                  placeholder={t.howHelp} className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl px-6 py-4 dark:text-white placeholder:text-slate-400 font-medium"
+                  placeholder={t.howHelp} className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-2xl px-6 py-5 dark:text-white placeholder:text-slate-400 font-medium"
                 />
-                <button onClick={() => onStartChat(prompt, 'chat')} className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-14 px-6 md:px-10 rounded-2xl font-black text-xs md:text-sm uppercase tracking-widest shadow-lg">{t.go}</button>
+                <button onClick={() => onStartChat(prompt, 'chat')} className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-8 md:px-12 rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
+                  {t.go}
+                </button>
               </div>
             </div>
             {!user && (
-               <div className="mt-6 flex justify-center">
-                 <button onClick={onLogin} disabled={isLoggingIn} className="flex items-center gap-3 px-6 py-3 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95">
-                   {isLoggingIn ? <i className="fa-solid fa-circle-notch animate-spin text-slate-400"></i> : <img src="https://www.google.com/favicon.ico" className="w-5 h-5" />}
-                   <span className="text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-500">{lang === 'si' ? 'Google සමඟ සම්බන්ධ වන්න' : 'Sign in with Google'}</span>
-                 </button>
-               </div>
+               <button onClick={onLogin} className="mt-8 flex items-center gap-3 px-8 py-4 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95 mx-auto">
+                 <img src="https://www.google.com/favicon.ico" className="w-5 h-5" />
+                 <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">{lang === 'si' ? 'Google සමඟ එක්වන්න' : 'Join with Google'}</span>
+               </button>
             )}
           </div>
         </section>
 
-        {/* Features Grid - Improved Order and Alignment */}
-        <section className="w-full max-w-6xl space-y-8 animate-slide-in-up">
-          <div className="flex items-center gap-4 px-2 opacity-80">
-             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent"></div>
-             <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Tools</span>
-             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-200 dark:via-slate-700 to-transparent"></div>
+        {/* Feature Grid - Main Tools including Help Me */}
+        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
+          <div className="flex items-center gap-6 opacity-40">
+             <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
+             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Main Tools</span>
+             <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 md:gap-6 items-stretch">
-            <FeatureCard icon="fa-message" title={t.reasoning} desc="Deep Chat" onClick={() => onStartChat(prompt, 'chat')} color="blue" />
-            <FeatureCard icon="fa-calculator" title={t.maths} desc="Solver" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
-            <FeatureCard icon="fa-palette" title={t.creative} desc="Designer" onClick={() => onStartChat(prompt, 'studio')} color="purple" />
-            <FeatureCard icon="fa-camera" title={t.vision} desc="Visual AI" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
-            <FeatureCard icon="fa-microphone-lines" title={t.voiceBeta} desc="Voice" onClick={onVoiceOpen} color="cyan" isBeta />
+          
+          <div className="flex flex-wrap justify-center gap-4 md:gap-8">
+            <FeatureCard icon="fa-message" title={t.reasoning} desc="Deep Chat" onClick={() => onStartChat(prompt, 'chat')} color="cyan" />
+            <FeatureCard icon="fa-calculator" title={t.maths} desc="Math Solver" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
+            <FeatureCard icon="fa-palette" title={t.creative} desc="Draw Designer" onClick={() => onStartChat(prompt, 'studio')} color="purple" />
+            <FeatureCard icon="fa-camera" title={t.vision} desc="Camera Visual AI" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
+            <FeatureCard icon="fa-microphone-lines" title={t.voiceBeta} desc="Talk Voice" onClick={onVoiceOpen} color="blue" isBeta />
+            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc="AI Agent" onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta />
           </div>
         </section>
 
-        <section className="w-full max-w-6xl grid grid-cols-2 xs:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5 animate-slide-in-up">
-            <NavCard href="#downloads" icon="fa-download" color="blue" title={t.downloads} />
-            <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} />
-            <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} />
-            <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} />
-            <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} />
-            <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} />
-            <NavCard href="#terms" icon="fa-file-contract" color="slate" title={t.terms} />
+        {/* Navigation Grid - Additional Section */}
+        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
+          <div className="flex items-center gap-6 opacity-40">
+             <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
+             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Additional</span>
+             <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
+          </div>
+          
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+              <NavCard href="#downloads" icon="fa-download" color="cyan" title={t.downloads} />
+              <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} />
+              <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} />
+              <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} />
+              <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} />
+              <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} />
+              <NavCard href="#terms" icon="fa-file-contract" color="indigo" title={t.terms} />
+          </div>
         </section>
 
-        <footer className="w-full pt-12 pb-8 text-center space-y-4 opacity-40">
-          <p className="text-[9px] font-black uppercase tracking-[0.4em] text-slate-400">© 2026 JN Productions Global</p>
+        <footer className="w-full py-16 opacity-30 border-t border-black/5 dark:border-white/5">
+          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • All Rights Reserved</p>
         </footer>
       </div>
     </div>
   );
 };
 
-const FeatureCard = ({ icon, title, desc, onClick, color, isBeta }: any) => (
-  <button onClick={onClick} className="glass-panel p-6 rounded-[32px] flex flex-col items-center text-center justify-center gap-4 hover:-translate-y-1 hover:shadow-xl transition-all duration-300 group border border-slate-200 dark:border-white/5 relative bg-white/60 dark:bg-slate-900/40">
-    {isBeta && <div className="absolute top-4 right-4 px-1.5 py-0.5 bg-cyan-500/10 text-cyan-600 text-[6px] font-black uppercase tracking-widest rounded-full border border-cyan-500/20">BETA</div>}
-    <div className={`w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-${color}-500 group-hover:scale-110 transition-all duration-300 shadow-sm border border-slate-100 dark:border-white/5`}><i className={`fa-solid ${icon} text-2xl`}></i></div>
-    <div className="space-y-1">
-      <h4 className="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-tight">{title}</h4>
-      <p className="text-[9px] font-medium text-slate-500 dark:text-slate-400">{desc}</p>
-    </div>
-  </button>
-);
+const FeatureCard = ({ icon, title, desc, onClick, color, isBeta }: any) => {
+  const colors: Record<string, string> = {
+    cyan: "group-hover:text-cyan-500",
+    indigo: "group-hover:text-indigo-500",
+    purple: "group-hover:text-purple-500",
+    emerald: "group-hover:text-emerald-500",
+    blue: "group-hover:text-blue-500"
+  };
 
-const NavCard = ({ href, icon, title, color }: any) => (
-  <a href={href} className="glass-panel p-4 py-6 rounded-2xl flex flex-col items-center text-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-1 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20">
-    <div className={`w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 group-hover:text-${color}-500 transition-colors`}><i className={`fa-solid ${icon} text-sm`}></i></div>
-    <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">{title}</h3>
-  </a>
-);
+  return (
+    <button onClick={onClick} className="glass-panel w-40 h-40 md:w-52 md:h-52 rounded-[44px] flex flex-col items-center justify-center gap-4 hover:-translate-y-3 hover:shadow-2xl transition-all duration-500 group border border-slate-200 dark:border-white/5 relative bg-white/50 dark:bg-slate-900/50">
+      {isBeta && <div className="absolute top-4 right-4 px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[7px] font-black uppercase tracking-widest rounded-full border border-cyan-500/20">BETA</div>}
+      <div className={`w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-125 transition-all duration-500 shadow-sm border border-slate-100 dark:border-white/5 ${colors[color]}`}>
+        <i className={`fa-solid ${icon} text-3xl`}></i>
+      </div>
+      <div className="space-y-1 px-4">
+        <h4 className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">{title}</h4>
+        <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter opacity-60">{desc}</p>
+      </div>
+    </button>
+  );
+};
+
+const NavCard = ({ href, onClick, icon, title, color }: any) => {
+  const colors: Record<string, string> = {
+    cyan: "group-hover:text-cyan-500",
+    indigo: "group-hover:text-indigo-500",
+    purple: "group-hover:text-purple-500",
+    emerald: "group-hover:text-emerald-500",
+    orange: "group-hover:text-orange-500",
+    pink: "group-hover:text-pink-500",
+    violet: "group-hover:text-violet-500",
+    blue: "group-hover:text-blue-500"
+  };
+
+  const Component = href ? 'a' : 'button';
+
+  return (
+    <Component 
+      href={href} 
+      onClick={onClick}
+      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[28px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group"
+    >
+      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner ${colors[color]}`}>
+        <i className={`fa-solid ${icon} text-lg`}></i>
+      </div>
+      <h3 className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white">{title}</h3>
+    </Component>
+  );
+};
 
 export default LandingPage;
