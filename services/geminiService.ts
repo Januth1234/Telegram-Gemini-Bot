@@ -6,11 +6,6 @@ import { cacheService, CacheKey } from "./cacheService";
 
 declare const puter: any;
 
-/**
- * Orin AI Gemini Service
- * Handles all interactions with Google GenAI models and user session management.
- */
-
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
     super(message);
@@ -26,18 +21,16 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a helpful and simple assistant from Sri Lanka.
-
+  return `You are Orin AI, a helpful assistant from Sri Lanka.
+  
 RULES:
-1. BE SIMPLE: Use everyday language. No complex jargon or heavy words.
-2. BE DIRECT: Start answering immediately. 
-3. LANGUAGE: If the user speaks Sinhala, use natural, simple Sinhala. If English, use simple English.
-4. MATH: Show math steps clearly using LaTeX.
-5. IDENTITY: Only mention you were made by Januth Nimnal if asked.
-6. LENGTH: Keep responses helpful but concise.
+1. SIMPLE: Use everyday language.
+2. DIRECT: Answer immediately.
+3. LANGUAGE: Use simple Sinhala or English.
+4. IDENTITY: Only mention Januth Nimnal if asked.
+5. CONCISE: Keep it short and helpful.
 
-Context:
-Time in Sri Lanka: ${timeStr}.`;
+Context: Time in Sri Lanka is ${timeStr}.`;
 };
 
 export class GeminiService {
@@ -79,7 +72,7 @@ export class GeminiService {
         }
       }
     } catch (e) {
-      console.warn("Puter connection delayed.");
+      console.warn("Connection delayed.");
     }
   }
 
@@ -152,17 +145,6 @@ export class GeminiService {
     return false;
   }
 
-  async loginWithGoogle(): Promise<UserAccount> {
-    try {
-      if (typeof puter === 'undefined') throw new Error("System offline.");
-      const user = await puter.auth.signIn();
-      this.updateCurrentUser(user);
-      return this.currentUser!;
-    } catch (e: any) {
-      throw new AppError("Login failed.", 'auth');
-    }
-  }
-
   async logout() {
     this.currentUser = null;
     this.saveUser();
@@ -186,7 +168,8 @@ export class GeminiService {
     });
   }
 
-  async connectTranslator(callbacks: any, config: { source: string; target: string }) {
+  // Added connectTranslator method to handle real-time speech-to-speech translation
+  async connectTranslator(callbacks: any, options: { source: string; target: string }) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     return ai.live.connect({
@@ -195,9 +178,12 @@ export class GeminiService {
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a translator between ${config.source} and ${config.target}. Speak ONLY the translation.`,
+        systemInstruction: `You are a professional real-time translator. 
+        Your task is to facilitate a conversation between two people speaking ${options.source} and ${options.target}.
+        Listen to audio input in either language and immediately provide the translation into the other language as audio.
+        Output only the translated speech. Keep the tone natural and preserve the original intent.`,
       },
     });
   }
@@ -205,18 +191,18 @@ export class GeminiService {
   async generateWelcomeMessage(options: { date: string; time: string; location?: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Strict 3-5 word rule enforced in prompt
+      // Updated word limit to 6-7 words
       const prompt = `Generate a very short greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
-      It MUST be exactly 3 to 5 words. No more, no less.
-      Context: Time is ${options.time}. No emojis or jargon.`;
+      It MUST be exactly 6 to 7 words. 
+      Context: Time is ${options.time}. Keep it friendly and simple.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text?.trim() || (options.lang === 'si' ? "ඔබට සුබ දවසක් වේවා" : "Have a good day");
+      return response.text?.trim() || (options.lang === 'si' ? "ඔබට අද දවස සුබ එකක් වේවා" : "Have a very wonderful day today");
     } catch {
-      return options.lang === 'si' ? "ඔබට සුබ දවසක් වේවා" : "Have a good day";
+      return options.lang === 'si' ? "ඔබට අද දවස සුබ එකක් වේවා" : "Have a very wonderful day today";
     }
   }
 
@@ -225,7 +211,7 @@ export class GeminiService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Translate this to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only the translation.`,
+        contents: `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only the translation.`,
       });
       return response.text || text;
     } catch {
@@ -237,23 +223,19 @@ export class GeminiService {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(0, 3).map(m => m.content).join(' ');
-      const prompt = `Give this chat a name in ${lang === 'si' ? 'Sinhala' : 'English'}. 
-      Strict Rule: Use exactly 3 to 4 words. Max 5. 
-      Context: ${context}`;
+      const prompt = `Short title (max 5 words) for this chat in ${lang === 'si' ? 'Sinhala' : 'English'}: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
       
-      let title = response.text?.trim() || (lang === 'si' ? "නව සංවාදය" : "New Chat");
-      // Fallback trim if AI is too talkative
+      let title = response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : "New Chat");
       const words = title.split(' ');
       if (words.length > 5) title = words.slice(0, 5).join(' ');
-      
       return title;
     } catch {
-      return lang === 'si' ? "නව සංවාදය" : "New Chat";
+      return lang === 'si' ? "නව පිළිසඳර" : "New Chat";
     }
   }
 
@@ -266,41 +248,18 @@ export class GeminiService {
     history?: ChatMessage[];
     signal?: AbortSignal;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
-    if (this.hasReachedLimit()) throw new AppError("Limit reached. Please login.", "limit_reached");
+    if (this.hasReachedLimit()) throw new AppError("Limit reached.", "limit_reached");
     
-    const count = options.messageCount || 0;
-    const isUserLoggedIn = !!this.currentUser;
-    const usePuterAI = isUserLoggedIn || count >= 2;
-
-    if (usePuterAI && typeof puter !== 'undefined' && !options.signal) {
-      try {
-        const response = await puter.ai.chat(prompt, {
-           model: 'gemini-flash',
-           system_prompt: getSystemInstruction()
-        });
-        this.incrementUsage();
-        return { text: response.toString(), links: [] };
-      } catch (e) {
-        console.warn("Puter fallback active.");
-      }
-    }
-
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
-
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any[] = [];
       if (options.history && options.history.length > 0) {
-          const recentHistory = options.history.slice(-10);
-          for (const msg of recentHistory) {
-              const role = msg.role === 'user' ? 'user' : 'model';
-              if (msg.type === 'text' && msg.content) {
-                  contents.push({ role, parts: [{ text: msg.content }] });
-              }
-          }
+          options.history.slice(-10).forEach(msg => {
+              contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+          });
       }
 
       const currentParts: any[] = [];
@@ -310,15 +269,9 @@ export class GeminiService {
       currentParts.push({ text: prompt || "Continue." });
       contents.push({ role: 'user', parts: currentParts });
 
-      const config: any = { 
-        systemInstruction: getSystemInstruction(),
-      };
-
-      if (options.grounding === 'search') {
-        config.tools = [{ googleSearch: {} }];
-      } else if (options.grounding === 'maps') {
-        config.tools = [{ googleMaps: {} }];
-      }
+      const config: any = { systemInstruction: getSystemInstruction() };
+      if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
+      else if (options.grounding === 'maps') config.tools = [{ googleMaps: {} }];
 
       const response = await ai.models.generateContent({
         model: modelName,
@@ -327,7 +280,6 @@ export class GeminiService {
       });
 
       this.incrementUsage();
-
       const links: GroundingLink[] = [];
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (groundingChunks) {
@@ -340,7 +292,7 @@ export class GeminiService {
       return { text: response.text || "", links };
     } catch (e: any) {
       if (e.name === 'AbortError') throw e;
-      throw new AppError("Network Error", 'generic');
+      throw new AppError("Failed to chat.", 'generic');
     }
   }
 
@@ -348,27 +300,18 @@ export class GeminiService {
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      const config: any = {
-        imageConfig: {
-          aspectRatio: aspectRatio as any,
-          imageSize: size as any
-        }
-      };
-
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
-        config
+        config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: size as any } }
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
-      throw new Error("Empty Response");
+      throw new Error("No image generated.");
     } catch (e: any) {
-      if (e.name === 'AbortError') throw e;
-      throw new AppError("Drawing Failed", 'generic');
+      throw new AppError("Drawing failed.", 'generic');
     }
   }
 
@@ -376,14 +319,12 @@ export class GeminiService {
     try {
       const response = await fetch(url);
       const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = blobUrl;
+      link.href = window.URL.createObjectURL(blob);
       link.download = `${filename}.png`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      window.URL.revokeObjectURL(blobUrl);
     } catch (err) {
       console.error("Save error:", err);
     }
