@@ -266,13 +266,16 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
   const containerClass = inline 
     ? "w-full h-full flex flex-col items-center justify-between py-6 px-4" 
-    : `w-full max-w-lg h-[90vh] glass-panel rounded-[40px] flex flex-col items-center justify-between p-6 bg-white/90 dark:bg-slate-900/90 ${glowClass} transition-all duration-700`;
+    : `w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center justify-between p-6 bg-white/90 dark:bg-slate-900/90 ${glowClass} transition-all duration-700`;
 
   return (
     <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md"}>
       {!inline && <div className="absolute inset-0" onClick={onClose}></div>}
       
-      <div className={containerClass}>
+      <div 
+        className={containerClass}
+        style={!inline ? { height: 'calc(var(--vh, 1vh) * 90)' } : undefined}
+      >
         
         {/* Header - Compact */}
         <div className="w-full flex items-center justify-between z-10 shrink-0">
