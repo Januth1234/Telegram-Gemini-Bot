@@ -10,6 +10,7 @@ import LogicFlowPage from './components/LogicFlowPage';
 import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import DownloadsPage from './components/DownloadsPage';
+import SitemapPage from './components/SitemapPage';
 import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
@@ -40,9 +41,9 @@ const App: React.FC = () => {
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0]; // Handle query params in hash
-    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
+    const validViews: string[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'sitemap'];
     
-    if (validViews.includes(hash as AppView)) return hash as AppView;
+    if (validViews.includes(hash)) return hash as AppView;
     if (hash === 'workspace') return 'chat';
     return 'landing';
   };
@@ -395,6 +396,7 @@ const App: React.FC = () => {
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'sitemap': return <SitemapPage onClose={() => navigate('landing')} lang={lang} />;
       default: 
         return (
           <LandingPage 

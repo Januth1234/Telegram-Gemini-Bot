@@ -193,13 +193,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-8 animate-slide-in-up" style={{ animationDelay: '100ms' }}>
-          <div className="grid grid-cols-2 xs:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-5">
+          <div className="grid grid-cols-2 xs:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
             <NavCard href="#downloads" icon="fa-download" color="blue" title={t.downloads} desc={t.downloadsDesc} />
             <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} desc={t.aboutCreator} />
             <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} desc={t.pricingDesc} />
             <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} desc="Architecture" />
             <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} desc="Changelog" />
             <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} desc="Safety" />
+            <NavCard href="#terms" icon="fa-file-contract" color="slate" title={t.terms} desc="Legal" />
+            <NavCard href="#sitemap" icon="fa-sitemap" color="cyan" title="Sitemap" desc="Index" />
           </div>
         </section>
 
@@ -222,7 +224,7 @@ const FeatureCard: React.FC<{ icon: string; title: string; desc: string; href: s
     <div className={`absolute inset-0 bg-gradient-to-br from-${color}-500/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500`}></div>
     
     {isBeta && (
-      <div className="absolute top-3 right-3 px-1.5 py-0.5 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[6px] font-black uppercase tracking-widest rounded border border-cyan-500/20">BETA</div>
+      <div className="absolute top-3 right-3 px-1.5 py-0.5 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[6px] font-black uppercase tracking-widest rounded-full border border-cyan-500/20">BETA</div>
     )}
 
     <div className={`w-12 h-12 md:w-16 md:h-16 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:text-${color}-500 group-hover:scale-110 transition-all duration-300 shadow-sm border border-slate-100 dark:border-white/5 relative z-10 mt-2`}>

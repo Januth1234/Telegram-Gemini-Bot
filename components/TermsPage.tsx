@@ -10,7 +10,7 @@ const TermsPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     sections: [
       {
         head: "01. එකඟතාවය",
-        body: "ඔරින් AI භාවිතා කිරීමෙන් ඔබ මෙම මූලික නීති වලට එකඟ වේ."
+        body: "ඔරින් AI භාවිතා කිරීමෙන් ඔබ මෙම මූලික නීති වලට එකඟ වේ. මෙම කොන්දේසි කාලයෙන් කාලයට යාවත්කාලීන විය හැක."
       },
       {
         head: "02. නිවැරදි භාවිතය",
@@ -30,7 +30,7 @@ const TermsPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "06. නීතිය",
-        body: "මෙම කොන්දේසි ශ්‍රී ලංකාවේ නීතියට යටත් වේ."
+        body: "මෙම කොන්දේසි ශ්‍රී ලංකාවේ නීතියට යටත් වේ. යම් ගැටලුවක් මතු වුවහොත් එය ශ්‍රී ලංකා අධිකරණ බල සීමාව යටතේ විසඳා ගත යුතුය."
       }
     ],
     footer: "JN Productions Global සේවා ගිවිසුම"
@@ -40,11 +40,11 @@ const TermsPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     sections: [
       {
         head: "01. Agreement",
-        body: "By using Orin AI, you agree to these simple rules designed to keep the platform safe for everyone."
+        body: "By using Orin AI, you agree to these simple rules designed to keep the platform safe and functional for everyone."
       },
       {
         head: "02. Fair Use",
-        body: "Use this workspace for research, creativity, and work. Do not use it to generate spam, illegal content, or anything that harms others."
+        body: "Use this workspace for research, creativity, and professional work. Do not use it to generate spam, illegal content, or anything that harms others."
       },
       {
         head: "03. AI Accuracy Warning",
@@ -52,19 +52,19 @@ const TermsPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "04. You Own Your Creations",
-        body: "The text and images you create here belong to you. You are free to use them for your personal or commercial projects."
+        body: "The text and images you create here belong to you. You are free to use them for your personal or commercial projects without extra fees."
       },
       {
         head: "05. Our Liability",
-        body: "We try our best to keep Orin running perfectly, but we aren't responsible if the service goes down or makes an error."
+        body: "We try our best to keep Orin running perfectly, but we aren't responsible if the service goes down or makes a calculation error."
       },
       {
         head: "06. Account Security",
-        body: "Keep your login details safe. If you bring your own API keys, you are responsible for their usage."
+        body: "Keep your login details safe. If you bring your own API keys, you are responsible for their usage and security."
       },
       {
         head: "07. Legal Disputes",
-        body: "These terms are governed by the laws of Sri Lanka."
+        body: "These terms are governed by the laws of Sri Lanka. Any disputes shall be handled within the jurisdiction of Sri Lankan courts."
       }
     ],
     footer: "JN Productions Global Terms Protocol"
@@ -74,28 +74,38 @@ const TermsPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
       <div className="max-w-4xl mx-auto space-y-12 pb-32 px-6 pt-12 text-slate-900 dark:text-slate-100">
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{content.title}</h2>
-            <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em] opacity-60">{content.version}</p>
+          <div className="flex items-center gap-4">
+             <div className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400">
+                <i className="fa-solid fa-file-contract text-xl"></i>
+             </div>
+             <div>
+               <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{content.title}</h2>
+               <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em] opacity-60">{content.version}</p>
+             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm"
+            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-red-500 hover:rotate-90 transition-all shadow-sm"
           >
             <i className="fa-solid fa-xmark"></i>
           </button>
         </header>
 
-        <div className="space-y-10 text-slate-600 dark:text-slate-400 font-medium">
+        <div className="space-y-12">
           {content.sections.map((s, i) => (
-            <section key={i} className="space-y-3 animate-reveal" style={{ animationDelay: `${i * 0.05}s` }}>
-              <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{s.head}</h3>
-              <p className={`leading-relaxed ${isSinhala ? 'sinhala-text' : ''}`}>{s.body}</p>
+            <section key={i} className="animate-reveal space-y-4" style={{ animationDelay: `${i * 0.05}s` }}>
+              <div className="flex items-center gap-3">
+                 <div className="w-1.5 h-6 bg-cyan-600 rounded-full"></div>
+                 <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{s.head}</h3>
+              </div>
+              <p className={`text-slate-600 dark:text-slate-400 font-medium leading-relaxed indent-4 ${isSinhala ? 'sinhala-text' : ''}`}>{s.body}</p>
             </section>
           ))}
 
           <footer className="pt-16 border-t border-black/5 dark:border-white/5 text-center space-y-4 opacity-40">
+            <div className="w-12 h-1 bg-slate-200 dark:bg-slate-800 mx-auto rounded-full mb-4"></div>
             <p className="text-[10px] font-black uppercase tracking-[0.4em]">{content.footer}</p>
+            <p className="text-[8px] font-bold uppercase tracking-widest text-slate-400">Last updated February 2026</p>
           </footer>
         </div>
       </div>
