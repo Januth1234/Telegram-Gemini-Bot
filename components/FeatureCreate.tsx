@@ -31,8 +31,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   // Suggested Prompts - Updated for Whisk & Lyria
   const suggestions = [
     { label: "Cyberpunk City", type: 'image', prompt: "A futuristic cyberpunk city with neon lights and rain, hyper-realistic, 8k" },
-    { label: "Lyria Melody", type: 'audio', prompt: "Generate a soulful lo-fi jazz melody with rain sounds" },
-    { label: "Veo Action", type: 'video', prompt: "FPV drone shot flying through a narrow canyon at high speed" },
+    { label: "Lyria Melody", type: 'audio', prompt: "Generate a soulful lo-fi jazz melody with rain sounds and soft piano" },
+    { label: "Veo Action", type: 'video', prompt: "FPV drone shot flying through a narrow canyon at high speed, 4k cinematic" },
     { label: "Whisk Motion", type: 'animate', prompt: "Cinematic camera pan right, slow motion, 4k detail" }
   ];
 
@@ -261,10 +261,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </div>
                     <div>
                        <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                          {activeModal === 'image' ? 'Neural Canvas' : activeModal === 'video' ? 'Veo Cinema' : activeModal === 'animate' ? 'Whisk Animation' : 'Lyria Music'}
+                          {activeModal === 'image' ? 'Neural Canvas' : activeModal === 'video' ? 'Veo Cinema' : activeModal === 'animate' ? 'Whisk Animation' : 'Lyria Music Studio'}
                        </h3>
                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                          {activeModal === 'image' ? 'Image Generation' : activeModal === 'video' ? 'Video Generation' : activeModal === 'animate' ? 'Image-to-Video' : 'Audio Synthesis'}
+                          {activeModal === 'image' ? 'Image Generation' : activeModal === 'video' ? 'Video Generation' : activeModal === 'animate' ? 'Image-to-Video' : 'AI Music Synthesis'}
                        </p>
                     </div>
                  </div>
@@ -302,12 +302,17 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                  {/* Prompt Input */}
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">
-                       {activeModal === 'animate' ? 'Motion Prompt (Optional)' : 'Description'}
+                       {activeModal === 'animate' ? 'Motion Prompt (Optional)' : activeModal === 'audio' ? 'Music Description' : 'Description'}
                     </label>
                     <textarea 
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
-                      placeholder={activeModal === 'image' ? "A futuristic cyberpunk city..." : activeModal === 'video' ? "A cat driving a car..." : activeModal === 'animate' ? "Pan camera right, cinematic lighting..." : "A cheerful jazz melody with saxophone..."}
+                      placeholder={
+                        activeModal === 'image' ? "A futuristic cyberpunk city..." : 
+                        activeModal === 'video' ? "A cat driving a car..." : 
+                        activeModal === 'animate' ? "Pan camera right, cinematic lighting..." : 
+                        "A cheerful jazz melody with saxophone and soft piano accompaniment..."
+                      }
                       className="w-full h-32 p-5 bg-slate-50 dark:bg-black/20 rounded-3xl border border-slate-200 dark:border-white/10 outline-none resize-none text-sm font-medium focus:ring-2 focus:ring-cyan-500/20 transition-all text-slate-900 dark:text-white placeholder:text-slate-400"
                     />
                  </div>
@@ -356,17 +361,18 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                    {isLoading ? (
                       <>
                         <i className="fa-solid fa-circle-notch animate-spin"></i>
-                        <span>Synthesizing...</span>
+                        <span>{activeModal === 'audio' ? 'Composing...' : 'Synthesizing...'}</span>
                       </>
                    ) : (
                       <>
                         <i className="fa-solid fa-bolt"></i>
-                        <span>Generate</span>
+                        <span>{activeModal === 'audio' ? 'Generate Music' : 'Generate'}</span>
                       </>
                    )}
                  </button>
                  
                  {activeModal !== 'audio' && <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest opacity-60">AI Generation takes time. Please wait.</p>}
+                 {activeModal === 'audio' && <p className="text-[9px] text-center text-slate-400 font-bold uppercase tracking-widest opacity-60">Lyria Engine generating audio waveform.</p>}
               </div>
            </div>
         </div>
