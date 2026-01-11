@@ -2,16 +2,14 @@
 import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
+import { cacheService, CacheKey } from "./cacheService";
 
 declare const puter: any;
 
-const getEnvApiKey = () => {
-  try {
-    return process.env.API_KEY || "";
-  } catch {
-    return "";
-  }
-};
+/**
+ * Orin AI Gemini Service
+ * Handles all interactions with Google GenAI models and user session management.
+ */
 
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
@@ -46,15 +44,7 @@ export class GeminiService {
   private freeUsageLimit = 200;
 
   constructor() {
-    const saved = localStorage.getItem('orin_user');
-    if (saved) {
-      try {
-        this.currentUser = JSON.parse(saved);
-      } catch (e) {
-        console.warn("Session cleared.");
-        localStorage.removeItem('orin_user');
-      }
-    }
+    this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
     this.initPuter();
     this.initFirebaseListener();
     this.checkAndResetUsage();
@@ -93,13 +83,13 @@ export class GeminiService {
   }
 
   private checkAndResetUsage() {
-    const lastReset = localStorage.getItem('orin_last_reset');
+    const lastReset = cacheService.get<string | null>(CacheKey.LAST_RESET, null);
     const now = new Date().getTime();
     const oneDay = 24 * 60 * 60 * 1000;
 
     if (!lastReset || (now - parseInt(lastReset)) > oneDay) {
-      localStorage.setItem('orin_usage_count', '0');
-      localStorage.setItem('orin_last_reset', now.toString());
+      cacheService.set(CacheKey.USAGE_COUNT, 0);
+      cacheService.set(CacheKey.LAST_RESET, now.toString());
     }
   }
 
@@ -123,9 +113,9 @@ export class GeminiService {
 
   private saveUser() {
     if (this.currentUser) {
-      localStorage.setItem('orin_user', JSON.stringify(this.currentUser));
+      cacheService.set(CacheKey.USER, this.currentUser);
     } else {
-      localStorage.removeItem('orin_user');
+      cacheService.remove(CacheKey.USER);
     }
   }
 
@@ -135,12 +125,12 @@ export class GeminiService {
 
   getUsageCount(): number {
     this.checkAndResetUsage();
-    return parseInt(localStorage.getItem('orin_usage_count') || '0');
+    return cacheService.get<number>(CacheKey.USAGE_COUNT, 0);
   }
 
   incrementUsage() {
     const current = this.getUsageCount();
-    localStorage.setItem('orin_usage_count', (current + 1).toString());
+    cacheService.set(CacheKey.USAGE_COUNT, current + 1);
   }
 
   hasReachedLimit(): boolean {
@@ -149,10 +139,10 @@ export class GeminiService {
   }
 
   private async checkApiKey(): Promise<boolean> {
-    const key = getEnvApiKey();
+    const key = process.env.API_KEY;
     if (key) return true;
     
-    if ((window as any).aistudio) {
+    if (typeof window !== 'undefined' && (window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (hasKey) return true;
         await (window as any).aistudio.openSelectKey();
@@ -179,26 +169,98 @@ export class GeminiService {
     if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
-  async convertMathImageToLatex(base64Data: string, mimeType: string): Promise<string> {
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async connectLive(callbacks: any) {
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    return ai.live.connect({
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+      callbacks,
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+        },
+        systemInstruction: getSystemInstruction(),
+      },
+    });
+  }
+
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async connectTranslator(callbacks: any, config: { source: string; target: string }) {
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    return ai.live.connect({
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+      callbacks,
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } },
+        },
+        systemInstruction: `You are a real-time speech-to-speech translator between ${config.source} and ${config.target}. 
+        Listen to the audio input. If it is ${config.source}, translate it to ${config.target} and speak it. 
+        If it is ${config.target}, translate it to ${config.source} and speak it. 
+        Be accurate and natural. Do not say anything else.`,
+      },
+    });
+  }
+
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async generateWelcomeMessage(options: { date: string; time: string; location?: string; lang: Language }): Promise<string> {
     try {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `Generate a very short, friendly 1-sentence welcome message for a user.
+      Context: Time is ${options.time}, Date is ${options.date}${options.location ? `, Location: ${options.location}` : ''}.
+      Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}.
+      Keep it simple and warm. No emojis.`;
+
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{
-          role: 'user',
-          parts: [
-            { inlineData: { data: base64Data, mimeType: mimeType } },
-            { text: "Output ONLY the raw LaTeX for the math in this image." }
-          ]
-        }]
+        contents: prompt,
       });
-      return (response.text || "").replace(/```latex/g, '').replace(/```/g, '').trim();
-    } catch (e: any) {
-      throw new AppError("Could not read math.", 'generic');
+      return response.text || "";
+    } catch {
+      return "";
     }
   }
 
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async translate(text: string, targetLang: Language): Promise<string> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Translate the following text to ${targetLang === 'si' ? 'Sinhala' : 'English'}. Only provide the translation, no extra text.
+        Text: "${text}"`,
+      });
+      return response.text || text;
+    } catch {
+      return text;
+    }
+  }
+
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const conversationSummary = messages.slice(0, 5).map(m => `${m.role}: ${m.content}`).join('\n');
+      const prompt = `Generate a very short (2-4 words) title for this conversation in ${lang === 'si' ? 'Sinhala' : 'English'}.
+      Modes used: ${modes.join(', ')}.
+      Conversation snippet:
+      ${conversationSummary}`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+      });
+      return response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : "New Chat");
+    } catch {
+      return lang === 'si' ? "නව පිළිසඳර" : "New Chat";
+    }
+  }
+
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
     grounding?: 'search' | 'maps'; 
@@ -206,6 +268,7 @@ export class GeminiService {
     lang?: Language;
     messageCount?: number;
     history?: ChatMessage[];
+    signal?: AbortSignal;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     if (this.hasReachedLimit()) throw new AppError("Limit reached. Please sign in.", "limit_reached");
     
@@ -213,7 +276,7 @@ export class GeminiService {
     const isUserLoggedIn = !!this.currentUser;
     const usePuterAI = isUserLoggedIn || count >= 2;
 
-    if (usePuterAI && typeof puter !== 'undefined') {
+    if (usePuterAI && typeof puter !== 'undefined' && !options.signal) {
       try {
         const response = await puter.ai.chat(prompt, {
            model: 'gemini-flash',
@@ -228,8 +291,9 @@ export class GeminiService {
 
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      if (options.signal?.aborted) throw new DOMException("Aborted", "AbortError");
 
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
       let contents: any[] = [];
@@ -260,12 +324,33 @@ export class GeminiService {
         config.tools = [{ googleMaps: {} }];
       }
 
-      const response = await ai.models.generateContent({
+      const generatePromise = ai.models.generateContent({
         model: modelName,
         contents,
         config
       });
 
+      if (options.signal) {
+        const result = await Promise.race([
+          generatePromise,
+          new Promise((_, reject) => {
+            options.signal?.addEventListener('abort', () => reject(new DOMException("Aborted", "AbortError")));
+          })
+        ]);
+        const response = result as any;
+        this.incrementUsage();
+        const links: GroundingLink[] = [];
+        const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (groundingChunks) {
+          groundingChunks.forEach((chunk: any) => {
+            if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+            else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
+          });
+        }
+        return { text: response.text || "", links };
+      }
+
+      const response = await generatePromise;
       this.incrementUsage();
 
       const links: GroundingLink[] = [];
@@ -279,119 +364,69 @@ export class GeminiService {
 
       return { text: response.text || "", links };
     } catch (e: any) {
+      if (e.name === 'AbortError') throw e;
       throw new AppError("Failed to process.", 'generic');
     }
   }
 
-  async generateWelcomeMessage(options: { date: string, time: string, location?: string, lang: Language }): Promise<string> {
-    try {
-      if (!await this.checkApiKey()) return "";
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Say a very brief, friendly hello. 
-      Context: Date is ${options.date}, Time is ${options.time}. Language: ${options.lang === 'si' ? 'Sinhala' : 'English'}. 
-      Max 5 words.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
-      });
-      return response.text?.trim() || "";
-    } catch {
-      return "";
-    }
-  }
-
-  async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
-    try {
-      if (!await this.checkApiKey()) return "New Chat";
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Title this chat in 2 words. Language: ${lang === 'si' ? 'Sinhala' : 'English'}.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
-      });
-      return response.text?.trim() || "New Chat";
-    } catch {
-      return "New Chat";
-    }
-  }
-
-  async translate(text: string, targetLang: Language): Promise<string> {
+  // Always use a fresh instance of GoogleGenAI to pick up potential API key updates
+  async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-      const prompt = `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: ${text}`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
-      });
-      return response.text || text;
-    } catch (e: any) {
-      throw new AppError("Translation failed.", 'generic');
-    }
-  }
-
-  async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize): Promise<string> {
-    try {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
+      if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const response = await ai.models.generateContent({
+      const config: any = {
+        imageConfig: {
+          aspectRatio: aspectRatio as any,
+          imageSize: size as any
+        }
+      };
+
+      const generatePromise = ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
-        config: {
-          imageConfig: {
-            aspectRatio: aspectRatio as any,
-            imageSize: size as any
-          }
-        }
+        config
       });
+
+      let response: any;
+      if (signal) {
+        response = await Promise.race([
+          generatePromise,
+          new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new DOMException("Aborted", "AbortError")));
+          })
+        ]);
+      } else {
+        response = await generatePromise;
+      }
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
       throw new Error("Failed.");
     } catch (e: any) {
+      if (e.name === 'AbortError') throw e;
       throw new AppError("Failed to draw.", 'generic');
     }
   }
 
-  async connectLive(callbacks: any) {
-    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-    const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-    return ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-      callbacks,
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Puck' } }
-        },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        systemInstruction: getSystemInstruction()
-      }
-    });
-  }
-
-  async connectTranslator(callbacks: any, options: { source: string, target: string }) {
-    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-    const ai = new GoogleGenAI({ apiKey: getEnvApiKey() });
-    return ai.live.connect({
-      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
-      callbacks,
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } }
-        },
-        inputAudioTranscription: {},
-        outputAudioTranscription: {},
-        systemInstruction: `You are a translator between ${options.source} and ${options.target}. Speak simply and naturally.`
-      }
-    });
+  // Method used to download generated assets, fix for error in components/ChatWorkspace.tsx
+  async downloadImage(url: string, filename: string = "orin-asset") {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = `${filename}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Download failed:", err);
+    }
   }
 }
 

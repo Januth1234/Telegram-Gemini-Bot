@@ -9,6 +9,7 @@ import ReleasesPage from './components/ReleasesPage';
 import LogicFlowPage from './components/LogicFlowPage';
 import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
+import DownloadsPage from './components/DownloadsPage';
 import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
@@ -16,16 +17,30 @@ import MathsMode from './components/MathsMode';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
+import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
 const App: React.FC = () => {
-  const [lang, setLang] = useState<Language>(() => (localStorage.getItem('orin_lang') as Language) || 'en');
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => (localStorage.getItem('orin_theme') as 'dark' | 'light') || 'dark');
+  // Use CacheService for initial hydration
+  const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
+  
+  // Theme initialization with system preference fallback
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    const cached = cacheService.get<string | null>(CacheKey.THEME, null);
+    if (cached === 'dark' || cached === 'light') return cached as 'dark' | 'light';
+    
+    // Check system preference
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      return 'dark';
+    }
+    return 'light';
+  });
+
   const t = translations[lang];
 
   const getInitialView = (): AppView => {
-    const hash = window.location.hash.replace('#', '');
-    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing'];
+    const hash = window.location.hash.replace('#', '').split('?')[0]; // Handle query params in hash
+    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
     
     if (validViews.includes(hash as AppView)) return hash as AppView;
     if (hash === 'workspace') return 'chat';
@@ -35,7 +50,59 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppView>(getInitialView());
   const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
 
+  // Parse Query Parameters for Developer API (e.g., ?prompt=hello)
   useEffect(() => {
+    const handleUrlParams = () => {
+      // Check both standard search params and hash params (since hash routing is used)
+      let queryPrompt = "";
+      
+      // Method 1: Standard URL Search Params
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.has('prompt')) {
+         queryPrompt = searchParams.get('prompt') || "";
+      } 
+      
+      // Method 2: Hash based params (e.g. #chat?prompt=hello)
+      if (!queryPrompt && window.location.hash.includes('?')) {
+         const hashParts = window.location.hash.split('?');
+         if (hashParts.length > 1) {
+            const hashParams = new URLSearchParams(hashParts[1]);
+            if (hashParams.has('prompt')) {
+               queryPrompt = hashParams.get('prompt') || "";
+            }
+         }
+      }
+
+      if (queryPrompt) {
+        setGlobalPrompt(decodeURIComponent(queryPrompt));
+        setShouldAutoSubmit(true);
+        // Clean URL without refresh
+        const newUrl = window.location.pathname + window.location.hash.split('?')[0];
+        window.history.replaceState({}, '', newUrl);
+        
+        // Ensure we end up in chat view if not already
+        if (getInitialView() === 'chat' || getInitialView() === 'landing') {
+           if (view !== 'chat') {
+             navigate('chat');
+             // Trigger auto-start logic for chat
+             const newId = Date.now().toString();
+             const newConv: Conversation = {
+                id: newId,
+                title: lang === 'si' ? "නව පිළිසඳර" : "New Chat",
+                messages: [],
+                timestamp: new Date(),
+                mode: 'chat',
+                modesUsed: ['chat']
+             };
+             setConversations(prev => [newConv, ...prev]);
+             setActiveConversationId(newId);
+           }
+        }
+      }
+    };
+
+    handleUrlParams();
+
     const handleHashChange = () => {
       const newView = getInitialView();
       setView(newView);
@@ -62,17 +129,16 @@ const App: React.FC = () => {
 
   const [user, setUser] = useState(geminiService.getCurrentUser());
   const [showAbout, setShowAbout] = useState(false);
-  const [globalPrompt, setGlobalPrompt] = useState(() => localStorage.getItem('orin_draft_prompt') || '');
+  const [globalPrompt, setGlobalPrompt] = useState(() => cacheService.get<string>(CacheKey.DRAFT_PROMPT, ''));
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
 
   const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const saved = localStorage.getItem('orin_history_v2');
-    if (!saved) return [];
+    const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
     try {
-      return JSON.parse(saved).map((c: any) => ({
+      return saved.map((c: any) => ({
         ...c,
         timestamp: new Date(c.timestamp),
         messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
@@ -81,16 +147,13 @@ const App: React.FC = () => {
   });
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    return localStorage.getItem('orin_active_conv_id');
+    return cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null);
   });
 
+  // Effect to persist history on change
   useEffect(() => {
-    try {
-      const toSave = conversations.filter(c => c.messages.length > 0 || c.id === activeConversationId);
-      localStorage.setItem('orin_history_v2', JSON.stringify(toSave));
-    } catch (e) {
-      console.warn("Storage error", e);
-    }
+    const withMsgs = conversations.filter(c => c.messages.length > 0 || c.id === activeConversationId);
+    cacheService.set(CacheKey.HISTORY, withMsgs);
   }, [conversations, activeConversationId]);
 
   useEffect(() => {
@@ -159,23 +222,27 @@ const App: React.FC = () => {
 
 
   useEffect(() => {
-    if (activeConversationId) localStorage.setItem('orin_active_conv_id', activeConversationId);
-    else localStorage.removeItem('orin_active_conv_id');
+    if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
+    else cacheService.remove(CacheKey.ACTIVE_CONV);
   }, [activeConversationId]);
 
   useEffect(() => {
-    localStorage.setItem('orin_draft_prompt', globalPrompt);
+    cacheService.set(CacheKey.DRAFT_PROMPT, globalPrompt);
   }, [globalPrompt]);
 
   useEffect(() => {
-    localStorage.setItem('orin_lang', lang);
+    cacheService.set(CacheKey.LANG, lang);
     document.documentElement.lang = lang;
   }, [lang]);
 
+  // Update theme and persist
   useEffect(() => {
-    localStorage.setItem('orin_theme', theme);
-    if (theme === 'dark') document.documentElement.classList.add('dark');
-    else document.documentElement.classList.remove('dark');
+    cacheService.set(CacheKey.THEME, theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
   }, [theme]);
 
   const refreshUser = useCallback(() => setUser(geminiService.getCurrentUser()), []);
@@ -327,6 +394,7 @@ const App: React.FC = () => {
       case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
       default: 
         return (
           <LandingPage 
@@ -360,10 +428,10 @@ const App: React.FC = () => {
                 </span>
              </div>
           )}
-          <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400">
+          <button onClick={toggleTheme} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:cyan-400">
             <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
           </button>
-          <button onClick={toggleLang} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 px-2">
+          <button onClick={toggleLang} className="text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-cyan-600 dark:hover:cyan-400 px-2">
             {t.langToggle}
           </button>
           <button 

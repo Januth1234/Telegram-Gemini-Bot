@@ -3,7 +3,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="description" content="Orin AI: A simple and smart AI for Sri Lankans. Chat, draw, and solve math in both Sinhala and English. Created by Januth Nimnal." />
     <meta name="google-site-verification" content="Lu-JLRTCralp28H_YoNGHXwgMiI7grchuK-9Qq6rluc" />
     <title>Orin AI - an AI for Sri Lankans</title>
@@ -32,11 +32,17 @@
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script>
       (function() {
-        const theme = localStorage.getItem('orin_theme') || 'dark';
-        if (theme === 'dark') {
-          document.documentElement.classList.add('dark');
-        } else {
-          document.documentElement.classList.remove('dark');
+        try {
+          const localTheme = localStorage.getItem('orin_theme');
+          const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          
+          if (localTheme === 'dark' || (!localTheme && systemDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {
+          console.error("Theme init error", e);
         }
       })();
 
@@ -44,6 +50,10 @@
         darkMode: 'class',
         theme: {
           extend: {
+            screens: {
+              'xs': '320px',
+              'tiny': '380px',
+            },
             fontFamily: { 
               sans: ['Plus Jakarta Sans', 'Noto Sans Sinhala', 'sans-serif'],
             },
@@ -57,7 +67,7 @@
               'reveal': 'reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
               'fade': 'fade 0.5s ease-out forwards',
               'scale-in': 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              'soft-pulse': 'softPulse 3s ease-in-out infinite',
+              'soft-pulse': 'softPulse 4s ease-in-out infinite',
               'beta-pulse': 'betaPulse 4s ease-in-out infinite',
               'bounce-subtle': 'bounceSubtle 2s ease-in-out infinite',
               'spin-reverse': 'spinReverse 3s linear infinite',
@@ -79,7 +89,7 @@
               },
               softPulse: {
                 '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
-                '50%': { opacity: '0.6', transform: 'scale(1.05)' },
+                '50%': { opacity: '0.6', transform: 'scale(1.02)' },
               },
               betaPulse: {
                 '0%, 100%': { opacity: '0.8', transform: 'scale(1)' },
@@ -114,7 +124,8 @@
         width: 100%;
         margin: 0;
         padding: 0;
-        overflow: hidden;
+        overflow-x: hidden;
+        -webkit-tap-highlight-color: transparent;
       }
 
       body {
@@ -122,6 +133,8 @@
         background-color: #f8fafc;
         color: #0f172a;
         transition: background-color 0.3s ease, color 0.3s ease;
+        line-height: 1.5;
+        text-rendering: optimizeLegibility;
       }
 
       .dark body {
@@ -137,8 +150,8 @@
 
       .glass-panel {
         background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(16px);
-        -webkit-backdrop-filter: blur(16px);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         border: 1px solid rgba(0, 0, 0, 0.05);
       }
 
@@ -147,7 +160,7 @@
         border: 1px solid rgba(255, 255, 255, 0.05);
       }
 
-      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+      .custom-scrollbar::-webkit-scrollbar { width: 5px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
       .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
       
@@ -160,33 +173,42 @@
         text-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
       }
 
-      .animate-reveal { animation: reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-      .animate-fade { animation: fade 0.5s ease-out forwards; }
-      .animate-scale-in { animation: scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+      /* Resilient Grid for Feature Cards */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 1rem;
+        width: 100%;
+      }
+      @media (min-width: 640px) {
+        .feature-grid {
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: 1.5rem;
+        }
+      }
+
+      /* Safe area for notched phones */
+      .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+      .safe-pt { padding-top: env(safe-area-inset-top); }
 
       /* MathLive Customization */
       math-field {
         width: 100%;
         background: transparent;
-        font-size: 1.5rem;
-        padding: 1rem;
+        font-size: 1.25rem;
+        padding: 0.75rem;
         border-radius: 1rem;
         border: none;
         outline: none;
         color: inherit;
         --keyboard-zindex: 3000;
       }
-      math-field::part(menu-toggle) {
-        display: none;
+      @media (min-width: 768px) {
+        math-field { font-size: 1.75rem; padding: 1.25rem; }
       }
-      math-field:focus-within {
-        outline: none;
-        background: rgba(255, 255, 255, 0.05);
-      }
-      .dark math-field {
-        --caret-color: #fff;
-        color: white;
-      }
+      math-field::part(menu-toggle) { display: none; }
+      math-field:focus-within { outline: none; background: rgba(255, 255, 255, 0.03); }
+      .dark math-field { --caret-color: #fff; color: white; }
     </style>
   <script type="importmap">
 {

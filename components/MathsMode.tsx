@@ -91,6 +91,7 @@ const MathsMode: React.FC<{ onClose: () => void; lang: Language }> = ({ onClose,
   const mfRef = useRef<any>(null);
   const graphRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (mfRef.current) {
@@ -100,17 +101,33 @@ const MathsMode: React.FC<{ onClose: () => void; lang: Language }> = ({ onClose,
     }
   }, []);
 
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsProcessing(false);
+  };
+
   const handleAction = async (command: string) => {
     const rawLatex = mfRef.current?.value;
     if (!rawLatex) return;
+    
     setIsProcessing(true);
     setError(null);
     setSolution(null);
+    
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     if (command === 'ai_explain') {
         try {
-            const res = await geminiService.chat(`Explain: ${rawLatex}`, { useThinking: true });
+            const res = await geminiService.chat(`Explain: ${rawLatex}`, { useThinking: true, signal });
             setSolution({ resultLatex: "AI Analysis", aiExplanation: res.text });
-        } catch (e: any) { setError(e.message); } finally { setIsProcessing(false); }
+        } catch (e: any) { 
+            if (e.name === 'AbortError') return;
+            setError(e.message); 
+        } finally { setIsProcessing(false); }
         return;
     }
     try {
@@ -129,16 +146,28 @@ const MathsMode: React.FC<{ onClose: () => void; lang: Language }> = ({ onClose,
 
   return (
     <div className="fixed inset-0 z-[120] bg-white dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden">
-      <header className="h-20 shrink-0 flex items-center justify-between px-6 border-b border-black/5 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-50">
+      <header className="h-20 shrink-0 flex items-center justify-between px-6 border-b border-black/5 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-50 sticky top-0">
          <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl">
                <i className="fa-solid fa-square-root-variable text-xl"></i>
             </div>
             <h2 className="text-lg font-black uppercase tracking-tighter text-slate-800 dark:text-white">{t.math.title}</h2>
          </div>
-         <button onClick={onClose} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all active:scale-90">
-            <i className="fa-solid fa-xmark text-xl"></i>
-         </button>
+         
+         <div className="flex items-center gap-3">
+            {isProcessing && (
+              <button 
+                onClick={handleStop}
+                className="w-12 h-12 rounded-2xl bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-red-500 flex items-center justify-center transition-all border border-black/5"
+                title="Stop calculation"
+              >
+                <i className="fa-solid fa-circle-stop text-lg"></i>
+              </button>
+            )}
+            <button onClick={onClose} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all active:scale-90">
+                <i className="fa-solid fa-xmark text-xl"></i>
+            </button>
+         </div>
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
@@ -174,7 +203,8 @@ const MathsMode: React.FC<{ onClose: () => void; lang: Language }> = ({ onClose,
                      <button
                        key={i}
                        onClick={() => (tool.type === 'action' || tool.type === 'ai') ? handleAction(tool.command) : insertSymbol(tool.command)}
-                       className={`px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 ${
+                       disabled={isProcessing}
+                       className={`px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 disabled:opacity-50 ${
                           tool.type === 'action' ? 'bg-indigo-600 text-white border-indigo-600' : 
                           tool.type === 'ai' ? 'bg-cyan-600 text-white border-cyan-600' :
                           'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'

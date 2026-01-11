@@ -86,6 +86,9 @@ export const translations = {
     knowledgeSources: "Links",
     sent: "You",
     analyst: "Orin",
+    downloads: "Downloads",
+    downloadsDesc: "Install App",
+    forDevs: "For Developers",
     prompts: {
       chat: ["Help with homework", "Write a short story", "What's in the news?"],
       studio: ["Sunset at beach", "Cute puppy", "City of the future"],
@@ -217,6 +220,9 @@ export const translations = {
     knowledgeSources: "සබැඳි",
     sent: "ඔබ",
     analyst: "ඔරින්",
+    downloads: "බාගත කරන්න",
+    downloadsDesc: "ස්ථාපනය",
+    forDevs: "වැඩසටහන්කරුවන්ට",
     prompts: {
       chat: ["ගණිතයට උදව් කරන්න", "කතාවක් ලියන්න", "අලුත්ම පුවත් මොනවාද?"],
       studio: ["වෙරළේ ඉර බහිනවා", "ලස්සන පූසෙක්", "අනාගත නගරයක්"],
