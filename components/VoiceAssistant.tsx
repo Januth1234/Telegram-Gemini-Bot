@@ -21,8 +21,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // High-Performance Visualizer (Ref-based, no re-renders)
-  const BAR_COUNT = 5; // Reduced bar count for simpler UI
+  // High-Performance Visualizer Settings
+  const BAR_COUNT = 5; 
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
@@ -38,13 +38,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
-  // Optimized loop: Updates DOM directly, skipping React render cycle
+  // Optimized Visualizer Loop (Direct DOM manipulation)
   const updateVisualizer = useCallback(() => {
     if (!isActive) return;
 
     const dataArray = new Uint8Array(BAR_COUNT);
     let hasSignal = false;
 
+    // Prioritize output audio visualization, fallback to input
     if (isSpeaking && analyserRef.current) {
       analyserRef.current.getByteFrequencyData(dataArray);
       hasSignal = true;
@@ -59,14 +60,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             if (!bar) return;
             let height = 15;
             if (hasSignal) {
-                // Map 0-255 to 15-100% height
-                height = Math.max(15, (dataArray[i] / 255) * 100);
+                // Map 0-255 to percentage height
+                const value = dataArray[i] || 0;
+                height = Math.max(15, (value / 255) * 100);
             } else {
-                // Low-power idle animation
-                height = 15 + Math.sin(time * 2 + i) * 5; 
+                // Idle breathing animation
+                height = 15 + Math.sin(time * 3 + i) * 8; 
             }
             bar.style.height = `${height}%`;
-            bar.style.opacity = hasSignal ? '1' : '0.5';
+            bar.style.opacity = hasSignal ? '1' : '0.4';
         });
     }
 
@@ -254,21 +256,27 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
   }, [transcription]);
 
-  // Optimized styling - removed large blur radii and complex shadows
+  // Dynamic Aesthetics
   const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
+  
+  // Conditional glow effect based on active state
+  const glowClass = isActive 
+    ? (mode === 'translator' ? 'shadow-[0_0_50px_rgba(99,102,241,0.25)] border-indigo-500/30' : 'shadow-[0_0_50px_rgba(6,182,212,0.25)] border-cyan-500/30')
+    : 'shadow-2xl border-slate-200 dark:border-white/5';
+
   const containerClass = inline 
     ? "w-full h-full flex flex-col items-center justify-between py-6 px-4" 
-    : `w-full max-w-lg h-[90vh] glass-panel rounded-[40px] flex flex-col items-center justify-between p-6 bg-white/90 dark:bg-slate-900/90 shadow-2xl`;
+    : `w-full max-w-lg h-[90vh] glass-panel rounded-[40px] flex flex-col items-center justify-between p-6 bg-white/90 dark:bg-slate-900/90 ${glowClass} transition-all duration-700`;
 
   return (
-    <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm"}>
+    <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md"}>
       {!inline && <div className="absolute inset-0" onClick={onClose}></div>}
       
       <div className={containerClass}>
         
         {/* Header - Compact */}
         <div className="w-full flex items-center justify-between z-10 shrink-0">
-           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isActive ? 'bg-slate-100 dark:bg-white/10 border-slate-200 dark:border-white/10' : `bg-${activeColor}-500/10 border-${activeColor}-500/20`}`}>
+           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border transition-colors duration-500 ${isActive ? 'bg-slate-100 dark:bg-white/10 border-slate-200 dark:border-white/10' : `bg-${activeColor}-500/10 border-${activeColor}-500/20`}`}>
               <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-slate-500 dark:text-slate-300' : `text-${activeColor}-600 dark:text-${activeColor}-400`}`}>BETA v5.0</span>
            </div>
            
@@ -278,41 +286,46 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
            </div>
         </div>
 
-        {/* Center Hub - Optimized */}
+        {/* Center Hub - Interactive Orb */}
         <div className="relative flex flex-col items-center justify-center flex-1 w-full my-4">
            <div className="relative">
-              {/* Static glow instead of heavy animation */}
-              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
+              {/* Active State Glow */}
+              <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-40' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
+
+              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-xl scale-105' : 'bg-slate-100 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
                 
-                {/* Simple ring for active state */}
-                {isActive && <div className="absolute -inset-2 rounded-full border-2 border-current opacity-20"></div>}
+                {/* Speaking Ring Animation */}
+                {isActive && <div className={`absolute -inset-3 rounded-full border-2 border-current opacity-20 ${isSpeaking ? 'animate-ping' : ''}`}></div>}
                 
                 <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl transition-transform duration-300 ${isSpeaking ? 'scale-110' : ''}`}></i>
                 
-                {/* Optimized Stop Button */}
-                {isActive && isSpeaking && (
+                {/* --- STOP SPEAKING BUTTON --- */}
+                {/* Only appears when AI is actively speaking (outputting audio) */}
+                <div className={`absolute -bottom-2 -right-2 transition-all duration-300 ${isSpeaking ? 'opacity-100 scale-100 translate-y-0' : 'opacity-0 scale-75 translate-y-4 pointer-events-none'}`}>
                   <button 
                     onClick={(e) => { e.stopPropagation(); stopAiSpeaking(); }}
-                    className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-red-500 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg border-2 border-slate-100 dark:border-slate-700 z-20"
+                    className="w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-red-500 flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-xl border-4 border-slate-50 dark:border-slate-900 z-20"
+                    title={t.stopSpeaking}
                   >
                     <i className="fa-solid fa-volume-xmark text-lg"></i>
                   </button>
-                )}
+                </div>
+
               </div>
            </div>
 
-           <div className="mt-8 text-center space-y-2 z-10">
-              <h2 className={`text-2xl font-black uppercase tracking-tight ${isActive ? (mode === 'translator' ? 'text-indigo-600 dark:text-indigo-400' : 'text-cyan-600 dark:text-cyan-400') : 'text-slate-900 dark:text-white'}`}>
+           <div className="mt-8 text-center space-y-2 z-10 min-h-[4rem]">
+              <h2 className={`text-2xl font-black uppercase tracking-tight transition-colors ${isActive ? (mode === 'translator' ? 'text-indigo-600 dark:text-indigo-400' : 'text-cyan-600 dark:text-cyan-400') : 'text-slate-900 dark:text-white'}`}>
                   {isActive ? (isSpeaking ? "Speaking..." : "Listening...") : (mode === 'translator' ? t.translator : t.voice)}
               </h2>
-              {!isActive && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready</p>}
+              {!isActive && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready to Connect</p>}
            </div>
         </div>
 
-        {/* Optimized Visualizer & Transcription */}
-        <div className={`w-full flex flex-col gap-4 transition-all duration-300 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        {/* Visualizer & Transcription */}
+        <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 pointer-events-none'}`}>
             <div className="w-full h-8 flex items-end justify-center gap-2">
-              {/* Ref-based visualizer bars */}
+              {/* High-Performance Visualizer Bars */}
               {Array.from({ length: BAR_COUNT }).map((_, i) => (
                 <div 
                   key={i} 
@@ -323,15 +336,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               ))}
             </div>
 
-            <div ref={scrollTranscriptionRef} className="w-full h-28 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-black/20 rounded-3xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5">
+            <div ref={scrollTranscriptionRef} className="w-full h-32 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-black/20 rounded-3xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5 shadow-inner">
               {transcription.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-full opacity-40">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Conversation Transcript</p>
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">{isSpeaking ? 'AI is replying...' : 'Say something...'}</p>
                   </div>
               ) : (
                   transcription.map((item, i) => (
                       <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                          <div className={`px-3 py-2 rounded-xl text-[11px] font-medium max-w-[90%] ${item.role === 'user' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300')}`}>
+                          <div className={`px-3 py-2 rounded-xl text-[11px] font-medium max-w-[90%] leading-relaxed ${item.role === 'user' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-tr-sm' : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 rounded-tl-sm' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 rounded-tl-sm')}`}>
                               {item.text}
                           </div>
                       </div>
@@ -340,13 +353,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             </div>
         </div>
 
-        {/* Actions - Bottom */}
+        {/* Bottom Actions */}
         <div className="w-full space-y-3 pt-4 z-10 shrink-0">
           {!isActive ? (
             <button 
               onClick={startSession} 
               disabled={isConnecting}
-              className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50 hover:bg-slate-800 dark:hover:bg-slate-200"
             >
               {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'}`}></i>}
               <span>{isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Start Voice')}</span>
@@ -354,7 +367,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           ) : (
             <button 
               onClick={stopSession} 
-              className="w-full py-4 bg-red-500 text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+              className="w-full py-4 bg-red-500 text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg hover:shadow-red-500/30 active:scale-95 transition-all flex items-center justify-center gap-3"
             >
               <i className="fa-solid fa-power-off"></i>
               <span>{t.endSession}</span>
@@ -367,9 +380,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         </div>
 
         {errorMessage && (
-          <div className="absolute top-1/2 left-6 right-6 p-4 bg-red-500 text-white text-center z-50 rounded-2xl shadow-xl">
+          <div className="absolute top-1/2 left-6 right-6 p-4 bg-red-500 text-white text-center z-50 rounded-2xl shadow-xl animate-reveal">
+             <i className="fa-solid fa-triangle-exclamation mb-2"></i>
              <p className="text-xs font-bold">{errorMessage}</p>
-             <button onClick={() => setErrorMessage(null)} className="mt-3 px-4 py-1 bg-white/20 rounded-full text-[10px] uppercase font-black">Dismiss</button>
+             <button onClick={() => setErrorMessage(null)} className="mt-3 px-4 py-1 bg-white/20 rounded-full text-[10px] uppercase font-black hover:bg-white/30 transition-colors">Dismiss</button>
           </div>
         )}
       </div>
