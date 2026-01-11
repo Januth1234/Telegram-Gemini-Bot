@@ -10,7 +10,6 @@ import LogicFlowPage from './components/LogicFlowPage';
 import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import DownloadsPage from './components/DownloadsPage';
-import SitemapPage from './components/SitemapPage';
 import AboutModal from './components/AboutModal';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
@@ -41,7 +40,7 @@ const App: React.FC = () => {
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0]; // Handle query params in hash
-    const validViews: string[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'sitemap'];
+    const validViews: string[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
     
     if (validViews.includes(hash)) return hash as AppView;
     if (hash === 'workspace') return 'chat';
@@ -54,16 +53,12 @@ const App: React.FC = () => {
   // Parse Query Parameters for Developer API (e.g., ?prompt=hello)
   useEffect(() => {
     const handleUrlParams = () => {
-      // Check both standard search params and hash params (since hash routing is used)
       let queryPrompt = "";
-      
-      // Method 1: Standard URL Search Params
       const searchParams = new URLSearchParams(window.location.search);
       if (searchParams.has('prompt')) {
          queryPrompt = searchParams.get('prompt') || "";
       } 
       
-      // Method 2: Hash based params (e.g. #chat?prompt=hello)
       if (!queryPrompt && window.location.hash.includes('?')) {
          const hashParts = window.location.hash.split('?');
          if (hashParts.length > 1) {
@@ -77,15 +72,12 @@ const App: React.FC = () => {
       if (queryPrompt) {
         setGlobalPrompt(decodeURIComponent(queryPrompt));
         setShouldAutoSubmit(true);
-        // Clean URL without refresh
         const newUrl = window.location.pathname + window.location.hash.split('?')[0];
         window.history.replaceState({}, '', newUrl);
         
-        // Ensure we end up in chat view if not already
         if (getInitialView() === 'chat' || getInitialView() === 'landing') {
            if (view !== 'chat') {
              navigate('chat');
-             // Trigger auto-start logic for chat
              const newId = Date.now().toString();
              const newConv: Conversation = {
                 id: newId,
@@ -151,11 +143,10 @@ const App: React.FC = () => {
     return cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null);
   });
 
-  // Effect to persist history on change
   useEffect(() => {
-    const withMsgs = conversations.filter(c => c.messages.length > 0 || c.id === activeConversationId);
-    cacheService.set(CacheKey.HISTORY, withMsgs);
-  }, [conversations, activeConversationId]);
+    // Save to local cache on any change
+    cacheService.set(CacheKey.HISTORY, conversations);
+  }, [conversations]);
 
   useEffect(() => {
     const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
@@ -236,7 +227,6 @@ const App: React.FC = () => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  // Update theme and persist
   useEffect(() => {
     cacheService.set(CacheKey.THEME, theme);
     if (theme === 'dark') {
@@ -301,10 +291,14 @@ const App: React.FC = () => {
       setActiveConversationId(id);
       setGlobalPrompt("");
       setShouldAutoSubmit(false);
+      
       let targetView: AppView = 'chat';
       if (conv.mode === 'studio') targetView = 'art';
       else if (conv.mode === 'vision') targetView = 'camera';
       else if (conv.mode === 'maths') targetView = 'math';
+      else if (conv.mode === 'gethelp') targetView = 'help';
+      else if (conv.mode === 'voice') targetView = 'voice';
+      
       navigate(targetView);
     }
   };
@@ -338,6 +332,7 @@ const App: React.FC = () => {
   };
 
   const handleCloseWorkspace = useCallback(() => {
+    // If closing a workspace without any messages, delete it to keep history clean
     if (activeConversationId) {
       const active = conversations.find(c => c.id === activeConversationId);
       if (active && active.messages.length === 0) handleDeleteConversation(activeConversationId);
@@ -396,7 +391,6 @@ const App: React.FC = () => {
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'sitemap': return <SitemapPage onClose={() => navigate('landing')} lang={lang} />;
       default: 
         return (
           <LandingPage 

@@ -201,7 +201,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
             <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} desc="Changelog" />
             <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} desc="Safety" />
             <NavCard href="#terms" icon="fa-file-contract" color="slate" title={t.terms} desc="Legal" />
-            <NavCard href="#sitemap" icon="fa-sitemap" color="cyan" title="Sitemap" desc="Index" />
           </div>
         </section>
 
