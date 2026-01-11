@@ -56,7 +56,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      inputRef.current?.focus();
+      if (activeTab !== 'voice' && activeTab !== 'maths') {
+        inputRef.current?.focus();
+      }
     }, 200);
     return () => clearTimeout(timer);
   }, [activeTab, activeConvId]);
@@ -174,17 +176,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
+  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice';
+
   const renderBody = () => {
-    if (activeTab === 'voice') return <div className="flex-1 overflow-y-auto custom-scrollbar pb-32"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
-    if (activeTab === 'maths') return <MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} />;
-    if (activeTab === 'gethelp') return <GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} />;
+    if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
+    if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
+    if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
         <div className="max-w-3xl mx-auto space-y-10">
           {messages.length === 0 ? (
             <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
-               <div className="w-20 h-20 md:w-24 md:h-24 rounded-[40px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
+               <div className="w-20 h-20 md:w-24 md:h-24 rounded-[32px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
@@ -199,11 +203,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ) : (
             messages.map(msg => (
               <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
                     <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
                     {msg.imageUrl && (
                       <div className="mt-6 space-y-4">
-                         <div className="rounded-[24px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
+                         <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
                             <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
                          </div>
                          <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
@@ -240,8 +244,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
     );
   };
-
-  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice';
 
   return (
     <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
@@ -285,12 +287,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 >
                   <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
                   <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
-                    {m === 'chat' ? 'Chat' : m === 'maths' ? 'Math' : m === 'studio' ? 'Create' : m === 'vision' ? 'Camera' : m === 'gethelp' ? 'Help Me' : 'Voice'}
+                    {m === 'chat' ? 'Chat' : m === 'maths' ? 'Math' : m === 'studio' ? 'Create' : m === 'vision' ? 'Camera' : m === 'gethelp' ? 'Help' : 'Voice'}
                   </span>
                   {isBETA(m) && (
                     <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                       <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                     </span>
                   )}
                 </button>
@@ -306,12 +308,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {renderBody()}
 
-        {/* Hide input bar for modes that use specialized interactions (Voice, Math) */}
+        {/* Optimized input bar layout */}
         {activeTab !== 'maths' && activeTab !== 'voice' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent">
              <div className="max-w-3xl mx-auto pointer-events-auto pb-[env(safe-area-inset-bottom)]">
-                <div className="glass-panel p-2 md:p-3 rounded-[32px] md:rounded-[48px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
-                   <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[24px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"><i className="fa-solid fa-paperclip text-lg"></i></button>
+                <div className="glass-panel p-2 md:p-3 rounded-[24px] md:rounded-[32px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
+                   <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[20px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"><i className="fa-solid fa-paperclip text-lg"></i></button>
                    <input 
                     ref={inputRef} 
                     value={localInput} 
@@ -320,7 +322,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'vision' ? t.placeholderVision : activeTab === 'gethelp' ? "Ask for follow-ups..." : t.placeholderChat} 
                     className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
-                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[24px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>
+                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[20px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>
                    <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {

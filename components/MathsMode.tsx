@@ -135,7 +135,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         </header>
       )}
 
-      <nav className="w-full md:w-64 bg-white/50 dark:bg-slate-900/20 border-r border-black/5 dark:border-white/5 p-4 flex md:flex-col gap-2 overflow-x-auto no-scrollbar shrink-0 backdrop-blur-xl">
+      <nav className="w-full md:w-64 bg-white/50 dark:bg-slate-900/20 border-r border-black/5 dark:border-white/5 p-4 flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0 backdrop-blur-xl">
           {(Object.keys(CATEGORIES) as MathCategory[]).map(cat => (
               <button
                 key={cat}
