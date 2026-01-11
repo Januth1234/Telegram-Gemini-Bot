@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { LiveServerMessage, Modality } from '@google/genai';
+import { LiveServerMessage } from '@google/genai';
 
 interface VoiceAssistantProps {
   onClose: () => void;
@@ -21,9 +21,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Visualizer: 7 Ultra-Wide "Fatty" Bars
-  const BAR_COUNT = 7;
-  const [audioLevels, setAudioLevels] = useState<number[]>(new Array(BAR_COUNT).fill(12));
+  // High-Performance Visualizer (Ref-based, no re-renders)
+  const BAR_COUNT = 5; // Reduced bar count for simpler UI
+  const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const inputAnalyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number>(0);
@@ -38,7 +38,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
+  // Optimized loop: Updates DOM directly, skipping React render cycle
   const updateVisualizer = useCallback(() => {
+    if (!isActive) return;
+
     const dataArray = new Uint8Array(BAR_COUNT);
     let hasSignal = false;
 
@@ -50,16 +53,21 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       hasSignal = true;
     }
 
-    if (hasSignal) {
-      const levels = Array.from(dataArray).map(v => Math.max(16, (v / 255) * 100));
-      setAudioLevels(levels);
-    } else {
-      // Idle "breathing" state
-      setAudioLevels(prev => prev.map((v, i) => {
+    if (barsRef.current) {
         const time = Date.now() / 1000;
-        const idle = 15 + Math.sin(time * 2.5 + i) * 8;
-        return v * 0.85 + idle * 0.15; 
-      }));
+        barsRef.current.forEach((bar, i) => {
+            if (!bar) return;
+            let height = 15;
+            if (hasSignal) {
+                // Map 0-255 to 15-100% height
+                height = Math.max(15, (dataArray[i] / 255) * 100);
+            } else {
+                // Low-power idle animation
+                height = 15 + Math.sin(time * 2 + i) * 5; 
+            }
+            bar.style.height = `${height}%`;
+            bar.style.opacity = hasSignal ? '1' : '0.5';
+        });
     }
 
     animationFrameRef.current = requestAnimationFrame(updateVisualizer);
@@ -126,9 +134,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
   const handleModeChange = (newMode: VoiceMode) => {
     if (newMode === mode) return;
-    if (isActive) {
-      stopSession();
-    }
+    if (isActive) stopSession();
     setMode(newMode);
   };
 
@@ -139,7 +145,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) throw new Error("Audio support not found in this browser.");
+      if (!AudioCtx) throw new Error("Audio support not found.");
 
       const context = new AudioCtx({ sampleRate: 24000 });
       if (context.state === 'suspended') await context.resume();
@@ -163,7 +169,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsActive(true);
           const source = inputAudioContextRef.current!.createMediaStreamSource(stream);
           const processor = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
-          
           source.connect(inputAnalyserRef.current!);
           
           processor.onaudioprocess = (e) => {
@@ -171,14 +176,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const inputData = e.inputBuffer.getChannelData(0);
             const int16 = new Int16Array(inputData.length);
             for (let i = 0; i < inputData.length; i++) int16[i] = inputData[i] * 32768;
-            
             try {
                sessionRef.current.sendRealtimeInput({ 
                  media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } 
                });
-            } catch (err) {
-               // Ignore send errors if session closed mid-frame
-            }
+            } catch (err) {}
           };
           source.connect(processor);
           processor.connect(inputAudioContextRef.current!.destination);
@@ -186,7 +188,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         onmessage: async (msg: LiveServerMessage) => {
           let incomingText = "";
           let role: 'user' | 'model' = 'model';
-
           if (msg.serverContent?.inputTranscription) {
             incomingText = msg.serverContent.inputTranscription.text;
             role = 'user';
@@ -210,10 +211,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const source = audioContextRef.current.createBufferSource();
             source.buffer = buffer;
             source.connect(analyserRef.current);
-            
             const now = audioContextRef.current.currentTime;
             if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05; 
-            
             source.start(nextStartTimeRef.current);
             nextStartTimeRef.current += buffer.duration;
             sourcesRef.current.add(source);
@@ -231,35 +230,23 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           sessionRef.current = null;
         },
         onerror: (e: any) => {
-          console.error("Neural Bridge Connectivity Lost:", e);
-          const msg = e.message || "Endpoint unreachable. Re-check API configuration.";
-          setErrorMessage(msg);
+          setErrorMessage(e.message || "Endpoint error.");
           setIsActive(false);
           setIsConnecting(false);
           sessionRef.current = null;
-          if ((msg.includes("API Key") || msg.includes("entity was not found")) && (window as any).aistudio) {
-            (window as any).aistudio.openSelectKey();
-          }
         }
       };
 
-      let sessionPromise;
-      if (mode === 'translator') {
-         sessionPromise = geminiService.connectTranslator(callbacks, { source: 'English', target: 'Sinhala' });
-      } else {
-         sessionPromise = geminiService.connectLive(callbacks);
-      }
+      const sessionPromise = mode === 'translator' 
+        ? geminiService.connectTranslator(callbacks, { source: 'English', target: 'Sinhala' })
+        : geminiService.connectLive(callbacks);
 
       sessionRef.current = await sessionPromise;
     } catch (e: any) {
-      setErrorMessage(e.message || "Failed to establish biometric handshake.");
+      setErrorMessage(e.message || "Connection failed.");
       setIsConnecting(false);
     }
   };
-
-  useEffect(() => {
-    return () => stopSession();
-  }, [stopSession]);
 
   useEffect(() => {
     if (scrollTranscriptionRef.current) {
@@ -267,173 +254,125 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
   }, [transcription]);
 
-  const content = (
-    <div className={`max-w-xl w-full glass-panel rounded-[48px] p-8 md:p-12 border border-slate-200 dark:border-white/5 shadow-2xl relative z-10 flex flex-col items-center gap-6 md:gap-8 bg-white/70 dark:bg-slate-900/70 backdrop-blur-2xl transition-all duration-700 ${isActive ? 'ring-2 ring-cyan-500/20 shadow-[0_0_80px_rgba(6,182,212,0.1)]' : ''}`}>
-      
-      {/* BETA BADGE */}
-      <div className="absolute top-6 right-8 px-2.5 py-1 bg-cyan-600 text-white text-[8px] font-black uppercase tracking-widest rounded-full border border-white/20 shadow-lg shadow-cyan-600/20 z-30 animate-beta-pulse">
-        BETA PRO
-      </div>
-
-      {/* MODE TOGGLE */}
-      <div className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-full flex gap-1 shadow-inner z-20 border border-slate-200 dark:border-white/5">
-         <button 
-           onClick={() => handleModeChange('assistant')}
-           className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-md text-cyan-600 dark:text-cyan-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-         >
-           {t.voiceMode.assistant}
-         </button>
-         <button 
-           onClick={() => handleModeChange('translator')}
-           className={`px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-md text-indigo-600 dark:text-indigo-400' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
-         >
-           {t.voiceMode.interpreter}
-         </button>
-      </div>
-
-      <div className="text-center space-y-4 relative w-full flex flex-col items-center">
-        
-        {/* Main Mic Hub */}
-        <div className="relative group/hub">
-            {/* Glowing Aura */}
-            <div className={`absolute -inset-10 rounded-full blur-3xl opacity-20 transition-all duration-1000 ${isActive ? (mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500') : 'bg-transparent'}`}></div>
-            
-            <div className={`w-32 h-32 rounded-[40px] relative flex items-center justify-center transition-all duration-700 ${
-              isActive 
-                ? (mode === 'translator' ? 'bg-indigo-600 shadow-indigo-600/40' : 'bg-cyan-600 shadow-cyan-600/40') + ' shadow-2xl text-white scale-105 border border-white/20' 
-                : 'bg-slate-200 dark:bg-white/10 text-slate-400 border border-black/5 dark:border-white/5'
-              }`}>
-              
-              {isActive && (
-                <div className={`absolute -inset-6 rounded-[48px] border-2 ${mode === 'translator' ? 'border-indigo-500/20' : 'border-cyan-500/20'} ${isSpeaking ? 'animate-ping opacity-20' : 'animate-soft-pulse'}`}></div>
-              )}
-              
-              <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl transition-transform duration-500 ${isSpeaking ? 'scale-110' : ''}`}></i>
-            </div>
-
-            {/* INTERRUPT CONTROL - Speaker Icon that stops AI */}
-            {isActive && isSpeaking && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); stopAiSpeaking(); }}
-                className="absolute -bottom-4 -right-4 w-12 h-12 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center hover:scale-110 active:scale-95 transition-all shadow-xl animate-reveal z-40 border-4 border-white dark:border-slate-800 group/stop"
-                title={t.stopSpeaking}
-              >
-                <i className="fa-solid fa-volume-xmark text-lg group-hover/stop:animate-bounce-subtle"></i>
-              </button>
-            )}
-        </div>
-
-        <div className="space-y-1 pt-4">
-          <div className="flex items-center justify-center gap-2">
-            <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{mode === 'translator' ? t.translator : t.voice}</h2>
-          </div>
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
-            {isActive ? (
-                <>
-                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                   {t.neuralBridgeActive}
-                </>
-            ) : 'Ready to Engage'}
-          </p>
-        </div>
-      </div>
-
-      {errorMessage && (
-        <div className="w-full p-5 bg-red-500/10 border border-red-500/20 rounded-[28px] animate-reveal">
-           <p className="text-[10px] font-bold text-red-500 text-center uppercase tracking-widest leading-relaxed">
-             <i className="fa-solid fa-circle-exclamation mr-2"></i>
-             {errorMessage}
-           </p>
-           <button onClick={startSession} className="w-full mt-3 text-[9px] font-black text-red-600 uppercase tracking-widest hover:underline">Retry Connection Protocol</button>
-        </div>
-      )}
-
-      {/* Fatty Bars - Visualizer */}
-      <div className="w-full h-24 flex items-end justify-center gap-2 md:gap-3 px-2 relative py-4">
-        {audioLevels.map((level, i) => (
-          <div 
-            key={i} 
-            className={`w-10 rounded-2xl transition-all duration-150 ${
-                isActive 
-                ? (mode === 'translator' ? 'bg-gradient-to-t from-indigo-500 to-purple-400 shadow-indigo-500/30' : 'bg-gradient-to-t from-cyan-500 to-blue-400 shadow-cyan-500/30') + ' shadow-lg' 
-                : 'bg-slate-300 dark:bg-slate-700 opacity-20'
-            }`}
-            style={{ 
-              height: `${Math.max(12, level)}%`,
-              opacity: isActive ? 0.8 + (level/100)*0.2 : 0.2
-            }}
-          ></div>
-        ))}
-      </div>
-
-      {/* Real-time Transcription Engine */}
-      {isActive && (
-        <div 
-            ref={scrollTranscriptionRef}
-            className="w-full h-44 overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-black/20 rounded-[32px] p-6 flex flex-col gap-4 border border-slate-200/50 dark:border-white/5 shadow-inner backdrop-blur-sm transition-all duration-500"
-        >
-            {transcription.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full gap-3 opacity-50">
-                   <div className="w-10 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full animate-pulse"></div>
-                   <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest italic text-center">
-                     {mode === 'translator' ? t.transMode.listening : 'Awaiting Voice Stream...'}
-                   </p>
-                </div>
-            ) : (
-                transcription.map((item, i) => (
-                    <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                        <div className={`px-5 py-3 rounded-2xl text-[12px] font-medium leading-relaxed max-w-[90%] shadow-sm ${
-                             item.role === 'user' 
-                             ? 'bg-slate-200/50 dark:bg-white/10 text-slate-700 dark:text-slate-200 rounded-br-none border border-black/5 dark:border-white/5' 
-                             : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300') + ' rounded-bl-none font-bold border border-cyan-500/10'
-                        }`}>
-                            {item.text}
-                        </div>
-                    </div>
-                ))
-            )}
-        </div>
-      )}
-
-      <div className="w-full space-y-4 pt-2">
-        {!isActive ? (
-          <button 
-            onClick={startSession} 
-            disabled={isConnecting}
-            className="w-full py-6 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] shadow-xl shadow-slate-900/20 dark:shadow-white/5 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4 disabled:opacity-50 group"
-          >
-            {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'} group-hover:scale-110 transition-transform`}></i>}
-            {isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Start Orin Voice')}
-          </button>
-        ) : (
-          <button 
-            onClick={stopSession} 
-            className="w-full py-6 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-[28px] font-black text-[11px] uppercase tracking-[0.3em] shadow-lg hover:shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-4 border border-red-500/20"
-          >
-            <i className="fa-solid fa-phone-slash"></i>
-            {t.endSession}
-          </button>
-        )}
-        
-        {!inline && (
-          <button onClick={onClose} className="w-full text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest hover:text-slate-900 dark:hover:text-white transition-colors py-2">{t.back}</button>
-        )}
-      </div>
-    </div>
-  );
-
-  if (inline) {
-    return (
-      <div className="h-full flex items-center justify-center p-4 md:p-6 animate-reveal">
-        {content}
-      </div>
-    );
-  }
+  // Optimized styling - removed large blur radii and complex shadows
+  const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
+  const containerClass = inline 
+    ? "w-full h-full flex flex-col items-center justify-between py-6 px-4" 
+    : `w-full max-w-lg h-[90vh] glass-panel rounded-[40px] flex flex-col items-center justify-between p-6 bg-white/90 dark:bg-slate-900/90 shadow-2xl`;
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-6 md:p-12 animate-reveal overflow-hidden">
-      <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-2xl transition-all duration-1000" onClick={onClose}></div>
-      {content}
+    <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm"}>
+      {!inline && <div className="absolute inset-0" onClick={onClose}></div>}
+      
+      <div className={containerClass}>
+        
+        {/* Header - Compact */}
+        <div className="w-full flex items-center justify-between z-10 shrink-0">
+           <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isActive ? 'bg-slate-100 dark:bg-white/10 border-slate-200 dark:border-white/10' : `bg-${activeColor}-500/10 border-${activeColor}-500/20`}`}>
+              <span className={`text-[10px] font-black uppercase tracking-widest ${isActive ? 'text-slate-500 dark:text-slate-300' : `text-${activeColor}-600 dark:text-${activeColor}-400`}`}>BETA v5.0</span>
+           </div>
+           
+           <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 border border-black/5 dark:border-white/5">
+               <button onClick={() => handleModeChange('assistant')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600 dark:text-cyan-300' : 'text-slate-400'}`}>{t.voiceMode.assistant}</button>
+               <button onClick={() => handleModeChange('translator')} className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-300' : 'text-slate-400'}`}>{t.voiceMode.interpreter}</button>
+           </div>
+        </div>
+
+        {/* Center Hub - Optimized */}
+        <div className="relative flex flex-col items-center justify-center flex-1 w-full my-4">
+           <div className="relative">
+              {/* Static glow instead of heavy animation */}
+              <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
+                
+                {/* Simple ring for active state */}
+                {isActive && <div className="absolute -inset-2 rounded-full border-2 border-current opacity-20"></div>}
+                
+                <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl transition-transform duration-300 ${isSpeaking ? 'scale-110' : ''}`}></i>
+                
+                {/* Optimized Stop Button */}
+                {isActive && isSpeaking && (
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); stopAiSpeaking(); }}
+                    className="absolute -bottom-2 -right-2 w-12 h-12 rounded-full bg-white dark:bg-slate-800 text-red-500 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-lg border-2 border-slate-100 dark:border-slate-700 z-20"
+                  >
+                    <i className="fa-solid fa-volume-xmark text-lg"></i>
+                  </button>
+                )}
+              </div>
+           </div>
+
+           <div className="mt-8 text-center space-y-2 z-10">
+              <h2 className={`text-2xl font-black uppercase tracking-tight ${isActive ? (mode === 'translator' ? 'text-indigo-600 dark:text-indigo-400' : 'text-cyan-600 dark:text-cyan-400') : 'text-slate-900 dark:text-white'}`}>
+                  {isActive ? (isSpeaking ? "Speaking..." : "Listening...") : (mode === 'translator' ? t.translator : t.voice)}
+              </h2>
+              {!isActive && <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ready</p>}
+           </div>
+        </div>
+
+        {/* Optimized Visualizer & Transcription */}
+        <div className={`w-full flex flex-col gap-4 transition-all duration-300 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+            <div className="w-full h-8 flex items-end justify-center gap-2">
+              {/* Ref-based visualizer bars */}
+              {Array.from({ length: BAR_COUNT }).map((_, i) => (
+                <div 
+                  key={i} 
+                  ref={(el) => { barsRef.current[i] = el; }}
+                  className={`w-3 rounded-full transition-colors ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}
+                  style={{ height: '20%', opacity: 0.5 }}
+                ></div>
+              ))}
+            </div>
+
+            <div ref={scrollTranscriptionRef} className="w-full h-28 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-black/20 rounded-3xl p-4 flex flex-col gap-2 border border-black/5 dark:border-white/5">
+              {transcription.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full opacity-40">
+                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest italic">Conversation Transcript</p>
+                  </div>
+              ) : (
+                  transcription.map((item, i) => (
+                      <div key={i} className={`flex flex-col ${item.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                          <div className={`px-3 py-2 rounded-xl text-[11px] font-medium max-w-[90%] ${item.role === 'user' ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200' : (mode === 'translator' ? 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-300' : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300')}`}>
+                              {item.text}
+                          </div>
+                      </div>
+                  ))
+              )}
+            </div>
+        </div>
+
+        {/* Actions - Bottom */}
+        <div className="w-full space-y-3 pt-4 z-10 shrink-0">
+          {!isActive ? (
+            <button 
+              onClick={startSession} 
+              disabled={isConnecting}
+              className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+            >
+              {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'}`}></i>}
+              <span>{isConnecting ? t.establishingHandshake : (mode === 'translator' ? t.transMode.start : 'Start Voice')}</span>
+            </button>
+          ) : (
+            <button 
+              onClick={stopSession} 
+              className="w-full py-4 bg-red-500 text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-lg active:scale-95 transition-all flex items-center justify-center gap-3"
+            >
+              <i className="fa-solid fa-power-off"></i>
+              <span>{t.endSession}</span>
+            </button>
+          )}
+          
+          {!inline && (
+            <button onClick={onClose} className="w-full text-[10px] font-black text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors py-2 uppercase tracking-widest">{t.back}</button>
+          )}
+        </div>
+
+        {errorMessage && (
+          <div className="absolute top-1/2 left-6 right-6 p-4 bg-red-500 text-white text-center z-50 rounded-2xl shadow-xl">
+             <p className="text-xs font-bold">{errorMessage}</p>
+             <button onClick={() => setErrorMessage(null)} className="mt-3 px-4 py-1 bg-white/20 rounded-full text-[10px] uppercase font-black">Dismiss</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

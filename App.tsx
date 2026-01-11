@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -37,6 +37,8 @@ const App: React.FC = () => {
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
+  
+  const saveTimeoutRef = useRef<number | null>(null);
 
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
@@ -62,11 +64,26 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
+  // Persistent Local Storage & Cloud Sync Trigger
   useEffect(() => {
     cacheService.set(CacheKey.HISTORY, conversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     else cacheService.remove(CacheKey.ACTIVE_CONV);
-  }, [conversations, activeConversationId]);
+
+    // Auto-sync to Firebase if logged in
+    if (user?.id) {
+      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = window.setTimeout(() => {
+        setSyncStatus('syncing');
+        firebaseService.saveHistory(user.id, conversations)
+          .then(() => {
+            setSyncStatus('success');
+            setTimeout(() => setSyncStatus('idle'), 2000);
+          })
+          .catch(() => setSyncStatus('error'));
+      }, 3000); // 3-second debounce for cloud writes
+    }
+  }, [conversations, activeConversationId, user?.id]);
 
   useEffect(() => {
     const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
@@ -81,6 +98,7 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
+  // Initial cloud fetch when user logs in
   useEffect(() => {
     if (user?.id && !hasSyncedWithCloud) {
       setSyncStatus('syncing');
@@ -91,7 +109,10 @@ const App: React.FC = () => {
             prev.forEach(c => combined.set(c.id, c));
             cloudData.forEach((c: any) => {
                 const local = combined.get(c.id);
-                if (!local || c.timestamp > local.timestamp) combined.set(c.id, c);
+                // Merge rule: keep the one with more messages or newer timestamp
+                if (!local || c.timestamp > local.timestamp || c.messages.length > local.messages.length) {
+                  combined.set(c.id, c);
+                }
             });
             return Array.from(combined.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
           });
@@ -201,7 +222,17 @@ const App: React.FC = () => {
           )}
           <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-10 h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
           <button onClick={() => { const n = lang === 'en' ? 'si' : 'en'; setLang(n); cacheService.set(CacheKey.LANG, n); }} className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2">{t.langToggle}</button>
-          <button onClick={() => navigate('account')} className="w-10 h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">{user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px]"></i>}</button>
+          
+          <div className="flex items-center gap-3 pl-2">
+            {user && (
+              <span className="hidden sm:inline-block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                {user.name.split(' ')[0]}
+              </span>
+            )}
+            <button onClick={() => navigate('account')} className="w-10 h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 active:scale-95 transition-all shadow-sm">
+              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px] text-slate-400"></i>}
+            </button>
+          </div>
         </div>
       </header>
       <main className="flex-1 overflow-hidden relative">{renderContent()}</main>

@@ -59,7 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade">
           <div className="flex flex-col items-center gap-8">
-            <div className="w-24 h-24 md:w-32 md:h-32 bg-cyan-600 rounded-[36px] flex items-center justify-center text-white shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
+            <div className="w-24 h-24 md:w-32 md:h-32 bg-cyan-600 rounded-[32px] flex items-center justify-center text-white shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
               <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
               <i className="fa-solid fa-bolt text-5xl md:text-7xl relative z-10"></i>
             </div>
@@ -77,14 +77,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
           <div className="w-full max-w-2xl px-2">
             <div className="relative group">
-              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[32px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
-              <div className="relative glass-panel p-2 rounded-[32px] flex items-center shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10">
+              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[24px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
+              <div className="relative glass-panel p-2 rounded-[24px] flex items-center shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10">
                 <input 
                   type="text" value={prompt} onChange={(e) => onPromptChange(e.target.value)} 
                   onKeyDown={(e) => e.key === 'Enter' && onStartChat(prompt, 'chat')}
                   placeholder={t.howHelp} className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-2xl px-6 py-5 dark:text-white placeholder:text-slate-400 font-medium"
                 />
-                <button onClick={() => onStartChat(prompt, 'chat')} className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-8 md:px-12 rounded-[24px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
+                <button onClick={() => onStartChat(prompt, 'chat')} className="bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-8 md:px-12 rounded-[20px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all">
                   {t.go}
                 </button>
               </div>
@@ -98,21 +98,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* Feature Grid - Re-labeled Tools */}
+        {/* Feature Grid - Clean labels with glowing icons for Beta */}
         <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
           <div className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
-             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Main Tools</span>
+             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Neural Tools</span>
              <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
           </div>
           
           <div className="flex flex-wrap justify-center gap-4 md:gap-8">
             <FeatureCard icon="fa-message" title={t.reasoning} desc="Chat" onClick={() => onStartChat(prompt, 'chat')} color="cyan" />
-            <FeatureCard icon="fa-calculator" title={t.maths} desc="Math" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
+            <FeatureCard icon="fa-calculator" title={t.maths} desc="Solve" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta />
             <FeatureCard icon="fa-palette" title={t.creative} desc="Create" onClick={() => onStartChat(prompt, 'studio')} color="purple" />
-            <FeatureCard icon="fa-camera" title={t.vision} desc="Camera" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
-            <FeatureCard icon="fa-microphone-lines" title={t.voiceBeta} desc="Talk Voice" onClick={onVoiceOpen} color="blue" isBeta />
-            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc="AI Agent" onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta />
+            <FeatureCard icon="fa-camera" title={t.vision} desc="Visuals" onClick={() => onStartChat(prompt, 'vision')} color="emerald" />
+            <FeatureCard icon="fa-microphone-lines" title={t.voice} desc="Voice" onClick={onVoiceOpen} color="blue" isBeta />
+            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc="Agents" onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta />
           </div>
         </section>
 
@@ -120,7 +120,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
           <div className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
-             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Additional</span>
+             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Archive</span>
              <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
           </div>
           
@@ -153,14 +153,19 @@ const FeatureCard = ({ icon, title, desc, onClick, color, isBeta }: any) => {
   };
 
   return (
-    <button onClick={onClick} className="glass-panel w-40 h-40 md:w-52 md:h-52 rounded-[44px] flex flex-col items-center justify-center gap-4 hover:-translate-y-3 hover:shadow-2xl transition-all duration-500 group border border-slate-200 dark:border-white/5 relative bg-white/50 dark:bg-slate-900/50">
-      {isBeta && <div className="absolute top-4 right-4 px-2 py-0.5 bg-cyan-500/10 text-cyan-600 text-[7px] font-black uppercase tracking-widest rounded-full border border-cyan-500/20">BETA</div>}
-      <div className={`w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-125 transition-all duration-500 shadow-sm border border-slate-100 dark:border-white/5 ${colors[color]}`}>
-        <i className={`fa-solid ${icon} text-3xl`}></i>
+    <button onClick={onClick} className="glass-panel w-40 h-40 md:w-48 md:h-48 rounded-[32px] flex flex-col items-center justify-center gap-4 hover:-translate-y-3 hover:shadow-2xl transition-all duration-500 group border border-slate-200 dark:border-white/5 relative bg-white/50 dark:bg-slate-900/50">
+      {isBeta && (
+        <div className="absolute top-4 right-4 flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+        </div>
+      )}
+      <div className={`w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-125 transition-all duration-500 shadow-sm border border-slate-100 dark:border-white/5 ${colors[color]}`}>
+        <i className={`fa-solid ${icon} text-2xl md:text-3xl`}></i>
       </div>
-      <div className="space-y-1 px-4">
+      <div className="space-y-0.5 px-4 text-center">
         <h4 className="text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">{title}</h4>
-        <p className="text-[8px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-tighter opacity-60">{desc}</p>
+        <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter opacity-60">{desc}</p>
       </div>
     </button>
   );
@@ -184,7 +189,7 @@ const NavCard = ({ href, onClick, icon, title, color }: any) => {
     <Component 
       href={href} 
       onClick={onClick}
-      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[28px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group"
+      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group"
     >
       <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner ${colors[color]}`}>
         <i className={`fa-solid ${icon} text-lg`}></i>
