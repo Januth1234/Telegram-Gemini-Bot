@@ -22,61 +22,17 @@ import { translations } from './translations';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    const cached = cacheService.get<string | null>(CacheKey.THEME, null);
-    if (cached === 'dark' || cached === 'light') return cached as 'dark' | 'light';
-    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
-    return 'light';
-  });
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => cacheService.get<string | null>(CacheKey.THEME, null) as any || 'light');
 
   const t = translations[lang];
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0];
-    const validViews: string[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
-    if (validViews.includes(hash)) return hash as AppView;
-    return 'landing';
+    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
+    return validViews.includes(hash as any) ? hash as AppView : 'landing';
   };
 
   const [view, setView] = useState<AppView>(getInitialView());
-  const [notification, setNotification] = useState<{ title: string; body: string } | null>(null);
-
-  useEffect(() => {
-    const handleUrlParams = () => {
-      let queryPrompt = "";
-      const searchParams = new URLSearchParams(window.location.search);
-      if (searchParams.has('prompt')) queryPrompt = searchParams.get('prompt') || "";
-      
-      if (!queryPrompt && window.location.hash.includes('?')) {
-         const hashParts = window.location.hash.split('?');
-         if (hashParts.length > 1) {
-            const hashParams = new URLSearchParams(hashParts[1]);
-            if (hashParams.has('prompt')) queryPrompt = hashParams.get('prompt') || "";
-         }
-      }
-
-      if (queryPrompt) {
-        setGlobalPrompt(decodeURIComponent(queryPrompt));
-        setShouldAutoSubmit(true);
-        window.history.replaceState({}, '', window.location.pathname + window.location.hash.split('?')[0]);
-        if (view !== 'chat') navigate('chat');
-      }
-    };
-
-    handleUrlParams();
-    const handleHashChange = () => setView(getInitialView());
-    window.addEventListener('hashchange', handleHashChange);
-    
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, []);
-
-  const navigate = (newView: AppView) => {
-    window.location.hash = newView === 'landing' ? '' : newView;
-    setView(newView); 
-  };
-
   const [user, setUser] = useState(geminiService.getCurrentUser());
   const [globalPrompt, setGlobalPrompt] = useState(() => cacheService.get<string>(CacheKey.DRAFT_PROMPT, ''));
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
@@ -94,52 +50,43 @@ const App: React.FC = () => {
     } catch { return []; }
   });
 
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    return cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null);
-  });
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
+
+  const navigate = (newView: AppView) => {
+    window.location.hash = newView === 'landing' ? '' : newView;
+    setView(newView); 
+  };
+
+  useEffect(() => {
+    const handleHash = () => setView(getInitialView());
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
 
   useEffect(() => {
     cacheService.set(CacheKey.HISTORY, conversations);
-  }, [conversations]);
+    if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
+    else cacheService.remove(CacheKey.ACTIVE_CONV);
+  }, [conversations, activeConversationId]);
 
   useEffect(() => {
     const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
       if (authUser) {
-         const newUser: UserAccount = {
-            id: authUser.uid,
-            name: authUser.displayName || "User",
-            email: authUser.email || "user@orin.ai",
-            avatar: authUser.photoURL || undefined,
-            tier: 'Verified Member',
-            dailyUsage: { text: 0, images: 0, videos: 0 }
-         };
-         if (user?.id !== newUser.id) {
-           geminiService.setSessionUser(newUser);
-           setUser(newUser);
-         }
+         const newUser: UserAccount = { id: authUser.uid, name: authUser.displayName || "User", email: authUser.email || "user@orin.ai", avatar: authUser.photoURL || undefined, tier: 'Verified Member', dailyUsage: { text: 0, images: 0, videos: 0 } };
+         if (user?.id !== newUser.id) { geminiService.setSessionUser(newUser); setUser(newUser); }
       } else {
-        if (user) {
-           setUser(null);
-           geminiService.logout();
-        }
+        if (user) { setUser(null); geminiService.logout(); }
         setHasSyncedWithCloud(false);
       }
     });
     return () => unsubscribe();
   }, [user]);
 
-  // Cloud History Sync
+  // History Sync Logic - Robust transition
   useEffect(() => {
     if (user?.id && !hasSyncedWithCloud) {
       setSyncStatus('syncing');
-      
-      // Fallback timeout to prevent permanent "loading"
-      const timeout = setTimeout(() => {
-        if (syncStatus === 'syncing') setSyncStatus('error');
-      }, 10000);
-
       firebaseService.getHistory(user.id).then((cloudData) => {
-        clearTimeout(timeout);
         if (cloudData && cloudData.length > 0) {
           setConversations(prev => {
             const combined = new Map();
@@ -148,130 +95,36 @@ const App: React.FC = () => {
                 const local = combined.get(c.id);
                 if (!local || c.timestamp > local.timestamp) combined.set(c.id, c);
             });
-            return Array.from(combined.values()).sort((a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime());
+            return Array.from(combined.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
           });
         }
         setSyncStatus('success');
-        setTimeout(() => setSyncStatus('idle'), 2000);
         setHasSyncedWithCloud(true);
+        setTimeout(() => setSyncStatus('idle'), 2000);
       }).catch(() => {
-        clearTimeout(timeout);
         setSyncStatus('error');
+        setHasSyncedWithCloud(true); // Don't loop errors
+        setTimeout(() => setSyncStatus('idle'), 3000);
       });
     }
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (user?.id && hasSyncedWithCloud) {
-      const timeout = setTimeout(() => {
-         const withMsgs = conversations.filter(c => c.messages.length > 0);
-         if (withMsgs.length > 0) {
-            setSyncStatus('syncing');
-            firebaseService.saveHistory(user.id, withMsgs).then(() => {
-               setSyncStatus('success');
-               setTimeout(() => setSyncStatus('idle'), 2000);
-            }).catch(() => setSyncStatus('error'));
-         }
-      }, 5000);
-      return () => clearTimeout(timeout);
-    }
-  }, [conversations, user?.id, hasSyncedWithCloud]);
-
-  useEffect(() => {
-    if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
-    else cacheService.remove(CacheKey.ACTIVE_CONV);
-  }, [activeConversationId]);
+  }, [user?.id, hasSyncedWithCloud]);
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
-    const emptyConv = conversations.find(c => c.id === activeConversationId && c.messages.length === 0);
-    
-    if (!emptyConv) {
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    if (!activeConv || activeConv.messages.length > 0) {
       const newId = Date.now().toString();
-      const newConv: Conversation = {
-        id: newId,
-        title: lang === 'si' ? "නව පිළිසඳර" : "New Chat",
-        messages: [],
-        timestamp: new Date(),
-        mode: mode,
-        modesUsed: [mode]
-      };
-      setConversations(prev => [newConv, ...prev]);
+      setConversations(prev => [{ id: newId, title: lang === 'si' ? "නව පිළිසඳර" : "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
       setActiveConversationId(newId);
     } else {
-        setConversations(prev => prev.map(c => c.id === emptyConv.id ? { ...c, mode, modesUsed: [mode] } : c));
+      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode } : c));
     }
 
-    let targetView: AppView = 'chat';
-    if (mode === 'studio') targetView = 'art';
-    else if (mode === 'vision') targetView = 'camera';
-    else if (mode === 'voice') targetView = 'voice';
-    else if (mode === 'maths') targetView = 'math';
-    else if (mode === 'gethelp') targetView = 'help';
-    
-    navigate(targetView);
+    const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', gethelp: 'help', chat: 'chat', translator: 'chat' };
+    navigate(modeMap[mode] || 'chat');
   };
-
-  const handleUpdateActiveConversation = (title?: string, modesUsed?: WorkspaceMode[]) => {
-    if (!activeConversationId) return;
-    setConversations(prev => prev.map(c => 
-      c.id === activeConversationId 
-        ? { ...c, title: title || c.title, timestamp: new Date(), modesUsed: modesUsed || c.modesUsed } 
-        : c
-    ));
-  };
-
-  const handleSwitchConversation = (id: string) => {
-    const conv = conversations.find(c => c.id === id);
-    if (conv) {
-      setActiveConversationId(id);
-      let targetView: AppView = 'chat';
-      if (conv.mode === 'studio') targetView = 'art';
-      else if (conv.mode === 'vision') targetView = 'camera';
-      else if (conv.mode === 'maths') targetView = 'math';
-      else if (conv.mode === 'gethelp') targetView = 'help';
-      else if (conv.mode === 'voice') targetView = 'voice';
-      navigate(targetView);
-    }
-  };
-
-  const handleNewConversation = () => {
-    const newId = Date.now().toString();
-    const newConv: Conversation = {
-      id: newId,
-      title: lang === 'si' ? "නව පිළිසඳර" : "New Chat",
-      messages: [],
-      timestamp: new Date(),
-      mode: 'chat',
-      modesUsed: ['chat']
-    };
-    setConversations(prev => [newConv, ...prev]);
-    setActiveConversationId(newId);
-    setGlobalPrompt("");
-    setShouldAutoSubmit(false);
-    navigate('chat');
-  };
-
-  const handleDeleteConversation = (id: string) => {
-    setConversations(prev => {
-      const filtered = prev.filter(c => c.id !== id);
-      if (activeConversationId === id) {
-        if (filtered.length > 0) setActiveConversationId(filtered[0].id);
-        else { setActiveConversationId(null); navigate('landing'); }
-      }
-      return filtered;
-    });
-  };
-
-  const handleCloseWorkspace = useCallback(() => {
-    if (activeConversationId) {
-      const active = conversations.find(c => c.id === activeConversationId);
-      if (active && active.messages.length === 0) handleDeleteConversation(activeConversationId);
-    }
-    navigate('landing');
-  }, [activeConversationId, conversations, handleDeleteConversation]);
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
 
@@ -283,8 +136,8 @@ const App: React.FC = () => {
         const workspaceMode: WorkspaceMode = view === 'art' ? 'studio' : view === 'camera' ? 'vision' : 'chat';
         return (
           <ChatWorkspace 
-            onClose={handleCloseWorkspace} 
-            hwStatus={{ mode: 'GPU', label: 'Processing' }} 
+            onClose={() => navigate('landing')} 
+            hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
             initialMode={workspaceMode}
             autoSubmit={shouldAutoSubmit}
@@ -292,21 +145,22 @@ const App: React.FC = () => {
             messages={activeMessages}
             setMessages={(updater) => {
               if (!activeConversationId) return;
-              setConversations(prev => prev.map(c => {
-                if (c.id === activeConversationId) {
-                  const nextMessages = typeof updater === 'function' ? updater(c.messages) : updater;
-                  return { ...c, messages: nextMessages, timestamp: new Date() };
-                }
-                return c;
-              }));
+              setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: typeof updater === 'function' ? updater(c.messages) : updater, timestamp: new Date() } : c));
             }}
             lang={lang}
             conversations={conversations}
-            onSwitchConv={handleSwitchConversation}
-            onNewConv={handleNewConversation}
-            onDeleteConv={handleDeleteConversation}
+            onSwitchConv={setActiveConversationId}
+            onNewConv={() => handleStartWorkspace('', 'chat')}
+            onDeleteConv={(id) => {
+               setConversations(prev => {
+                 const filtered = prev.filter(c => c.id !== id);
+                 if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
+                 return filtered;
+               });
+            }}
             activeConvId={activeConversationId || ""}
-            onUpdateTitle={handleUpdateActiveConversation}
+            onUpdateTitle={(title) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title } : c))}
+            onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
             isSyncing={syncStatus === 'syncing'}
           />
         );
@@ -322,53 +176,30 @@ const App: React.FC = () => {
       case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
       default: 
-        return (
-          <LandingPage 
-            prompt={globalPrompt}
-            onPromptChange={setGlobalPrompt}
-            onStartChat={handleStartWorkspace} 
-            onVoiceOpen={() => handleStartWorkspace('', 'voice', false)}
-            lang={lang}
-            user={user}
-            onLogin={async () => navigate('account')}
-          />
-        );
+        return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={async () => navigate('account')} />;
     }
   };
 
   return (
-    <div className={`h-screen w-screen flex flex-col transition-all duration-300 overflow-hidden ${lang === 'si' ? 'sinhala-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950`}>
-      <header className="h-16 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
-        <div className="flex items-center gap-3 cursor-pointer group" onClick={() => navigate('landing')}>
-          <div className="w-8 h-8 rounded-lg bg-cyan-600 dark:bg-cyan-500 flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform">
-            <i className="fa-solid fa-bolt text-sm"></i>
-          </div>
+    <div className={`h-screen w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950`}>
+      <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
+        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('landing')}>
+          <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-sm"></i></div>
           <h1 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
-
         <div className="flex items-center gap-3">
           {syncStatus !== 'idle' && (
-             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5">
-                <span className={`text-[9px] font-black uppercase tracking-widest ${syncStatus === 'error' ? 'text-red-500' : syncStatus === 'success' ? 'text-emerald-500' : 'text-slate-500'}`}>
-                  {syncStatus === 'syncing' ? 'Syncing' : syncStatus === 'success' ? 'Cloud Safe' : 'Sync Error'}
-                </span>
+             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                <span className="text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Syncing' : syncStatus === 'success' ? 'Saved' : 'Error'}</span>
              </div>
           )}
-          <button onClick={() => setTheme(prev => prev === 'dark' ? 'light' : 'dark')} className="w-10 h-10 flex items-center justify-center text-slate-500">
-            <i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i>
-          </button>
-          <button onClick={() => setLang(prev => prev === 'en' ? 'si' : 'en')} className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2">
-            {t.langToggle}
-          </button>
-          <button onClick={() => navigate('account')} className="w-10 h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
-            {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="User" /> : <i className="fa-solid fa-user text-[10px]"></i>}
-          </button>
+          <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-10 h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
+          <button onClick={() => { const n = lang === 'en' ? 'si' : 'en'; setLang(n); cacheService.set(CacheKey.LANG, n); }} className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2">{t.langToggle}</button>
+          <button onClick={() => navigate('account')} className="w-10 h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">{user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px]"></i>}</button>
         </div>
       </header>
-
-      <main className="flex-1 overflow-hidden relative">
-        {renderContent()}
-      </main>
+      <main className="flex-1 overflow-hidden relative">{renderContent()}</main>
     </div>
   );
 };
