@@ -141,7 +141,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       return;
     }
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text || "", timestamp: new Date(), type: 'text', fileName: fileToUse?.name };
+    // CREATE USER MESSAGE WITH IMAGE DATA IF PRESENT
+    const userMsg: ChatMessage = { 
+        id: Date.now().toString(), 
+        role: 'user', 
+        content: text || "", 
+        timestamp: new Date(), 
+        type: fileToUse ? 'image' : 'text',
+        imageUrl: fileToUse ? `data:${fileToUse.mimeType};base64,${fileToUse.data}` : undefined,
+        fileName: fileToUse?.name 
+    };
+
     const currentHistory = [...messages, userMsg];
     setMessages(prev => [...prev, userMsg]);
 
@@ -206,15 +216,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             messages.map(msg => (
               <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
                  <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                    
+                    {/* Render Image if exists (works for both User and Assistant) */}
                     {msg.imageUrl && (
-                      <div className="mt-6 space-y-4">
-                         <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
-                            <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
+                      <div className="mb-4">
+                         <div className="rounded-[20px] overflow-hidden border-2 border-white/10 shadow-lg bg-black/10 group max-w-sm">
+                            <img src={msg.imageUrl} className="w-full h-auto object-cover" alt="Content" />
                          </div>
-                         <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
+                         {msg.role === 'assistant' && (
+                            <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="mt-3 w-full py-3 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-600 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Save Image</button>
+                         )}
                       </div>
                     )}
+
+                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                    
                     {msg.links && msg.links.length > 0 && (
                       <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
                          {msg.links.map((link, idx) => (
@@ -314,6 +330,18 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {activeTab !== 'maths' && activeTab !== 'voice' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent safe-pb">
              <div className="max-w-3xl mx-auto pointer-events-auto">
+                {/* File Preview in Input Bar */}
+                {selectedFile && (
+                  <div className="mb-2 mx-2 p-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/10 shadow-lg flex items-center gap-4 animate-slide-in-up">
+                     <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="w-12 h-12 rounded-xl object-cover border border-black/5" alt="Preview" />
+                     <div className="flex-1 min-w-0">
+                        <p className="text-[10px] font-black text-slate-900 dark:text-white truncate">{selectedFile.name}</p>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase">Ready to send</p>
+                     </div>
+                     <button onClick={() => setSelectedFile(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-xmark"></i></button>
+                  </div>
+                )}
+
                 <div className="glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-1 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
                    <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"><i className="fa-solid fa-paperclip text-base"></i></button>
                    <input 
@@ -325,7 +353,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
                    <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-base"></i></button>
-                   <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
+                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
                         const r = new FileReader();
@@ -334,7 +362,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       }
                    }} />
                 </div>
-                {selectedFile && <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0 shadow-sm"><i className="fa-solid fa-file text-emerald-600 text-[9px]"></i><span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[120px]">{selectedFile.name}</span><button onClick={() => setSelectedFile(null)} className="text-red-500 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button></div>}
              </div>
           </div>
         )}
