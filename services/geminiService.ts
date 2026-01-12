@@ -163,7 +163,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: getSystemInstruction(),
+        systemInstruction: getSystemInstruction() + "\nCRITICAL: Respond IMMEDIATELY. Be extremely concise. Do not pause.",
       },
     });
   }
@@ -179,7 +179,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a real-time speech translator between ${options.source} and ${options.target}. Speak only the translation.`,
+        systemInstruction: `You are a real-time translator. Translate ${options.source} to ${options.target} (and vice versa) IMMEDIATELY. No extra words. Just the translation. Fast mode.`,
       },
     });
   }
@@ -257,7 +257,13 @@ export class GeminiService {
       let contents: any[] = [];
       if (options.history && options.history.length > 0) {
           options.history.slice(-10).forEach(msg => {
-              contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+              if (msg.role === 'user' && msg.imageUrl) {
+                 // Skip adding massive base64 to history context to save tokens/bandwidth if not strictly needed for context
+                 // or summarize it. For now, we just pass text context.
+                 contents.push({ role: 'user', parts: [{ text: msg.content + " [Image sent]" }] });
+              } else {
+                 contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
+              }
           });
       }
 
