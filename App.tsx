@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -229,6 +230,7 @@ const App: React.FC = () => {
       className={`w-screen flex flex-col ${fontClass} bg-slate-50 dark:bg-slate-950 overflow-hidden transition-all duration-300`}
       style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
     >
+      <Analytics />
       <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
         <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('landing')}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-sm"></i></div>
