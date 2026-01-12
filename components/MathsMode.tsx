@@ -6,7 +6,7 @@ import { translations } from '../translations';
 declare const nerdamer: any;
 const MathFieldTag = 'math-field' as any;
 
-type MathCategory = 'General' | 'Algebra' | 'Trigonometry' | 'Calculus' | 'Linear Algebra' | 'Statistics' | 'Physics';
+type MathCategory = 'General' | 'Algebra' | 'Geometry' | 'Trigonometry' | 'Calculus' | 'Discrete Math' | 'Logic' | 'Linear Algebra' | 'Statistics' | 'Financial Math' | 'Physics';
 
 interface MathTool {
   label: string;
@@ -33,6 +33,16 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
       { label: 'Solve for x', command: 'solve', type: 'action', desc: 'Find x' },
       { label: 'Factor', command: 'factor', type: 'action', desc: 'Factor' },
       { label: 'Expand', command: 'expand', type: 'action', desc: 'Expand' },
+      { label: 'Quadratic', command: 'ax^2 + bx + c = 0', type: 'insert', desc: 'Quad' },
+    ]
+  },
+  'Geometry': {
+    icon: 'fa-draw-polygon',
+    tools: [
+      { label: 'Pythagoras', command: 'a^2 + b^2 = c^2', type: 'insert', desc: 'Right Tri' },
+      { label: 'Circle Area', command: 'A = \\pi r^2', type: 'insert', desc: 'Area' },
+      { label: 'Sphere Vol', command: 'V = \\frac{4}{3} \\pi r^3', type: 'insert', desc: 'Volume' },
+      { label: 'Sine Rule', command: '\\frac{a}{\\sin A} = \\frac{b}{\\sin B}', type: 'insert', desc: 'Triangle' },
     ]
   },
   'Trigonometry': {
@@ -41,6 +51,7 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
       { label: 'Sin', command: '\\sin(\\placeholder)', type: 'insert', desc: 'Sin' },
       { label: 'Cos', command: '\\cos(\\placeholder)', type: 'insert', desc: 'Cos' },
       { label: 'Tan', command: '\\tan(\\placeholder)', type: 'insert', desc: 'Tan' },
+      { label: 'Identity', command: '\\sin^2 x + \\cos^2 x = 1', type: 'insert', desc: 'Identity' },
     ]
   },
   'Calculus': {
@@ -48,6 +59,27 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
     tools: [
       { label: 'Diff', command: 'diff', type: 'action', desc: 'd/dx' },
       { label: 'Integral', command: 'integrate', type: 'action', desc: 'Integral' },
+      { label: 'Limit', command: '\\lim_{x \\to \\placeholder}', type: 'insert', desc: 'Limit' },
+      { label: 'Derivative', command: '\\frac{d}{dx}(\\placeholder)', type: 'insert', desc: 'd/dx' },
+    ]
+  },
+  'Discrete Math': {
+    icon: 'fa-network-wired',
+    tools: [
+      { label: 'Permutation', command: 'P(n, r) = \\frac{n!}{(n-r)!}', type: 'insert', desc: 'nPr' },
+      { label: 'Combination', command: 'C(n, r) = \\frac{n!}{r!(n-r)!}', type: 'insert', desc: 'nCr' },
+      { label: 'Factorial', command: 'n!', type: 'insert', desc: 'n!' },
+      { label: 'Summation', command: '\\sum_{i=1}^{n} \\placeholder', type: 'insert', desc: 'Sum' },
+    ]
+  },
+  'Logic': {
+    icon: 'fa-microchip',
+    tools: [
+      { label: 'AND', command: '\\land', type: 'insert', desc: 'AND' },
+      { label: 'OR', command: '\\lor', type: 'insert', desc: 'OR' },
+      { label: 'NOT', command: '\\neg', type: 'insert', desc: 'NOT' },
+      { label: 'Implies', command: '\\implies', type: 'insert', desc: 'If/Then' },
+      { label: 'Truth Table', command: 'generate_truth_table', type: 'ai', desc: 'Logic Map' },
     ]
   },
   'Linear Algebra': {
@@ -55,6 +87,7 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
     tools: [
       { label: 'Det', command: 'determinant', type: 'action', desc: '|A|' },
       { label: 'Invert', command: 'invert', type: 'action', desc: 'Inverse' },
+      { label: 'Transpose', command: 'transpose', type: 'action', desc: 'A^T' },
     ]
   },
   'Statistics': {
@@ -62,6 +95,16 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
     tools: [
       { label: 'Mean', command: 'mean', type: 'action', desc: 'Mean' },
       { label: 'Median', command: 'median', type: 'action', desc: 'Median' },
+      { label: 'Variance', command: '\\sigma^2', type: 'insert', desc: 'Var' },
+      { label: 'Std Dev', command: '\\sigma', type: 'insert', desc: 'SD' },
+    ]
+  },
+  'Financial Math': {
+    icon: 'fa-coins',
+    tools: [
+      { label: 'Compound', command: 'A = P(1 + \\frac{r}{n})^{nt}', type: 'insert', desc: 'Interest' },
+      { label: 'Present Val', command: 'PV = \\frac{FV}{(1+i)^n}', type: 'insert', desc: 'PV' },
+      { label: 'Annuity', command: 'PMT \\times \\frac{1-(1+i)^{-n}}{i}', type: 'insert', desc: 'Loan' },
     ]
   },
   'Physics': {
@@ -69,6 +112,7 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: MathTool[] }> = {
     tools: [
       { label: 'Newton', command: 'F = m \\cdot a', type: 'insert', desc: 'Force' },
       { label: 'Einstein', command: 'E = m \\cdot c^2', type: 'insert', desc: 'Energy' },
+      { label: 'Gravity', command: 'F = G\\frac{m_1 m_2}{r^2}', type: 'insert', desc: 'Gravity' },
     ]
   }
 };
@@ -78,14 +122,16 @@ interface MathsModeProps {
   lang: Language; 
   embedded?: boolean;
   messages: ChatMessage[];
-  onSend: (text: string) => void;
+  onSend: (text: string, file?: { data: string; mimeType: string; name: string }) => void;
   isTyping: boolean;
 }
 
 const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
   const t = translations[lang];
   const [activeCat, setActiveCat] = useState<MathCategory>('General');
+  const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const mfRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (mfRef.current) {
@@ -97,20 +143,37 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
 
   const handleAction = async (command: string) => {
     const rawLatex = mfRef.current?.value;
-    if (!rawLatex) return;
     
+    let prompt = "";
     if (command === 'ai_explain') {
-        onSend(`Please solve this math problem step-by-step and provide a clear final answer: ${rawLatex}`);
-        return;
+        prompt = `Please solve this math problem step-by-step and provide a clear final answer: ${rawLatex || "the problem in the attached image"}`;
+    } else if (command === 'generate_truth_table') {
+        prompt = `Generate a truth table for this logical expression: ${rawLatex || "the expression in the attached image"}`;
+    } else {
+        prompt = `Execute ${command} on this mathematical expression: ${rawLatex || "the expression in the attached image"}. Briefly summarize the result and provide any necessary steps.`;
     }
     
-    onSend(`Execute ${command} on this mathematical expression: ${rawLatex}. Briefly summarize the result and provide any necessary steps.`);
+    onSend(prompt, selectedFile || undefined);
+    setSelectedFile(null); // Clear after sending
   };
 
   const insertSymbol = (cmd: string) => {
     if (mfRef.current) {
         mfRef.current.executeCommand(['insert', cmd]);
         mfRef.current.focus();
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const r = new FileReader();
+      r.onload = () => setSelectedFile({ 
+        data: (r.result as string).split(',')[1], 
+        mimeType: file.type, 
+        name: file.name 
+      });
+      r.readAsDataURL(file);
     }
   };
 
@@ -128,7 +191,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
               </div>
               <div className="flex flex-col">
                 <h2 className="text-lg font-black uppercase tracking-tighter text-slate-800 dark:text-white leading-none">{t.math.title}</h2>
-                <span className="text-[8px] font-black text-cyan-600 uppercase tracking-widest mt-1">BETA v4.0</span>
+                <span className="text-[8px] font-black text-cyan-600 uppercase tracking-widest mt-1">BETA v5.0</span>
               </div>
            </div>
            <button onClick={onClose} className="w-12 h-12 flex items-center justify-center rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all active:scale-90"><i className="fa-solid fa-xmark text-xl"></i></button>
@@ -155,8 +218,28 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-8 pb-40">
           <div className="max-w-4xl mx-auto space-y-6">
               <div className="glass-panel rounded-[32px] p-6 border border-indigo-500/20 shadow-xl bg-white dark:bg-slate-900 relative">
-                <div className="absolute top-4 left-6 text-[8px] font-black text-slate-400 uppercase tracking-widest">Visual Math Input</div>
-                <MathFieldTag ref={mfRef} className="w-full text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none mt-4"></MathFieldTag>
+                <div className="flex items-center justify-between mb-4">
+                    <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Visual Math Input</div>
+                    <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all flex items-center gap-2 ${selectedFile ? 'bg-emerald-500 text-white border-emerald-500' : 'text-slate-500 border-slate-200 dark:border-white/10 hover:bg-slate-50'}`}
+                    >
+                        <i className="fa-solid fa-camera"></i>
+                        {selectedFile ? 'Image Attached' : 'Attach Problem Image'}
+                    </button>
+                </div>
+                
+                {selectedFile && (
+                  <div className="mb-4 relative group w-fit">
+                    <div className="absolute -top-2 -right-2 z-10">
+                        <button onClick={() => setSelectedFile(null)} className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90"><i className="fa-solid fa-xmark text-[10px]"></i></button>
+                    </div>
+                    <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="h-24 rounded-xl border border-black/10 dark:border-white/10 shadow-sm" alt="Attached" />
+                  </div>
+                )}
+
+                <MathFieldTag ref={mfRef} className="w-full text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none"></MathFieldTag>
+                <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               </div>
               
               <div className="flex flex-wrap gap-2 animate-reveal">

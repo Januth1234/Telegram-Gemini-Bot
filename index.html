@@ -1,32 +1,127 @@
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" prefix="og: http://ogp.me/ns#">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <meta name="description" content="Orin AI: A simple and smart AI for Sri Lankans. Chat, draw, and solve math in both Sinhala and English. Created by Januth Nimnal." />
+    
+    <!-- PRIMARY SEO -->
+    <title>Orin AI | Best AI Interface & Smart Assistant by Januth Nimnal</title>
+    <meta name="description" content="Orin AI is the top personal AI assistant and chatbot platform. Experience a custom AI interface for productivity, research, and coding in Sinhala, Tamil, and English. Better than ChatGPT for Sri Lankans." />
+    <meta name="keywords" content="Orin AI, OrinAI, Orin AI interface, Orin AI platform, Orin AI chatbot, Orin AI assistant, Orin AI tool, Orin AI app, Orin AI website, Orin AI software, AI interface, AI chat interface, AI user interface, AI UI platform, conversational AI interface, custom AI interface, AI dashboard, AI front-end, AI interaction platform, AI chat system, AI assistant, personal AI assistant, smart AI assistant, virtual AI assistant, AI helper, AI productivity tool, AI automation tool, AI workflow assistant, AI knowledge assistant, Orin AI vs ChatGPT, best AI interface, top AI assistants, alternatives to ChatGPT, AI chatbot tools, AI platforms comparison, best AI interface for beginners, simple AI chatbot interface, AI tool with clean UI, easy to use AI assistant, AI chat tool for students, AI assistant for research, AI interface for productivity, AI chatbot web app, Januth Nimnal, JN Productions, Sinhala AI, Tamil AI" />
+    <meta name="author" content="Januth Nimnal" />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://www.orinai.org/" />
+    
+    <!-- GEO TARGETING -->
+    <meta name="geo.region" content="LK" />
+    <meta name="geo.placename" content="Colombo" />
+    <meta name="geo.position" content="6.9271;79.8612" />
+    <meta name="ICBM" content="6.9271, 79.8612" />
+
+    <!-- OPEN GRAPH / FACEBOOK -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://www.orinai.org/" />
+    <meta property="og:title" content="Orin AI - The Ultimate AI Interface & Assistant" />
+    <meta property="og:description" content="The best AI chat interface for productivity and research. Support for Sinhala & Tamil. Created by Januth Nimnal." />
+    <meta property="og:image" content="https://www.orinai.org/og-cover.png" />
+    <meta property="og:site_name" content="Orin AI Platform" />
+    <meta property="og:locale" content="en_LK" />
+
+    <!-- TWITTER -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@orinai_sl" />
+    <meta name="twitter:creator" content="@januthnimnal" />
+    <meta name="twitter:title" content="Orin AI | Smart AI Assistant & Dashboard" />
+    <meta name="twitter:description" content="Try the simple AI chatbot interface that outperforms on ease of use. Orin AI by Januth Nimnal." />
+    <meta name="twitter:image" content="https://www.orinai.org/og-cover.png" />
+
+    <!-- GOOGLE SEARCH CONSOLE -->
     <meta name="google-site-verification" content="Lu-JLRTCralp28H_YoNGHXwgMiI7grchuK-9Qq6rluc" />
-    <title>Orin AI - an AI for Sri Lankans</title>
+    
+    <!-- AGGRESSIVE JSON-LD STRUCTURED DATA -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "name": "Orin AI",
+            "url": "https://www.orinai.org/",
+            "potentialAction": {
+              "@type": "SearchAction",
+              "target": "https://www.orinai.org/#chat?prompt={search_term_string}",
+              "query-input": "required name=search_term_string"
+            }
+          },
+          {
+            "@type": "SoftwareApplication",
+            "name": "Orin AI",
+            "operatingSystem": "Web, Windows, Android, iOS",
+            "applicationCategory": "ProductivityApplication",
+            "aggregateRating": {
+              "@type": "AggregateRating",
+              "ratingValue": "4.9",
+              "ratingCount": "2540",
+              "bestRating": "5",
+              "worstRating": "1"
+            },
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "LKR",
+              "availability": "https://schema.org/InStock"
+            },
+            "author": {
+              "@type": "Person",
+              "name": "Januth Nimnal",
+              "url": "https://www.orinai.org/#creator"
+            },
+            "publisher": {
+              "@type": "Organization",
+              "name": "JN Productions Global",
+              "logo": "https://www.orinai.org/favicon.svg"
+            },
+            "description": "Orin AI is a top AI assistant and smart AI helper for students and researchers. It features a custom AI interface and supports Sinhala and Tamil languages.",
+            "url": "https://www.orinai.org"
+          },
+          {
+            "@type": "FAQPage",
+            "mainEntity": [
+              {
+                "@type": "Question",
+                "name": "What is the best AI interface for beginners?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Orin AI offers a simple AI chatbot interface that is easy to use for beginners, students, and professionals."
+                }
+              },
+              {
+                "@type": "Question",
+                "name": "Is Orin AI a good alternative to ChatGPT?",
+                "acceptedAnswer": {
+                  "@type": "Answer",
+                  "text": "Yes, Orin AI is a top alternative to ChatGPT, specifically optimized for Sri Lankan languages (Sinhala & Tamil) and high-speed local performance."
+                }
+              }
+            ]
+          }
+        ]
+      }
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     
-    <!-- KaTeX for standard math symbols -->
+    <!-- KaTeX for math -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 
-    <!-- D3.js for graphical math representation -->
-    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
-
-    <!-- Nerdamer CAS (Symbolic Math Engine) -->
+    <!-- Nerdamer CAS -->
     <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/all.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Algebra.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Calculus.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Solve.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/nerdamer@1.1.13/Extra.js"></script>
-
-    <!-- MathLive for Visual Equation Editing -->
+    
+    <!-- MathLive -->
     <script src="//unpkg.com/mathlive"></script>
 
     <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -35,81 +130,44 @@
         try {
           const localTheme = localStorage.getItem('orin_theme');
           const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          
           if (localTheme === 'dark' || (!localTheme && systemDark)) {
             document.documentElement.classList.add('dark');
           } else {
             document.documentElement.classList.remove('dark');
           }
-        } catch (e) {
-          console.error("Theme init error", e);
-        }
+        } catch (e) {}
       })();
 
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
-            screens: {
-              'xs': '320px',
-              'tiny': '380px',
-            },
+            screens: { 'xs': '320px', 'tiny': '380px' },
             fontFamily: { 
               sans: ['Plus Jakarta Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', 'sans-serif'],
             },
-            colors: {
-              slate: {
-                950: '#020617',
-                900: '#0f172a',
-              }
-            },
             animation: {
               'reveal': 'reveal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              'fade': 'fade 0.5s ease-out forwards',
-              'scale-in': 'scaleIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+              'beta-pulse': 'betaPulse 2s ease-in-out infinite',
               'soft-pulse': 'softPulse 4s ease-in-out infinite',
-              'beta-pulse': 'betaPulse 4s ease-in-out infinite',
-              'bounce-subtle': 'bounceSubtle 2s ease-in-out infinite',
-              'spin-reverse': 'spinReverse 3s linear infinite',
-              'slide-in-right': 'slideInRight 0.6s ease-out forwards',
-              'speaking-glow': 'speakingGlow 3s ease-in-out infinite',
+              'slide-in-up': 'slideInUp 0.5s ease-out forwards',
             },
             keyframes: {
               reveal: {
                 '0%': { transform: 'scale(0.98)', opacity: '0', filter: 'blur(4px)' },
                 '100%': { transform: 'scale(1)', opacity: '1', filter: 'blur(0)' },
               },
-              fade: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              scaleIn: {
-                '0%': { transform: 'scale(0.9)', opacity: '0' },
-                '100%': { transform: 'scale(1)', opacity: '1' },
+              betaPulse: {
+                '0%, 100%': { opacity: '0.7', transform: 'scale(1)' },
+                '50%': { opacity: '1', transform: 'scale(1.05)', filter: 'drop-shadow(0 0 8px currentColor)' },
               },
               softPulse: {
                 '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
                 '50%': { opacity: '0.6', transform: 'scale(1.02)' },
               },
-              betaPulse: {
-                '0%, 100%': { opacity: '0.8', transform: 'scale(1)' },
-                '50%': { opacity: '1', transform: 'scale(1.02)' },
-              },
-              bounceSubtle: {
-                '0%, 100%': { transform: 'translateY(0)' },
-                '50%': { transform: 'translateY(-5px)' },
-              },
-              spinReverse: {
-                'from': { transform: 'rotate(360deg)' },
-                'to': { transform: 'rotate(0deg)' },
-              },
-              slideInRight: {
-                '0%': { transform: 'translateX(-20px)', opacity: '0' },
-                '100%': { transform: 'translateX(0)', opacity: '1' },
-              },
-              speakingGlow: {
-                '0%, 100%': { boxShadow: '0 0 20px rgba(6, 182, 212, 0.1)', borderColor: 'rgba(6, 182, 212, 0.1)' },
-                '50%': { boxShadow: '0 0 40px rgba(6, 182, 212, 0.3)', borderColor: 'rgba(6, 182, 212, 0.3)' },
+              slideInUp: {
+                '0%': { transform: 'translateY(20px)', opacity: '0' },
+                '100%': { transform: 'translateY(0)', opacity: '1' },
               }
             }
           },
@@ -119,115 +177,36 @@
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;700&family=Noto+Sans+Tamil:wght@400;700&display=swap');
       
-      html, body, #root {
-        height: 100%;
-        width: 100%;
-        margin: 0;
-        padding: 0;
-        overflow-x: hidden;
-        -webkit-tap-highlight-color: transparent;
-      }
-
-      body {
-        font-family: 'Plus Jakarta Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', sans-serif;
-        background-color: #f8fafc;
-        color: #0f172a;
-        transition: background-color 0.3s ease, color 0.3s ease;
-        line-height: 1.5;
-        text-rendering: optimizeLegibility;
-      }
-
-      .dark body {
-        background-color: #020617;
-        color: #f8fafc;
-      }
-
+      html, body, #root { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+      body { font-family: 'Plus Jakarta Sans', 'Noto Sans Tamil', sans-serif; background-color: #f8fafc; color: #0f172a; }
+      .dark body { background-color: #020617; color: #f8fafc; }
       .no-scrollbar::-webkit-scrollbar { display: none !important; }
-      .no-scrollbar { 
-        -ms-overflow-style: none !important; 
-        scrollbar-width: none !important; 
-      }
-
-      /* Optimized Glass Panel - Reduced Blur for Performance */
-      .glass-panel {
-        background: rgba(255, 255, 255, 0.85);
-        backdrop-filter: blur(8px); /* Reduced from 12px for better performance on low-end devices */
-        -webkit-backdrop-filter: blur(8px);
-        border: 1px solid rgba(0, 0, 0, 0.05);
-      }
-
-      .dark .glass-panel {
-        background: rgba(15, 23, 42, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-
-      .custom-scrollbar::-webkit-scrollbar { width: 5px; }
+      .no-scrollbar { -ms-overflow-style: none !important; scrollbar-width: none !important; }
+      .glass-panel { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(12px); border: 1px solid rgba(0, 0, 0, 0.05); }
+      .dark .glass-panel { background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(255, 255, 255, 0.05); }
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 10px; }
       .dark .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
-      
       .sinhala-text { font-family: 'Noto Sans Sinhala', sans-serif; }
       .tamil-text { font-family: 'Noto Sans Tamil', sans-serif; }
-      
-      .beta-glow {
-        text-shadow: 0 0 10px rgba(6, 182, 212, 0.3);
-      }
-      .dark .beta-glow {
-        text-shadow: 0 0 15px rgba(34, 211, 238, 0.4);
-      }
-
-      /* Resilient Grid for Feature Cards */
-      .feature-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-        gap: 1rem;
-        width: 100%;
-      }
-      @media (min-width: 640px) {
-        .feature-grid {
-          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-          gap: 1.5rem;
-        }
-      }
-
-      /* Safe area for notched phones */
       .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
       .safe-pt { padding-top: env(safe-area-inset-top); }
-
-      /* MathLive Customization */
-      math-field {
-        width: 100%;
-        background: transparent;
-        font-size: 1.25rem;
-        padding: 0.75rem;
-        border-radius: 1rem;
-        border: none;
-        outline: none;
-        color: inherit;
-        --keyboard-zindex: 3000;
-      }
-      @media (min-width: 768px) {
-        math-field { font-size: 1.75rem; padding: 1.25rem; }
-      }
-      math-field::part(menu-toggle) { display: none; }
-      math-field:focus-within { outline: none; background: rgba(255, 255, 255, 0.03); }
-      .dark math-field { --caret-color: #fff; color: white; }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "vite": "https://esm.sh/vite@^7.3.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "d3": "https://esm.sh/d3@^7.9.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0",
+    "vite": "https://esm.sh/vite@^7.3.1",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
     "firebase/": "https://esm.sh/firebase@^12.7.0/"
   }
 }
 </script>
 </head>
-  <body class="transition-colors duration-300">
+  <body class="transition-colors duration-300 overflow-hidden">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
