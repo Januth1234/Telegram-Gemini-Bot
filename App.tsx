@@ -25,20 +25,20 @@ const App: React.FC = () => {
 
   const t = translations[lang];
 
-  // Dynamic Viewport Height System
+  // Robust Dynamic Viewport Height System
   useEffect(() => {
     const setViewportHeight = () => {
       const vh = window.innerHeight * 0.01;
       document.documentElement.style.setProperty('--vh', `${vh}px`);
     };
-
     setViewportHeight();
     window.addEventListener('resize', setViewportHeight);
     window.addEventListener('orientationchange', setViewportHeight);
-
+    window.visualViewport?.addEventListener('resize', setViewportHeight);
     return () => {
       window.removeEventListener('resize', setViewportHeight);
       window.removeEventListener('orientationchange', setViewportHeight);
+      window.visualViewport?.removeEventListener('resize', setViewportHeight);
     };
   }, []);
 
@@ -81,7 +81,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // Persistent Local Storage & Cloud Sync Trigger
   useEffect(() => {
     cacheService.set(CacheKey.HISTORY, conversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
@@ -97,7 +96,7 @@ const App: React.FC = () => {
             setTimeout(() => setSyncStatus('idle'), 2000);
           })
           .catch(() => setSyncStatus('error'));
-      }, 3000); 
+      }, 3000);
     }
   }, [conversations, activeConversationId, user?.id]);
 
@@ -114,34 +113,14 @@ const App: React.FC = () => {
     return () => unsubscribe();
   }, [user]);
 
-  // Initial cloud fetch when user logs in
-  useEffect(() => {
-    if (user?.id && !hasSyncedWithCloud) {
-      setSyncStatus('syncing');
-      firebaseService.getHistory(user.id).then((cloudData) => {
-        if (cloudData && cloudData.length > 0) {
-          setConversations(prev => {
-            const combined = new Map();
-            prev.forEach(c => combined.set(c.id, c));
-            cloudData.forEach((c: any) => {
-                const local = combined.get(c.id);
-                if (!local || c.timestamp > local.timestamp || c.messages.length > local.messages.length) {
-                  combined.set(c.id, c);
-                }
-            });
-            return Array.from(combined.values()).sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-          });
-        }
-        setSyncStatus('success');
-        setHasSyncedWithCloud(true);
-        setTimeout(() => setSyncStatus('idle'), 2000);
-      }).catch(() => {
-        setSyncStatus('error');
-        setHasSyncedWithCloud(true);
-        setTimeout(() => setSyncStatus('idle'), 3000);
-      });
-    }
-  }, [user?.id, hasSyncedWithCloud]);
+  const cycleLanguage = () => {
+    let next: Language = 'en';
+    if (lang === 'en') next = 'si';
+    else if (lang === 'si') next = 'ta';
+    else next = 'en';
+    setLang(next);
+    cacheService.set(CacheKey.LANG, next);
+  };
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
@@ -161,9 +140,6 @@ const App: React.FC = () => {
   };
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
-  
-  // Font Class handling based on language
-  const fontClass = lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans';
 
   const renderContent = () => {
     switch (view) {
@@ -173,11 +149,7 @@ const App: React.FC = () => {
       case 'help':
       case 'math':
         const modeMapping: Record<AppView, WorkspaceMode> = {
-          'art': 'studio',
-          'camera': 'vision',
-          'help': 'gethelp',
-          'math': 'maths',
-          'chat': 'chat',
+          'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat',
           'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat'
         };
         return (
@@ -212,8 +184,8 @@ const App: React.FC = () => {
         );
       case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
-      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'terms': return <TermsPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
+      case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
       case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
@@ -226,42 +198,28 @@ const App: React.FC = () => {
 
   return (
     <div 
-      className={`w-screen flex flex-col ${fontClass} bg-slate-50 dark:bg-slate-950 overflow-hidden transition-all duration-300`}
+      className={`w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden relative`}
       style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
     >
-      <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-6 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate('landing')}>
+      <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-4 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5 safe-pt">
+        <div className="flex items-center gap-2 md:gap-3 cursor-pointer" onClick={() => navigate('landing')}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-sm"></i></div>
-          <h1 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
+          <h1 className="text-xs md:text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 md:gap-3">
           {syncStatus !== 'idle' && (
-             <div className="hidden md:flex items-center gap-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
+             <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
                 <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                <span className="text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? t.syncing : syncStatus === 'success' ? t.synced : t.syncError}</span>
+                <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Sync' : syncStatus === 'success' ? 'Saved' : 'Err'}</span>
              </div>
           )}
-          <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-10 h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
-          
-          {/* Language Toggle Cycle: EN -> SI -> TA */}
-          <button 
-            onClick={() => { 
-              const next = lang === 'en' ? 'si' : lang === 'si' ? 'ta' : 'en'; 
-              setLang(next); 
-              cacheService.set(CacheKey.LANG, next); 
-            }} 
-            className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-2 min-w-[30px]"
-          >
-            {lang === 'en' ? 'EN' : lang === 'si' ? 'SI' : 'TA'}
+          <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
+          <button onClick={cycleLanguage} className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-500 px-1 md:px-2 min-w-[60px] text-center border border-slate-200 dark:border-white/5 rounded-full py-1.5">
+            {lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}
           </button>
           
-          <div className="flex items-center gap-3 pl-2">
-            {user && (
-              <span className="hidden sm:inline-block text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
-                {user.name.split(' ')[0]}
-              </span>
-            )}
-            <button onClick={() => navigate('account')} className="w-10 h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 active:scale-95 transition-all shadow-sm">
+          <div className="flex items-center gap-2 pl-1">
+            <button onClick={() => navigate('account')} className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 active:scale-95 transition-all shadow-sm">
               {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px] text-slate-400"></i>}
             </button>
           </div>

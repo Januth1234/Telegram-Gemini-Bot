@@ -14,7 +14,6 @@ interface GetHelpModeProps {
 
 const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
   const t = translations[lang];
-  const isEmpty = messages.length === 0;
 
   // Logic to handle file downloads with correct extensions
   const handleDownloadFile = (content: string, filename: string, language: string) => {
@@ -58,13 +57,13 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang, embedded = fal
   };
 
   const containerClass = embedded 
-    ? `flex-1 flex flex-col w-full relative ${isEmpty ? 'justify-center items-center overflow-hidden' : 'overflow-y-auto custom-scrollbar bg-slate-50/50 dark:bg-slate-950/50'}`
-    : `fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal ${isEmpty ? 'overflow-hidden justify-center items-center' : 'overflow-hidden'}`;
+    ? "flex-1 flex flex-col p-4 md:p-10 overflow-y-auto custom-scrollbar items-center bg-slate-50/50 dark:bg-slate-950/50 pb-48" 
+    : "fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden";
 
   return (
     <div className={containerClass}>
       {!embedded && (
-        <header className={`h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50 ${isEmpty ? 'absolute top-0 left-0 right-0 bg-transparent border-none' : ''}`}>
+        <header className="h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-xl"><i className="fa-solid fa-wand-sparkles text-xl"></i></div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.getHelp}</h2>
@@ -73,33 +72,20 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang, embedded = fal
         </header>
       )}
 
-      <div className={`w-full max-w-4xl mx-auto ${isEmpty ? 'px-6' : 'space-y-12 p-6 md:p-10 pb-48'}`}>
-        {isEmpty ? (
-          <div className="text-center space-y-8 animate-reveal flex flex-col items-center">
-            <div className="w-24 h-24 rounded-[36px] bg-white dark:bg-slate-900 flex items-center justify-center text-cyan-600 border border-black/5 dark:border-white/10 shadow-2xl relative">
-               <div className="absolute inset-0 bg-cyan-500/10 rounded-[36px] blur-xl"></div>
-               <i className="fa-solid fa-microchip text-5xl relative z-10"></i>
+      <div className="w-full max-w-4xl space-y-12">
+        {messages.length === 0 ? (
+          <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
+            <div className="w-24 h-24 rounded-[48px] bg-cyan-500/10 flex items-center justify-center text-cyan-600 mx-auto border border-cyan-500/20 shadow-inner">
+               <i className="fa-solid fa-microchip text-5xl"></i>
             </div>
-            <div className="space-y-4 max-w-lg">
+            <div className="space-y-4 px-6">
                <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">AI Agent Workspace</h2>
-               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 leading-relaxed">
-                 Autonomous agent capabilities for complex tasks. Generate code, debug errors, analyze data, or build structured documents.
+               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
+                 Start a multi-step project. Ask me to write code, design data tables, or troubleshoot complex issues. Your progress is saved automatically.
                </p>
-               <div className="flex flex-wrap justify-center gap-3 pt-6">
-                  {[
-                    { label: "Build a landing page", icon: "fa-code" },
-                    { label: "Write a Python script", icon: "fa-python", brand: true },
-                    { label: "Analyze Data", icon: "fa-chart-pie" },
-                    { label: "Debug Logic", icon: "fa-bug" }
-                  ].map((s, i) => (
-                    <button 
-                      key={i} 
-                      onClick={() => onSend(s.label)} 
-                      className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 hover:border-cyan-200 transition-all shadow-sm active:scale-95 uppercase tracking-widest flex items-center gap-2"
-                    >
-                      <i className={`fa-solid ${s.brand ? 'fa-brands' : ''} ${s.icon} opacity-50`}></i>
-                      {s.label}
-                    </button>
+               <div className="flex flex-wrap justify-center gap-3 pt-8">
+                  {["Build a landing page", "Write a Python script", "Create a sales data table", "Design an SQL database"].map(s => (
+                    <button key={s} onClick={() => onSend(s)} className="px-6 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95 uppercase tracking-widest">{s}</button>
                   ))}
                </div>
             </div>

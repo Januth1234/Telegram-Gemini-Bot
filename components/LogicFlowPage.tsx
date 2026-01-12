@@ -10,61 +10,8 @@ interface LogicFlowPageProps {
 
 const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
-  // Control the visual flow logic: Native vs Direct (Simplified)
-  const [activeFlow, setActiveFlow] = useState<'native' | 'direct'>('native');
-
-  const content = {
-    en: {
-      btnNative: "Native Logic (SI/TA)",
-      btnDirect: "Direct Logic (EN)",
-      s1: "Bilingual Capture",
-      s2: "Bridge to English Core",
-      s3: "Multimodal Thinking",
-      s4: "Output Translation",
-      s5: "Final Response",
-      d1: "Raw Data Capture",
-      d2: "Neural Cycle Alpha",
-      d3: "Instant Manifest",
-      card1Title: "Neural Relay Mechanism",
-      card1Desc: "Orin v4.0 leverages an advanced relay system that translates Sinhala/Tamil queries into high-precision English prompts, ensuring the model's global reasoning depth is applied to local context.",
-      card2Title: "Low-Latency Handshake",
-      card2Desc: "Every packet in the logic flow is optimized for the Sri Lankan network backbone, utilizing regional edge computing to minimize the 'wait time' between input and neural synthesis."
-    },
-    si: {
-      btnNative: "දේශීය පද්ධතිය (SI/TA)",
-      btnDirect: "සෘජු පද්ධතිය (EN)",
-      s1: "භාෂා ග්‍රහණය",
-      s2: "ඉංග්‍රීසි පාලම",
-      s3: "කෘතිම බුද්ධිය සිතීම",
-      s4: "පරිවර්තනය",
-      s5: "අවසාන පිළිතුර",
-      d1: "දත්ත ලබාගැනීම",
-      d2: "ස්නායුක සැකසුම",
-      d3: "ක්ෂණික ප්‍රතිඵලය",
-      card1Title: "ස්නායුක හුවමාරු පද්ධතිය",
-      card1Desc: "ඔරින් v4.0 උසස් පරිවර්තන පද්ධතියක් භාවිතා කරමින් සිංහල/දෙමළ ප්‍රශ්න ඉංග්‍රීසි භාෂාවට හරවා ලොව පුරා ඇති දැනුම ඔබේ භාෂාවෙන් ලබා දෙයි.",
-      card2Title: "වේගවත් සම්බන්ධතාවය",
-      card2Desc: "ශ්‍රී ලංකාවේ අන්තර්ජාල සම්බන්ධතා සඳහා විශේෂයෙන් සකසා ඇති බැවින් ඉතා අඩු කාලයකින් පිළිතුරු ලබා ගැනීමට හැක."
-    },
-    ta: {
-      btnNative: "உள்ளூர் தர்க்கம் (SI/TA)",
-      btnDirect: "நேரடி தர்க்கம் (EN)",
-      s1: "மொழிப் பிடிப்பு",
-      s2: "ஆங்கிலப் பாலம்",
-      s3: "செயற்கை நுண்ணறிவு சிந்தனை",
-      s4: "வெளியீடு மொழிபெயர்ப்பு",
-      s5: "இறுதி பதில்",
-      d1: "தரவுப் பிடிப்பு",
-      d2: "நரம்பியல் சுழற்சி",
-      d3: "உடனடி வெளிப்பாடு",
-      card1Title: "நரம்பியல் ரிலே பொறிமுறை",
-      card1Desc: "ஒரின் v4.0 சிங்களம்/தமிழ் கேள்விகளை ஆங்கிலத் தூண்டுதல்களாக மொழிபெயர்க்க ஒரு மேம்பட்ட அமைப்பைப் பயன்படுத்துகிறது, இது உலகளாவிய அறிவை உள்ளூர் சூழலுக்குப் பயன்படுத்துகிறது.",
-      card2Title: "குறைந்த தாமத இணைப்பு",
-      card2Desc: "இலங்கை இணைய முதுகெலும்பிற்காக ஒவ்வொரு பாக்கெட்டும் மேம்படுத்தப்பட்டுள்ளது, இது உள்ளீடு மற்றும் நரம்பியல் தொகுப்புக்கு இடையிலான காத்திருப்பு நேரத்தைக் குறைக்கிறது."
-    }
-  };
-
-  const localT = content[lang];
+  const [activeFlow, setActiveFlow] = useState<'si' | 'en'>(lang === 'si' ? 'si' : 'en');
+  const isSinhalaFlow = activeFlow === 'si';
 
   const FlowStep = ({ icon, title, label, color, isLast = false }: any) => {
     const colorMap: Record<string, string> = {
@@ -92,12 +39,12 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
         {/* Text Labels */}
         <div className="mt-6 md:mt-8 text-center space-y-2 px-4 max-w-[180px]">
           <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-900 dark:text-white leading-tight">{title}</h4>
-          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase leading-relaxed">{label}</p>
+          <p className={`text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase leading-relaxed ${lang === 'si' ? 'sinhala-text' : ''}`}>{label}</p>
         </div>
         
         {/* Horizontal Line - Desktop */}
         {!isLast && (
-          <div className={`hidden md:block absolute top-[56px] left-[110%] h-[1px] bg-slate-200 dark:bg-slate-800 -z-10 w-20 lg:w-28`}>
+          <div className={`hidden md:block absolute top-[56px] left-[110%] h-[1px] bg-slate-200 dark:bg-slate-800 -z-10 ${isSinhalaFlow ? 'w-20 lg:w-28' : 'w-28 lg:w-40'}`}>
              <div className="absolute top-1/2 left-0 w-2 h-2 -translate-y-1/2 bg-cyan-500 rounded-full blur-[2px] animate-[flowLine_4s_infinite_linear]"></div>
              <div className={`absolute right-0 -top-1 w-2.5 h-2.5 rounded-full ${dotColorMap[color]} opacity-20 flex items-center justify-center`}><div className={`w-1.5 h-1.5 rounded-full ${dotColorMap[color]} animate-ping`}></div></div>
           </div>
@@ -135,26 +82,26 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
         <div className="space-y-20">
           <div className="flex justify-center">
             <div className="p-2 bg-slate-200/50 dark:bg-slate-900/50 rounded-3xl flex gap-2 border border-black/5 dark:border-white/5 backdrop-blur-3xl shadow-inner">
-               <button onClick={() => setActiveFlow('native')} className={`px-8 md:px-14 py-3 md:py-4 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${activeFlow === 'native' ? 'bg-white dark:bg-slate-800 shadow-2xl text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>{localT.btnNative}</button>
-               <button onClick={() => setActiveFlow('direct')} className={`px-8 md:px-14 py-3 md:py-4 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${activeFlow === 'direct' ? 'bg-white dark:bg-slate-800 shadow-2xl text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>{localT.btnDirect}</button>
+               <button onClick={() => setActiveFlow('si')} className={`px-8 md:px-14 py-3 md:py-4 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${activeFlow === 'si' ? 'bg-white dark:bg-slate-800 shadow-2xl text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Native Logic (SI)</button>
+               <button onClick={() => setActiveFlow('en')} className={`px-8 md:px-14 py-3 md:py-4 rounded-2xl text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] transition-all duration-500 ${activeFlow === 'en' ? 'bg-white dark:bg-slate-800 shadow-2xl text-slate-900 dark:text-white' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}>Direct Logic (EN)</button>
             </div>
           </div>
 
           <div className="glass-panel py-20 px-6 md:py-32 md:px-16 rounded-[64px] border border-black/5 dark:border-white/5 flex flex-col items-center justify-center shadow-sm relative overflow-x-auto no-scrollbar bg-[radial-gradient(circle_at_center,rgba(99,102,241,0.03),transparent_70%)]">
-            <div className={`flex flex-col md:flex-row items-center justify-center w-full min-w-max md:min-w-0 transition-all duration-700 ${activeFlow === 'native' ? 'gap-10 md:gap-20 lg:gap-32' : 'gap-10 md:gap-32 lg:gap-48'}`}>
-                {activeFlow === 'native' ? (
+            <div className="flex flex-col md:flex-row items-center justify-center w-full min-w-max md:min-w-0 transition-all duration-700 ${isSinhalaFlow ? 'gap-10 md:gap-20 lg:gap-32' : 'gap-10 md:gap-32 lg:gap-48'}">
+                {activeFlow === 'si' ? (
                   <>
-                    <FlowStep icon="fa-keyboard" title={t.stepInput} label={localT.s1} color="cyan" />
-                    <FlowStep icon="fa-language" title={t.stepTranslate} label={localT.s2} color="indigo" />
-                    <FlowStep icon="fa-brain" title={t.stepProcess} label={localT.s3} color="violet" />
-                    <FlowStep icon="fa-language" title={t.stepTranslate} label={localT.s4} color="indigo" />
-                    <FlowStep icon="fa-comment-dots" title={t.stepOutput} label={localT.s5} color="emerald" isLast />
+                    <FlowStep icon="fa-keyboard" title={t.stepInput} label="Bilingual Capture" color="cyan" />
+                    <FlowStep icon="fa-language" title={t.stepTranslate} label="Bridge to English Core" color="indigo" />
+                    <FlowStep icon="fa-brain" title={t.stepProcess} label="Multimodal Thinking" color="violet" />
+                    <FlowStep icon="fa-language" title={t.stepTranslate} label="Output Translation" color="indigo" />
+                    <FlowStep icon="fa-comment-dots" title={t.stepOutput} label="Final Response" color="emerald" isLast />
                   </>
                 ) : (
                   <>
-                    <FlowStep icon="fa-terminal" title={t.stepInput} label={localT.d1} color="cyan" />
-                    <FlowStep icon="fa-microchip" title={t.stepProcess} label={localT.d2} color="violet" />
-                    <FlowStep icon="fa-bolt" title={t.stepOutput} label={localT.d3} color="emerald" isLast />
+                    <FlowStep icon="fa-keyboard" title={t.stepInput} label="Raw Data Capture" color="cyan" />
+                    <FlowStep icon="fa-microchip" title={t.stepProcess} label="Neural Cycle Alpha" color="violet" />
+                    <FlowStep icon="fa-comment-dots" title={t.stepOutput} label="Instant Manifest" color="emerald" isLast />
                   </>
                 )}
             </div>
@@ -163,13 +110,13 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
              <div className="p-10 md:p-14 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl rounded-[48px] border border-black/5 dark:border-white/5 space-y-6 hover:-translate-y-1 transition-all shadow-sm">
                 <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-600 shadow-inner"><i className="fa-solid fa-microchip text-2xl"></i></div>
-                <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{localT.card1Title}</h5>
-                <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 font-medium">{localT.card1Desc}</p>
+                <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Neural Relay Mechanism</h5>
+                <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 font-medium">Orin v4.0 leverages an advanced relay system that translates Sinhala queries into high-precision English prompts, ensuring the model's global reasoning depth is applied to local context.</p>
              </div>
              <div className="p-10 md:p-14 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl rounded-[48px] border border-black/5 dark:border-white/5 space-y-6 hover:-translate-y-1 transition-all shadow-sm">
                 <div className="w-14 h-14 rounded-2xl bg-violet-500/10 flex items-center justify-center text-violet-600 shadow-inner"><i className="fa-solid fa-bolt-lightning text-2xl"></i></div>
-                <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">{localT.card2Title}</h5>
-                <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 font-medium">{localT.card2Desc}</p>
+                <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Low-Latency Handshake</h5>
+                <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 font-medium">Every packet in the logic flow is optimized for the Sri Lankan network backbone, utilizing regional edge computing to minimize the 'wait time' between input and neural synthesis.</p>
              </div>
           </div>
         </div>

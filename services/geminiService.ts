@@ -26,7 +26,7 @@ const getSystemInstruction = () => {
 RULES:
 1. SIMPLE: Use everyday language.
 2. DIRECT: Answer immediately.
-3. LANGUAGE: Detect the user's language (Sinhala, Tamil, or English) and reply in the EXACT SAME language.
+3. LANGUAGE: Use simple Sinhala or English.
 4. IDENTITY: Only mention Januth Nimnal if asked.
 5. CONCISE: Keep it short and helpful.
 
@@ -179,12 +179,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a professional bi-directional translator.
-        Objective: Translate speech between ${options.source} and ${options.target}.
-        Rules:
-        1. If input is ${options.source}, translate to ${options.target}.
-        2. If input is ${options.target}, translate to ${options.source}.
-        3. Give ONLY the spoken translation. No introductions or explanations.`,
+        systemInstruction: `You are a real-time speech translator between ${options.source} and ${options.target}. Speak only the translation.`,
       },
     });
   }
@@ -192,7 +187,7 @@ export class GeminiService {
   async generateWelcomeMessage(options: { timeOfDay: string; weather: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : options.lang === 'ta' ? 'Tamil' : 'English'}.
+      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
       Context: It is a ${options.weather} ${options.timeOfDay} in Sri Lanka.
       STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols.`;
 
@@ -213,10 +208,9 @@ export class GeminiService {
   async translate(text: string, targetLang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const targetName = targetLang === 'si' ? 'Sinhala' : targetLang === 'ta' ? 'Tamil' : 'English';
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Translate to ${targetName}: "${text}". Only output the translation.`,
+        contents: `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only output the translation.`,
       });
       return response.text || text;
     } catch {
@@ -228,20 +222,19 @@ export class GeminiService {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(0, 3).map(m => m.content).join(' ');
-      const langName = lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English';
-      const prompt = `Short title (3-5 words) for this chat in ${langName}: ${context}`;
+      const prompt = `Short title (3-5 words) for this chat in ${lang === 'si' ? 'Sinhala' : 'English'}: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
       
-      let title = response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat");
+      let title = response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : "New Chat");
       const words = title.split(' ');
       if (words.length > 5) title = words.slice(0, 5).join(' ');
       return title;
     } catch {
-      return lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat";
+      return lang === 'si' ? "නව පිළිසඳර" : "New Chat";
     }
   }
 
@@ -318,127 +311,6 @@ export class GeminiService {
       throw new Error("No image generated.");
     } catch (e: any) {
       throw new AppError("Drawing failed.", 'generic');
-    }
-  }
-
-  async generateVideo(prompt: string): Promise<string> {
-    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    // Using Veo fast generate preview
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt,
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '16:9'
-      }
-    });
-
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({operation: operation});
-    }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Video generation failed.");
-    
-    // Must append API key to download
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  async animateImage(prompt: string, imageBase64: string, mimeType: string): Promise<string> {
-    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-fast-generate-preview',
-      prompt: prompt, // Prompt is optional but helpful
-      image: {
-        imageBytes: imageBase64,
-        mimeType: mimeType
-      },
-      config: {
-        numberOfVideos: 1,
-        resolution: '720p',
-        aspectRatio: '16:9'
-      }
-    });
-
-    while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
-      operation = await ai.operations.getVideosOperation({operation: operation});
-    }
-
-    const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-    if (!downloadLink) throw new Error("Animation failed.");
-
-    const response = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-    const blob = await response.blob();
-    return URL.createObjectURL(blob);
-  }
-
-  async generateSpeech(text: string): Promise<string> {
-     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-     
-     const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: 'Kore' }, // Kore, Puck, Charon, Fenrir
-              },
-          },
-        },
-     });
-
-     const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-     if (!base64Audio) throw new Error("Audio generation failed.");
-     return this.pcmToWav(base64Audio);
-  }
-
-  private pcmToWav(base64: string): string {
-    const binary = atob(base64);
-    const len = binary.length;
-    const bytes = new Uint8Array(len);
-    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
-    
-    // Create WAV header
-    const wavHeader = new ArrayBuffer(44);
-    const view = new DataView(wavHeader);
-    
-    // RIFF chunk descriptor
-    this.writeString(view, 0, 'RIFF');
-    view.setUint32(4, 36 + len, true);
-    this.writeString(view, 8, 'WAVE');
-    
-    // fmt sub-chunk
-    this.writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM format
-    view.setUint16(22, 1, true); // Mono
-    view.setUint32(24, 24000, true); // Sample Rate
-    view.setUint32(28, 24000 * 2, true); // Byte Rate
-    view.setUint16(32, 2, true); // Block Align
-    view.setUint16(34, 16, true); // Bits per sample
-    
-    // data sub-chunk
-    this.writeString(view, 36, 'data');
-    view.setUint32(40, len, true);
-    
-    const blob = new Blob([view, bytes], { type: 'audio/wav' });
-    return URL.createObjectURL(blob);
-  }
-
-  private writeString(view: DataView, offset: number, string: string) {
-    for (let i = 0; i < string.length; i++) {
-      view.setUint8(offset + i, string.charCodeAt(i));
     }
   }
 

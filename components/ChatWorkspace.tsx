@@ -105,9 +105,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setTimeout(() => { setProgress(0); setStepLabel(""); }, 500);
   };
 
-  const handleSend = useCallback(async (overrideInput?: string) => {
+  const handleSend = useCallback(async (overrideInput?: string, overrideFile?: { data: string; mimeType: string; name: string }) => {
     const text = overrideInput !== undefined ? overrideInput : localInput;
-    if (!text.trim() && !selectedFile && activeTab !== 'studio') return;
+    const fileToUse = overrideFile !== undefined ? overrideFile : selectedFile;
+    
+    if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
     if (geminiService.hasReachedLimit()) return;
 
     abortControllerRef.current = new AbortController();
@@ -139,13 +141,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       return;
     }
 
-    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text || "", timestamp: new Date(), type: 'text', fileName: selectedFile?.name };
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: text || "", timestamp: new Date(), type: 'text', fileName: fileToUse?.name };
     const currentHistory = [...messages, userMsg];
     setMessages(prev => [...prev, userMsg]);
 
     try {
       const res = await geminiService.chat(text || "Continue.", { 
-        fileData: selectedFile || undefined, 
+        fileData: fileToUse || undefined, 
         grounding: 'search', 
         messageCount: currentHistory.filter(m => m.role === 'user').length,
         useThinking: true, 
@@ -183,19 +185,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
 
-    const isEmpty = messages.length === 0;
-
     return (
-      <div className={`flex-1 relative bg-slate-50/30 dark:bg-slate-950/30 ${isEmpty ? 'flex flex-col items-center justify-center pb-32 overflow-hidden' : 'overflow-y-auto custom-scrollbar p-4 md:p-10 pb-48'}`}>
-        <div className={`max-w-3xl mx-auto w-full ${isEmpty ? 'px-6' : 'space-y-10'}`}>
-          {isEmpty ? (
-            <div className="text-center space-y-8 animate-reveal">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
+        <div className="max-w-3xl mx-auto space-y-10">
+          {messages.length === 0 ? (
+            <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
                <div className="w-20 h-20 md:w-24 md:h-24 rounded-[32px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
                   <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : activeTab === 'vision' ? 'Camera' : 'Chat'}</h2>
-                  <div className="flex flex-wrap justify-center gap-2">
+                  <div className="flex flex-wrap justify-center gap-2 px-4">
                      {(activeTab === 'studio' ? t.prompts.studio : activeTab === 'vision' ? t.prompts.vision : t.prompts.chat).map(s => (
                         <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
                      ))}
@@ -203,47 +203,45 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                </div>
             </div>
           ) : (
-            <>
-              {messages.map(msg => (
-                <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                   <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                      <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                      {msg.imageUrl && (
-                        <div className="mt-6 space-y-4">
-                           <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
-                              <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
-                           </div>
-                           <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
-                        </div>
-                      )}
-                      {msg.links && msg.links.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
-                           {msg.links.map((link, idx) => (
-                             <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
-                                <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
-                             </a>
-                           ))}
-                        </div>
-                      )}
-                   </div>
-                   <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
-                      <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
-                      <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                      <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                   </div>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
-                  <div className="flex gap-1">
-                    {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
-                  </div>
-                  <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
-                </div>
-              )}
-              <div ref={scrollRef} className="h-4" />
-            </>
+            messages.map(msg => (
+              <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                    {msg.imageUrl && (
+                      <div className="mt-6 space-y-4">
+                         <div className="rounded-[20px] overflow-hidden border-2 border-slate-100 dark:border-white/5 shadow-2xl bg-slate-100 dark:bg-black group">
+                            <img src={msg.imageUrl} className="w-full h-auto transition-transform duration-700 group-hover:scale-105" alt="Result" />
+                         </div>
+                         <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="w-full py-4 bg-cyan-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-cyan-500 transition-all">Save Image</button>
+                      </div>
+                    )}
+                    {msg.links && msg.links.length > 0 && (
+                      <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
+                         {msg.links.map((link, idx) => (
+                           <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
+                              <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
+                           </a>
+                         ))}
+                      </div>
+                    )}
+                 </div>
+                 <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
+                    <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
+                    <div className="w-1 h-1 rounded-full bg-slate-400"></div>
+                    <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                 </div>
+              </div>
+            ))
           )}
+          {isTyping && (
+            <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
+              <div className="flex gap-1">
+                {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
+              </div>
+              <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
+            </div>
+          )}
+          <div ref={scrollRef} className="h-4" />
         </div>
       </div>
     );
@@ -280,9 +278,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
         <header className="h-16 md:h-20 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl">
-          <div className="flex items-center gap-4 flex-1">
-            <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 md:w-12 md:h-12 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all"><i className="fa-solid fa-bars-staggered"></i></button>
-            <nav className="flex items-center bg-slate-100 dark:bg-white/5 rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar max-w-full">
+          <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
+            <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all"><i className="fa-solid fa-bars-staggered"></i></button>
+            <nav className="flex items-center bg-slate-100 dark:bg-white/5 rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar scroll-smooth">
               {(['chat', 'maths', 'studio', 'vision', 'gethelp', 'voice'] as WorkspaceMode[]).map(m => (
                 <button 
                   key={m} 
@@ -295,7 +293,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   </span>
                   {isBETA(m) && (
                     <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                       <span className="animate-beta-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
                     </span>
                   )}
@@ -303,7 +301,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               ))}
             </nav>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-2">
              {isTyping && <button onClick={() => { abortControllerRef.current?.abort(); setIsTyping(false); stopProgress(); }} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-stop"></i></button>}
              <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all border border-slate-200 dark:border-white/10 shadow-sm"><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
           </div>
@@ -312,21 +310,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {renderBody()}
 
-        {/* Optimized input bar layout */}
+        {/* Optimized input bar layout for Mobile Safe Area */}
         {activeTab !== 'maths' && activeTab !== 'voice' && (
-          <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent">
-             <div className="max-w-3xl mx-auto pointer-events-auto pb-[env(safe-area-inset-bottom)]">
-                <div className="glass-panel p-2 md:p-3 rounded-[24px] md:rounded-[32px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-2 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
-                   <button onClick={() => fileInputRef.current?.click()} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[20px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all active:scale-90"><i className="fa-solid fa-paperclip text-lg"></i></button>
+          <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent safe-pb">
+             <div className="max-w-3xl mx-auto pointer-events-auto">
+                <div className="glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-1 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
+                   <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"><i className="fa-solid fa-paperclip text-base"></i></button>
                    <input 
                     ref={inputRef} 
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'vision' ? t.placeholderVision : activeTab === 'gethelp' ? "Ask for follow-ups..." : t.placeholderChat} 
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base md:text-xl py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
+                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'vision' ? t.placeholderVision : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat} 
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
-                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-12 h-12 md:w-14 md:h-14 shrink-0 rounded-[20px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-lg"></i></button>
+                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-base"></i></button>
                    <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -336,7 +334,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       }
                    }} />
                 </div>
-                {selectedFile && <div className="mt-4 flex items-center gap-3 px-4 py-2 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0 shadow-sm"><i className="fa-solid fa-file text-emerald-600 text-[10px]"></i><span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[150px]">{selectedFile.name}</span><button onClick={() => setSelectedFile(null)} className="text-red-500"><i className="fa-solid fa-xmark"></i></button></div>}
+                {selectedFile && <div className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 w-fit animate-reveal mx-auto md:mx-0 shadow-sm"><i className="fa-solid fa-file text-emerald-600 text-[9px]"></i><span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 truncate max-w-[120px]">{selectedFile.name}</span><button onClick={() => setSelectedFile(null)} className="text-red-500 ml-1"><i className="fa-solid fa-xmark text-xs"></i></button></div>}
              </div>
           </div>
         )}
