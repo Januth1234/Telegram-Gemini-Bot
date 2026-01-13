@@ -119,6 +119,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     startProgress(activeTab);
     setLocalInput('');
     onInputChange('');
+    setSelectedFile(null); // Clear immediately for UI
 
     if (activeTab === 'studio') {
       try {
@@ -174,7 +175,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     } catch (e: any) {
       if (e.name === 'AbortError') return;
       setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
-    } finally { setIsTyping(false); setSelectedFile(null); stopProgress(); }
+    } finally { setIsTyping(false); stopProgress(); }
   }, [localInput, selectedFile, activeTab, onInputChange, setMessages, lang, messages, onUpdateTitle]);
 
   const getTabIcon = (tab: WorkspaceMode) => {
@@ -338,7 +339,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         <p className="text-[10px] font-black text-slate-900 dark:text-white truncate">{selectedFile.name}</p>
                         <p className="text-[9px] font-bold text-slate-400 uppercase">Ready to send</p>
                      </div>
-                     <button onClick={() => setSelectedFile(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-xmark"></i></button>
+                     <button onClick={() => { setSelectedFile(null); if(fileInputRef.current) fileInputRef.current.value = ''; }} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-xmark"></i></button>
                   </div>
                 )}
 
@@ -360,6 +361,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
                         r.readAsDataURL(file);
                       }
+                      e.target.value = ''; // Reset input to allow re-selection
                    }} />
                 </div>
              </div>
