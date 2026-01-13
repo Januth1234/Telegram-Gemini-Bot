@@ -152,35 +152,66 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
-        {/* SEO Platform Overview Section - Visually styled but content-heavy for crawlers */}
-        <section className="w-full max-w-6xl py-12 px-6 mt-12 bg-slate-100/50 dark:bg-white/5 rounded-[40px] border border-black/5 dark:border-white/5 text-left animate-reveal">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              <div className="space-y-6">
-                 <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Why Orin AI Platform?</h2>
-                 <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Orin AI is the best AI interface for beginners and professionals alike. Designed by Januth Nimnal, this Orin AI assistant serves as a powerful AI workflow assistant, helping users with research, coding, and creative tasks. Unlike other AI chatbot tools, Orin provides native support for Sinhala and Tamil, making it the top AI assistant for Sri Lanka.
-                 </p>
-                 <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Looking for alternatives to ChatGPT? Orin AI platform offers a simple AI chatbot interface with a clean UI, acting as a personal AI assistant that respects your privacy. Whether you need an AI helper for productivity or an AI automation tool for business, Orin delivers.
-                 </p>
-              </div>
-              <div className="space-y-6">
-                 <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Key Features</h3>
-                 <ul className="space-y-2 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wide">
-                    <li className="flex items-center gap-3"><i className="fa-solid fa-check text-cyan-500"></i> Smart AI Assistant & Virtual Helper</li>
-                    <li className="flex items-center gap-3"><i className="fa-solid fa-check text-cyan-500"></i> Custom AI Interface & Dashboard</li>
-                    <li className="flex items-center gap-3"><i className="fa-solid fa-check text-cyan-500"></i> AI Chat Tool for Students & Research</li>
-                    <li className="flex items-center gap-3"><i className="fa-solid fa-check text-cyan-500"></i> Best AI Interface for Productivity</li>
-                    <li className="flex items-center gap-3"><i className="fa-solid fa-check text-cyan-500"></i> Orin AI App & Web Software</li>
-                 </ul>
-                 <div className="pt-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                       Comparison: Orin AI vs ChatGPT • AI Platforms Comparison • Top AI Assistants
+        {/* Strategic SEO Content: Intro -> Problem -> Solution -> Benefits -> CTA */}
+        <article className="w-full max-w-6xl py-16 px-8 mt-16 bg-slate-100/50 dark:bg-white/5 rounded-[48px] border border-black/5 dark:border-white/5 text-left animate-reveal shadow-sm">
+           <header className="mb-10 text-center md:text-left">
+              <h2 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-4">Orin AI Review 2026: The Next Generation of Assistant</h2>
+              <div className="h-1 w-24 bg-cyan-500 rounded-full mx-auto md:mx-0"></div>
+           </header>
+
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-16">
+              <div className="space-y-8">
+                 <section>
+                    <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">The Problem</h3>
+                    <p className="text-base font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+                       Finding the <strong>best AI assistant for small businesses</strong> and students in South Asia has always been a challenge. Most global tools lack localization, making it hard to find a reliable <strong>Sinhala AI chatbot</strong> or a tool that understands the nuance of local research needs. Expensive subscriptions and complex interfaces often gatekeep powerful AI from those who need it most.
                     </p>
+                 </section>
+
+                 <section>
+                    <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">The Solution</h3>
+                    <p className="text-base font-medium text-slate-700 dark:text-slate-300 leading-relaxed">
+                       Orin AI bridges this gap. It is designed as a custom <strong>AI chat interface</strong> that prioritizes speed, accessibility, and bilingual support. Whether you are looking for <strong>how to build your own AI chatbot</strong> experience or simply need a "smart AI assistant" for daily tasks, Orin delivers a seamless, ad-free environment powered by Google's Gemini models.
+                    </p>
+                 </section>
+              </div>
+
+              <div className="space-y-8">
+                 <section>
+                    <h3 className="text-sm font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Key Benefits</h3>
+                    <ul className="space-y-4">
+                       <li className="flex items-start gap-3">
+                          <i className="fa-solid fa-check-circle text-cyan-500 mt-1"></i>
+                          <div>
+                             <strong className="text-slate-900 dark:text-white text-sm block mb-1">Total Privacy</strong>
+                             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">Your data stays on your device. Orin operates with a local-first memory architecture.</p>
+                          </div>
+                       </li>
+                       <li className="flex items-start gap-3">
+                          <i className="fa-solid fa-check-circle text-cyan-500 mt-1"></i>
+                          <div>
+                             <strong className="text-slate-900 dark:text-white text-sm block mb-1">Native Language Support</strong>
+                             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">The only robust <strong>AI interface for productivity</strong> optimized for Sinhala and Tamil input.</p>
+                          </div>
+                       </li>
+                       <li className="flex items-start gap-3">
+                          <i className="fa-solid fa-check-circle text-cyan-500 mt-1"></i>
+                          <div>
+                             <strong className="text-slate-900 dark:text-white text-sm block mb-1">Multimodal Power</strong>
+                             <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">From <strong>AI assistant for research</strong> to creative image synthesis and math solving.</p>
+                          </div>
+                       </li>
+                    </ul>
+                 </section>
+
+                 <div className="pt-4">
+                    <button onClick={() => onStartChat(prompt, 'chat')} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:scale-[1.02] transition-all">
+                       Start Free AI Workspace
+                    </button>
                  </div>
               </div>
            </div>
-        </section>
+        </article>
 
         <footer className="w-full py-16 opacity-30 border-t border-black/5 dark:border-white/5 mt-12">
           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • All Rights Reserved</p>
