@@ -1,7 +1,8 @@
+
 {
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|assets).*)",
       "destination": "/index.html"
     }
   ]
