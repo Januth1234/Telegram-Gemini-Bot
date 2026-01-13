@@ -26,7 +26,7 @@ const getSystemInstruction = () => {
 RULES:
 1. SIMPLE: Use everyday language.
 2. DIRECT: Answer immediately.
-3. LANGUAGE: Use simple Sinhala or English.
+3. LANGUAGE: Use simple Sinhala, Tamil, or English.
 4. IDENTITY: Only mention Januth Nimnal if asked.
 5. CONCISE: Keep it short and helpful.
 
@@ -163,7 +163,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: getSystemInstruction() + "\nCRITICAL: Respond IMMEDIATELY. Be extremely concise. Do not pause.",
+        systemInstruction: getSystemInstruction() + "\nCRITICAL: Respond IMMEDIATELY. Be extremely concise. Support Sinhala and Tamil input.",
       },
     });
   }
@@ -179,7 +179,15 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a real-time translator. Translate ${options.source} to ${options.target} (and vice versa) IMMEDIATELY. No extra words. Just the translation. Fast mode.`,
+        systemInstruction: `You are a professional real-time interpreter.
+        Your task is to translate spoken audio between ${options.source} and ${options.target}.
+        
+        RULES:
+        1. If you hear ${options.source}, translate it to ${options.target}.
+        2. If you hear ${options.target}, translate it to ${options.source}.
+        3. Speak the translation CLEARLY and IMMEDIATELY.
+        4. Do NOT add introductory phrases like "He said" or "Translating". Just speak the translated text.
+        5. Detect the input language automatically between ${options.source} and ${options.target}.`,
       },
     });
   }
@@ -187,7 +195,7 @@ export class GeminiService {
   async generateWelcomeMessage(options: { timeOfDay: string; weather: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : 'English'}.
+      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : options.lang === 'ta' ? 'Tamil' : 'English'}.
       Context: It is a ${options.weather} ${options.timeOfDay} in Sri Lanka.
       STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols.`;
 
@@ -208,9 +216,10 @@ export class GeminiService {
   async translate(text: string, targetLang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const target = targetLang === 'si' ? 'Sinhala' : targetLang === 'ta' ? 'Tamil' : 'English';
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Translate to ${targetLang === 'si' ? 'Sinhala' : 'English'}: "${text}". Only output the translation.`,
+        contents: `Translate to ${target}: "${text}". Only output the translation.`,
       });
       return response.text || text;
     } catch {
@@ -222,7 +231,8 @@ export class GeminiService {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(0, 3).map(m => m.content).join(' ');
-      const prompt = `Short title (3-5 words) for this chat in ${lang === 'si' ? 'Sinhala' : 'English'}: ${context}`;
+      const target = lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English';
+      const prompt = `Short title (3-5 words) for this chat in ${target}: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -234,7 +244,7 @@ export class GeminiService {
       if (words.length > 5) title = words.slice(0, 5).join(' ');
       return title;
     } catch {
-      return lang === 'si' ? "නව පිළිසඳර" : "New Chat";
+      return "New Chat";
     }
   }
 
@@ -258,8 +268,6 @@ export class GeminiService {
       if (options.history && options.history.length > 0) {
           options.history.slice(-10).forEach(msg => {
               if (msg.role === 'user' && msg.imageUrl) {
-                 // Skip adding massive base64 to history context to save tokens/bandwidth if not strictly needed for context
-                 // or summarize it. For now, we just pass text context.
                  contents.push({ role: 'user', parts: [{ text: msg.content + " [Image sent]" }] });
               } else {
                  contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });

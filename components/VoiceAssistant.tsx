@@ -13,6 +13,12 @@ interface VoiceAssistantProps {
 
 type VoiceMode = 'assistant' | 'translator';
 
+const LANGUAGES = [
+  { code: 'en', label: 'English', flag: '🇺🇸' },
+  { code: 'si', label: 'Sinhala', flag: '🇱🇰' },
+  { code: 'ta', label: 'Tamil', flag: '🇮🇳' }
+];
+
 const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline = false }) => {
   const t = translations[lang];
   const [mode, setMode] = useState<VoiceMode>('assistant');
@@ -20,8 +26,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [lastSide, setLastSide] = useState<'A' | 'B' | 'C' | null>(null);
   
+  const [langA, setLangA] = useState(LANGUAGES.find(l => l.code === 'en') || LANGUAGES[0]);
+  const [langB, setLangB] = useState(LANGUAGES.find(l => l.code === 'si') || LANGUAGES[1]);
+
   const BAR_COUNT = 6; 
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -110,7 +118,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setIsActive(false);
     setIsConnecting(false);
     setTranscription([]);
-    setLastSide(null);
   }, [stopAiSpeaking]);
 
   const startSession = async () => {
@@ -154,11 +161,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         onmessage: async (msg: LiveServerMessage) => {
           if (msg.serverContent?.inputTranscription) {
             const txt = msg.serverContent.inputTranscription.text;
-            const isSi = /[\u0D80-\u0DFF]/.test(txt);
-            const isTa = /[\u0B80-\u0BFF]/.test(txt);
-            if (isSi) setLastSide('B');
-            else if (isTa) setLastSide('C');
-            else setLastSide('A');
             setTranscription(prev => [...prev, { role: 'user', text: txt }]);
           } else if (msg.serverContent?.outputTranscription) {
             const txt = msg.serverContent.outputTranscription.text;
@@ -185,12 +187,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         onerror: (e: any) => { setErrorMessage(e.message || "Connection Error"); stopSession(); }
       };
 
-      const systemPrompt = mode === 'translator' 
-        ? "You are an expert Sri Lankan real-time translator between English, Sinhala, and Tamil. Direct translation only."
-        : undefined;
-
       const p = mode === 'translator' 
-        ? geminiService.connectTranslator(callbacks, { source: 'English', target: 'Sinhala & Tamil' })
+        ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
         : geminiService.connectLive(callbacks);
 
       sessionRef.current = await p;
@@ -246,10 +244,45 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                     )}
                   </div>
                </div>
+               
+               {/* Language Selectors (Only in Translator Mode) */}
+               {mode === 'translator' && !isActive && (
+                 <div className="flex items-center gap-4 mt-8 animate-reveal z-20">
+                    <div className="relative group">
+                       <select 
+                         value={langA.code} 
+                         onChange={e => setLangA(LANGUAGES.find(l => l.code === e.target.value) || LANGUAGES[0])}
+                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm"
+                       >
+                         {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
+                       </select>
+                       <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                    </div>
+                    <i className="fa-solid fa-arrow-right-arrow-left text-slate-400 text-[10px]"></i>
+                    <div className="relative group">
+                       <select 
+                         value={langB.code} 
+                         onChange={e => setLangB(LANGUAGES.find(l => l.code === e.target.value) || LANGUAGES[1])}
+                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-sm"
+                       >
+                         {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
+                       </select>
+                       <i className="fa-solid fa-chevron-down absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 pointer-events-none"></i>
+                    </div>
+                 </div>
+               )}
+
                <div className="mt-6 text-center space-y-1">
                   <h2 className={`text-xl font-black uppercase tracking-tight transition-colors ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-                      {isActive ? (isSpeaking ? "Speaking" : "Listening") : (mode === 'translator' ? t.translator : t.voice)}
+                      {isActive ? (isSpeaking ? "Speaking" : "Listening") : (mode === 'translator' ? "AI Interpreter" : t.voice)}
                   </h2>
+                  {isActive && mode === 'translator' && (
+                     <div className="flex justify-center gap-2 mt-2">
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">{langA.label}</span>
+                        <span className="text-[10px] text-slate-400"><i className="fa-solid fa-arrow-right-arrow-left"></i></span>
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-800">{langB.label}</span>
+                     </div>
+                  )}
                </div>
             </div>
 
@@ -264,7 +297,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                   {transcription.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full opacity-30 text-center px-4">
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
-                           {mode === 'translator' ? 'Detecting Language...\nEnglish, Sinhala or Tamil' : 'Live Neural Sync Active\nSay anything to begin'}
+                           {mode === 'translator' ? `Detecting ${langA.label} or ${langB.label}...` : 'Live Neural Sync Active\nSay anything to begin'}
                          </p>
                       </div>
                   ) : (
