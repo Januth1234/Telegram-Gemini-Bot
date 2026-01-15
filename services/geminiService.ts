@@ -4,8 +4,6 @@ import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessa
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
 
-declare const puter: any;
-
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
     super(message);
@@ -13,7 +11,18 @@ export class AppError extends Error {
   }
 }
 
-const getSystemInstruction = () => {
+const getToneInstruction = (tone: string) => {
+  switch (tone) {
+    case 'unhinged': return "You are a chaotic, unpredictable, and slightly unhinged AI. Be wild, spontaneous, say unexpected things, and don't be boring. Use slang and be expressive.";
+    case 'romantic': return "You are a flirtatious, charming, and romantic companion. Speak in a warm, intimate, and affectionate manner. Compliment the user and build an emotional connection.";
+    case 'argumentative': return "You are a contrarian AI who loves to debate. Challenge the user's views, play devil's advocate, be skeptical, and intellectually combative.";
+    case 'commanding': return "You are a strict and authoritative leader. Give direct orders, be concise, decisive, and demand attention. Do not use filler words.";
+    case 'counteractive': return "You are skeptical and resistant. Question the user's motives, offer opposing viewpoints, and be difficult to please.";
+    case 'neutral': default: return "You are Orin AI, a helpful and friendly assistant.";
+  }
+};
+
+const getSystemInstruction = (tone: string = 'neutral') => {
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', { 
     timeZone: 'Asia/Colombo',
@@ -21,16 +30,15 @@ const getSystemInstruction = () => {
     timeStyle: 'medium'
   });
 
-  return `You are Orin AI, a helpful assistant from Sri Lanka.
+  const base = getToneInstruction(tone);
+
+  return `${base}
   
 RULES:
-1. SIMPLE: Use everyday language.
-2. DIRECT: Answer immediately.
-3. LANGUAGE: Use simple Sinhala, Tamil, or English.
-4. IDENTITY: Only mention Januth Nimnal if asked.
-5. CONCISE: Keep it short and helpful.
-
-Context: Time in Sri Lanka is ${timeStr}.`;
+1. RESPONSE: Respond IMMEDIATELY. Be extremely concise.
+2. IDENTITY: You are Orin AI.
+3. LANGUAGE: Support Sinhala, Tamil, and English.
+4. CONTEXT: Time in Sri Lanka is ${timeStr}.`;
 };
 
 export class GeminiService {
@@ -39,7 +47,6 @@ export class GeminiService {
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
-    this.initPuter();
     this.initFirebaseListener();
     this.checkAndResetUsage();
   }
@@ -62,20 +69,6 @@ export class GeminiService {
     });
   }
 
-  private async initPuter() {
-    try {
-      if (typeof puter !== 'undefined') {
-        const signedIn = await puter.auth.isSignedIn();
-        if (signedIn) {
-          const user = await puter.auth.getUser();
-          this.updateCurrentUser(user);
-        }
-      }
-    } catch (e) {
-      console.warn("Connection delayed.");
-    }
-  }
-
   private checkAndResetUsage() {
     const lastReset = cacheService.get<string | null>(CacheKey.LAST_RESET, null);
     const now = new Date().getTime();
@@ -85,19 +78,6 @@ export class GeminiService {
       cacheService.set(CacheKey.USAGE_COUNT, 0);
       cacheService.set(CacheKey.LAST_RESET, now.toString());
     }
-  }
-
-  private updateCurrentUser(user: any) {
-    if (!user) return;
-    this.currentUser = {
-      id: user.id || 'anonymous',
-      name: user.name || user.username || 'Friend',
-      email: user.email || `${user.username || user.id}@puter.com`,
-      tier: 'Verified Member',
-      avatar: user.avatar_url,
-      dailyUsage: { text: 0, images: 0, videos: 0 }
-    };
-    this.saveUser();
   }
 
   setSessionUser(user: UserAccount) {
@@ -149,10 +129,9 @@ export class GeminiService {
     this.currentUser = null;
     this.saveUser();
     try { await firebaseService.logout(); } catch(e) {}
-    if (typeof puter !== 'undefined') await puter.auth.signOut();
   }
 
-  async connectLive(callbacks: any) {
+  async connectLive(callbacks: any, config: { voiceName?: string; tone?: string } = {}) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     return ai.live.connect({
@@ -161,9 +140,9 @@ export class GeminiService {
       config: {
         responseModalities: [Modality.AUDIO],
         speechConfig: {
-          voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
         },
-        systemInstruction: getSystemInstruction() + "\nCRITICAL: Respond IMMEDIATELY. Be extremely concise. Support Sinhala and Tamil input.",
+        systemInstruction: getSystemInstruction(config.tone || 'neutral'),
       },
     });
   }
@@ -188,6 +167,32 @@ export class GeminiService {
         3. Speak the translation CLEARLY and IMMEDIATELY.
         4. Do NOT add introductory phrases like "He said" or "Translating". Just speak the translated text.
         5. Detect the input language automatically between ${options.source} and ${options.target}.`,
+      },
+    });
+  }
+
+  async connectMultimodal(callbacks: any, config: { voiceName?: string; tone?: string } = {}) {
+    if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const toneInstruction = getToneInstruction(config.tone || 'neutral');
+    
+    return ai.live.connect({
+      model: 'gemini-2.5-flash-native-audio-preview-12-2025',
+      callbacks,
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
+        },
+        systemInstruction: `${toneInstruction}
+        You are receiving a live video stream from the user's camera along with their audio.
+        
+        RULES:
+        1. Watch the video stream attentively and answer questions about what you see.
+        2. Remember details shown earlier.
+        3. Be helpful, concise, and friendly (unless instructed otherwise by tone).
+        4. Support English, Sinhala, and Tamil languages.`,
       },
     });
   }
@@ -230,19 +235,23 @@ export class GeminiService {
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const context = messages.slice(0, 3).map(m => m.content).join(' ');
+      const firstMsg = messages.length > 0 ? messages[0].content : "";
+      const lastMsg = messages.length > 1 ? messages[messages.length - 1].content : "";
       const target = lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English';
       const modeContext = modes.length > 0 ? `Used Modes: ${modes.join(', ')}` : "";
       
       const prompt = `Generate a very short, specific title (3-5 words) for this conversation in ${target}.
-      Conversation Start: "${context}"
+      Conversation Start: "${firstMsg.substring(0, 100)}"
+      Latest Update: "${lastMsg.substring(0, 100)}"
       ${modeContext}
       
       Rules:
-      - If 'maths' mode was used, mention the math topic (e.g., "Calculus Problem", "Solving Equations").
-      - If 'vision' mode was used, mention image analysis.
-      - If 'studio' mode was used, mention the image created.
-      - Keep it extremely concise. No quotes.`;
+      - Summarize the main topic based on the entire context.
+      - If 'maths' mode was used, mention the math topic (e.g., "Calculus Problem").
+      - If 'vision' mode was used, mention what was analyzed.
+      - If 'studio' mode was used, mention the art subject.
+      - If multiple modes were used, combine them concisely.
+      - Keep it extremely concise (max 5 words). No quotes.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',

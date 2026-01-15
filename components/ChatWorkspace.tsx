@@ -6,6 +6,7 @@ import { translations } from '../translations';
 import MathsMode from './MathsMode';
 import GetHelpMode from './GetHelpMode';
 import VoiceAssistant from './VoiceAssistant';
+import LiveVisionMode from './LiveVisionMode';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -60,7 +61,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (activeTab !== 'voice' && activeTab !== 'maths') {
+      if (activeTab !== 'voice' && activeTab !== 'maths' && activeTab !== 'vision') {
         inputRef.current?.focus();
       }
     }, 200);
@@ -172,7 +173,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.text, timestamp: new Date(), type: 'text', links: res.links };
       setMessages(prev => [...prev, assistantMsg]);
       
-      if (messages.length < 2) {
+      // Update title if it's the start or occasionally
+      if (messages.length < 2 || messages.length % 6 === 0) {
         const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], [activeTab], lang);
         onUpdateTitle(title, [activeTab]);
       }
@@ -198,14 +200,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       return getTabIcon(m);
   };
 
-  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice';
+  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice' || m === 'vision';
 
-  // Slice conversations for pagination
+  // Pagination Logic
   const visibleConversations = conversations.slice(0, historyPage * ITEMS_PER_PAGE);
+  const hasMoreHistory = visibleConversations.length < conversations.length;
 
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (window.confirm("Delete this conversation permanently?")) {
+    if (window.confirm(lang === 'si' ? "මෙම සංවාදය මකා දැමීමට අවශ්‍යද?" : "Delete this conversation history?")) {
         onDeleteConv(id);
     }
   };
@@ -214,6 +217,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
     if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
+    if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={handleClose} lang={lang} /></div>;
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
@@ -237,7 +241,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
                  <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
                     
-                    {/* Render Image if exists (works for both User and Assistant) */}
+                    {/* Render Image if exists */}
                     {msg.imageUrl && (
                       <div className="mb-4">
                          <div className="rounded-[20px] overflow-hidden border-2 border-white/10 shadow-lg bg-black/10 group max-w-sm">
@@ -286,16 +290,23 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   return (
     <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
       
-      {isHistoryOpen && <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[110] animate-fade" onClick={() => setIsHistoryOpen(false)} />}
+      {/* History Sidebar Backdrop */}
+      {isHistoryOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[140] animate-fade" 
+          onClick={() => setIsHistoryOpen(false)} 
+        />
+      )}
 
-      <div className={`fixed inset-y-0 left-0 z-[120] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
+      {/* History Sidebar */}
+      <div className={`fixed inset-y-0 left-0 z-[150] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
           <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</h3>
           <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="p-4">
-          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg">
-            New Chat
+          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
+            + New Chat
           </button>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
@@ -306,19 +317,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'}`}
             >
               <div className="flex items-start gap-3">
-                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
+                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
                     <i className={`fa-solid ${getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
                  </div>
-                 <div className="flex-1 min-w-0">
+                 <div className="flex-1 min-w-0 pr-6">
                     <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'}`}>{conv.title}</span>
                     <p className="text-[10px] text-slate-400 truncate mt-1">{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
                  </div>
               </div>
               
-              {/* Delete Button - Shows on group hover */}
+              {/* Delete Button */}
               <button 
                 onClick={(e) => handleDeleteClick(e, conv.id)}
-                className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
                 title="Delete Conversation"
               >
                 <i className="fa-solid fa-trash-can text-xs"></i>
@@ -326,22 +337,28 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </div>
           ))}
           
-          {visibleConversations.length < conversations.length && (
+          {hasMoreHistory && (
              <button 
                onClick={() => setHistoryPage(prev => prev + 1)}
-               className="w-full py-3 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest"
+               className="w-full py-4 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest"
              >
-               Load Older History
+               Load Older Conversations
              </button>
           )}
           
           {conversations.length === 0 && (
-             <div className="text-center py-10 opacity-40">
-                <i className="fa-solid fa-box-open text-3xl mb-2 text-slate-300"></i>
+             <div className="text-center py-20 opacity-40">
+                <i className="fa-solid fa-box-open text-3xl mb-4 text-slate-300"></i>
                 <p className="text-[9px] font-black uppercase tracking-widest">No History</p>
              </div>
           )}
         </div>
+        {/* Sync Status in Sidebar Footer */}
+        {isSyncing && (
+           <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing with Cloud...</span>
+           </div>
+        )}
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
@@ -379,7 +396,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {renderBody()}
 
         {/* Optimized input bar layout for Mobile Safe Area */}
-        {activeTab !== 'maths' && activeTab !== 'voice' && (
+        {activeTab !== 'maths' && activeTab !== 'voice' && activeTab !== 'vision' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent safe-pb">
              <div className="max-w-3xl mx-auto pointer-events-auto">
                 {/* File Preview in Input Bar */}

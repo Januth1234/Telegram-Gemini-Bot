@@ -19,6 +19,23 @@ const LANGUAGES = [
   { code: 'ta', label: 'Tamil', flag: '🇮🇳' }
 ];
 
+const VOICES = [
+  { id: 'Zephyr', label: 'Zephyr (Female)' },
+  { id: 'Puck', label: 'Puck (Playful)' },
+  { id: 'Fenrir', label: 'Fenrir (Deep Male)' },
+  { id: 'Kore', label: 'Kore (Gentle)' },
+  { id: 'Charon', label: 'Charon (Deep)' },
+];
+
+const TONES = [
+  { id: 'neutral', label: 'Neutral' },
+  { id: 'unhinged', label: 'Unhinged (Chaotic)' },
+  { id: 'romantic', label: 'Romantic' },
+  { id: 'argumentative', label: 'Argumentative' },
+  { id: 'commanding', label: 'Commanding' },
+  { id: 'counteractive', label: 'Skeptical' },
+];
+
 const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline = false }) => {
   const t = translations[lang];
   const [mode, setMode] = useState<VoiceMode>('assistant');
@@ -26,6 +43,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  // Settings
+  const [showSettings, setShowSettings] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState('Zephyr');
+  const [selectedTone, setSelectedTone] = useState('neutral');
   
   const [langA, setLangA] = useState(LANGUAGES.find(l => l.code === 'en') || LANGUAGES[0]);
   const [langB, setLangB] = useState(LANGUAGES.find(l => l.code === 'si') || LANGUAGES[1]);
@@ -189,7 +211,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       const p = mode === 'translator' 
         ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
-        : geminiService.connectLive(callbacks);
+        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone });
 
       sessionRef.current = await p;
     } catch (e: any) {
@@ -207,12 +229,67 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     ? "w-full h-full flex flex-col items-center p-4 overflow-hidden relative" 
     : "w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center p-6 bg-white dark:bg-slate-900/95 shadow-2xl transition-all duration-500 overflow-hidden relative";
 
+  const applySettings = () => {
+    setShowSettings(false);
+    if (isActive) {
+        stopSession();
+        setTimeout(() => startSession(), 500);
+    }
+  };
+
   return (
     <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md safe-p-all"}>
       {!inline && <div className="absolute inset-0" onClick={onClose}></div>}
       
       <div className={containerClass} style={!inline ? { height: 'calc(var(--vh, 1vh) * 90)' } : undefined}>
         
+        {/* Settings Modal */}
+        {showSettings && (
+          <div className="absolute inset-0 z-[160] bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl flex flex-col p-6 animate-fade">
+             <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Configuration</h3>
+                <button onClick={() => setShowSettings(false)} className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/10 flex items-center justify-center"><i className="fa-solid fa-xmark"></i></button>
+             </div>
+             
+             <div className="flex-1 overflow-y-auto space-y-8">
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice Model</label>
+                   <div className="grid grid-cols-1 gap-2">
+                      {VOICES.map(v => (
+                         <button 
+                           key={v.id}
+                           onClick={() => setSelectedVoice(v.id)}
+                           className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-cyan-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
+                         >
+                            <span className="text-xs font-bold">{v.label}</span>
+                            {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
+                         </button>
+                      ))}
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Personality Tone</label>
+                   <div className="grid grid-cols-2 gap-2">
+                      {TONES.map(t => (
+                         <button 
+                           key={t.id}
+                           onClick={() => setSelectedTone(t.id)}
+                           className={`p-3 rounded-xl text-xs font-bold text-center transition-all border ${selectedTone === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}`}
+                         >
+                            {t.label}
+                         </button>
+                      ))}
+                   </div>
+                </div>
+             </div>
+
+             <button onClick={applySettings} className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-xs uppercase tracking-widest mt-4">
+                 {isActive ? 'Restart Session' : 'Save Settings'}
+             </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="w-full flex items-center justify-between shrink-0 pb-4">
            <div className={`px-3 py-1 rounded-full border transition-all ${isActive ? 'bg-slate-100 dark:bg-white/5 border-slate-200' : `bg-${activeColor}-500/10 border-${activeColor}-500/20`}`}>
@@ -244,6 +321,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                     )}
                   </div>
                </div>
+               
+               {/* Config Button (When Idle) */}
+               {!isActive && mode === 'assistant' && (
+                  <button onClick={() => setShowSettings(true)} className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-full text-[9px] font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
+                     <i className="fa-solid fa-sliders"></i>
+                     <span>{selectedVoice} • {selectedTone}</span>
+                  </button>
+               )}
                
                {/* Language Selectors (Only in Translator Mode) */}
                {mode === 'translator' && !isActive && (
@@ -327,13 +412,20 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               <span>{isConnecting ? "HANDSHAKING..." : (mode === 'translator' ? t.transMode.start : t.voice)}</span>
             </button>
           ) : (
-            <button 
-              onClick={stopSession} 
-              className="w-full py-5 bg-red-500 text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-3"
-            >
-              <i className="fa-solid fa-power-off"></i>
-              <span>{t.endSession}</span>
-            </button>
+            <div className="flex gap-3">
+               {mode === 'assistant' && (
+                  <button onClick={() => setShowSettings(true)} className="w-16 h-16 rounded-[24px] bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center transition-all">
+                     <i className="fa-solid fa-sliders"></i>
+                  </button>
+               )}
+               <button 
+                  onClick={stopSession} 
+                  className="flex-1 py-5 bg-red-500 text-white rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-xl hover:shadow-red-500/20 active:scale-95 transition-all flex items-center justify-center gap-3"
+               >
+                  <i className="fa-solid fa-power-off"></i>
+                  <span>{t.endSession}</span>
+               </button>
+            </div>
           )}
           {!inline && (
             <button onClick={onClose} className="w-full text-[10px] font-black text-slate-400 hover:text-slate-600 transition-colors py-3 uppercase tracking-widest">Close Overlay</button>

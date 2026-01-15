@@ -185,6 +185,22 @@ const App: React.FC = () => {
     navigate(modeMap[mode] || 'chat');
   };
 
+  const handleDeleteConversation = (id: string) => {
+    setConversations(prev => {
+        const filtered = prev.filter(c => c.id !== id);
+        if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
+        
+        // Immediate Cloud Sync for Deletions to avoid zombie data
+        if (user?.id) {
+            firebaseService.saveHistory(user.id, filtered)
+                .then(() => console.log("Deletion synced"))
+                .catch(e => console.error("Deletion sync failed", e));
+        }
+        
+        return filtered;
+    });
+  };
+
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
 
   const renderContent = () => {
@@ -215,15 +231,7 @@ const App: React.FC = () => {
             conversations={conversations}
             onSwitchConv={setActiveConversationId}
             onNewConv={() => handleStartWorkspace('', 'chat')}
-            onDeleteConv={(id) => {
-               setConversations(prev => {
-                 const filtered = prev.filter(c => c.id !== id);
-                 if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
-                 // If all deleted, sync empty to cloud immediately if logged in
-                 if (filtered.length === 0 && user?.id) firebaseService.saveHistory(user.id, []);
-                 return filtered;
-               });
-            }}
+            onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
             onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
