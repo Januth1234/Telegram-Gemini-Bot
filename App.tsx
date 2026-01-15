@@ -81,6 +81,7 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
+  // Save to Local Storage & Cloud
   useEffect(() => {
     cacheService.set(CacheKey.HISTORY, conversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
@@ -100,11 +101,44 @@ const App: React.FC = () => {
     }
   }, [conversations, activeConversationId, user?.id]);
 
+  // Auth Listener & Cloud Merge
   useEffect(() => {
-    const unsubscribe = firebaseService.onAuthStateChanged((authUser) => {
+    const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
       if (authUser) {
          const newUser: UserAccount = { id: authUser.uid, name: authUser.displayName || "User", email: authUser.email || "user@orin.ai", avatar: authUser.photoURL || undefined, tier: 'Verified Member', dailyUsage: { text: 0, images: 0, videos: 0 } };
-         if (user?.id !== newUser.id) { geminiService.setSessionUser(newUser); setUser(newUser); }
+         
+         // If switching users or logging in fresh
+         if (user?.id !== newUser.id) { 
+           geminiService.setSessionUser(newUser); 
+           setUser(newUser);
+           
+           // Fetch Cloud History and Merge
+           try {
+             setSyncStatus('syncing');
+             const cloudHistory = await firebaseService.getHistory(authUser.uid);
+             if (cloudHistory && cloudHistory.length > 0) {
+               setConversations(prevLocal => {
+                 // Map by ID
+                 const combinedMap = new Map<string, Conversation>();
+                 [...prevLocal, ...cloudHistory].forEach(conv => {
+                   const existing = combinedMap.get(conv.id);
+                   // Keep the one with the later timestamp if conflict, otherwise add
+                   if (!existing || new Date(conv.timestamp) > new Date(existing.timestamp)) {
+                     combinedMap.set(conv.id, conv);
+                   }
+                 });
+                 // Convert back to array and sort desc
+                 return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+               });
+             }
+             setHasSyncedWithCloud(true);
+             setSyncStatus('success');
+             setTimeout(() => setSyncStatus('idle'), 2000);
+           } catch (e) {
+             console.error("Sync merge failed", e);
+             setSyncStatus('error');
+           }
+         }
       } else {
         if (user) { setUser(null); geminiService.logout(); }
         setHasSyncedWithCloud(false);
@@ -127,12 +161,24 @@ const App: React.FC = () => {
     setShouldAutoSubmit(autoSubmit);
     
     const activeConv = conversations.find(c => c.id === activeConversationId);
+    
+    // Only create new if we are on landing page OR the current active conversation has messages
     if (!activeConv || activeConv.messages.length > 0) {
       const newId = Date.now().toString();
-      setConversations(prev => [{ id: newId, title: lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+      const newTitle = lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat";
+      
+      setConversations(prev => [{ 
+        id: newId, 
+        title: newTitle, 
+        messages: [], 
+        timestamp: new Date(), 
+        mode, 
+        modesUsed: [mode] 
+      }, ...prev]);
       setActiveConversationId(newId);
     } else {
-      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode } : c));
+      // Reuse empty conversation but update mode
+      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode, modesUsed: [...(c.modesUsed || []), mode] } : c));
     }
 
     const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', gethelp: 'help', chat: 'chat', translator: 'chat' };
@@ -173,11 +219,13 @@ const App: React.FC = () => {
                setConversations(prev => {
                  const filtered = prev.filter(c => c.id !== id);
                  if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
+                 // If all deleted, sync empty to cloud immediately if logged in
+                 if (filtered.length === 0 && user?.id) firebaseService.saveHistory(user.id, []);
                  return filtered;
                });
             }}
             activeConvId={activeConversationId || ""}
-            onUpdateTitle={(title) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title } : c))}
+            onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
             onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
             isSyncing={syncStatus === 'syncing'}
           />

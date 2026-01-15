@@ -40,6 +40,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
 
+  // Pagination for History
+  const [historyPage, setHistoryPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -189,7 +193,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
   };
 
+  const getHistoryIcon = (modes: WorkspaceMode[] | undefined, defaultMode: WorkspaceMode) => {
+      const m = (modes && modes.length > 0) ? modes[modes.length - 1] : defaultMode;
+      return getTabIcon(m);
+  };
+
   const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice';
+
+  // Slice conversations for pagination
+  const visibleConversations = conversations.slice(0, historyPage * ITEMS_PER_PAGE);
+
+  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm("Delete this conversation permanently?")) {
+        onDeleteConv(id);
+    }
+  };
 
   const renderBody = () => {
     if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
@@ -280,16 +299,48 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </button>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
-          {conversations.map(conv => (
-            <button 
+          {visibleConversations.map(conv => (
+            <div 
               key={conv.id}
               onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }} 
-              className={`w-full text-left p-4 rounded-2xl transition-all border ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'}`}
             >
-              <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'}`}>{conv.title}</span>
-              <p className="text-[10px] text-slate-400 truncate mt-1">{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
-            </button>
+              <div className="flex items-start gap-3">
+                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
+                    <i className={`fa-solid ${getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
+                 </div>
+                 <div className="flex-1 min-w-0">
+                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'}`}>{conv.title}</span>
+                    <p className="text-[10px] text-slate-400 truncate mt-1">{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
+                 </div>
+              </div>
+              
+              {/* Delete Button - Shows on group hover */}
+              <button 
+                onClick={(e) => handleDeleteClick(e, conv.id)}
+                className="absolute right-2 top-2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
+                title="Delete Conversation"
+              >
+                <i className="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
           ))}
+          
+          {visibleConversations.length < conversations.length && (
+             <button 
+               onClick={() => setHistoryPage(prev => prev + 1)}
+               className="w-full py-3 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest"
+             >
+               Load Older History
+             </button>
+          )}
+          
+          {conversations.length === 0 && (
+             <div className="text-center py-10 opacity-40">
+                <i className="fa-solid fa-box-open text-3xl mb-2 text-slate-300"></i>
+                <p className="text-[9px] font-black uppercase tracking-widest">No History</p>
+             </div>
+          )}
         </div>
       </div>
 

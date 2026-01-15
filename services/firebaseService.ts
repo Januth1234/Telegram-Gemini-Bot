@@ -1,7 +1,8 @@
+
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User, onAuthStateChanged, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User, onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithCredential } from "firebase/auth";
 import { getFirestore, doc, setDoc, getDoc, Firestore } from "firebase/firestore";
 import { Conversation } from "../types";
 
@@ -15,6 +16,13 @@ const firebaseConfig = {
   appId: process.env.FIREBASE_APP_ID || "1:259788442094:web:4d946378ca1b4d7349a6ff",
   measurementId: "G-57DHESH4ZJ"
 };
+
+// Add global declaration for the native handler
+declare global {
+  interface Window {
+    handleNativeGoogleToken?: (token: string) => Promise<void>;
+  }
+}
 
 class FirebaseService {
   private app: any;
@@ -37,6 +45,19 @@ class FirebaseService {
         // Ensure persistence is set to LOCAL to survive refreshes
         setPersistence(this.auth, browserLocalPersistence)
           .catch((error) => console.error("Auth Persistence Error:", error));
+
+        // ✅ Native Google Sign-In Handler for WebViews
+        // This allows the mobile app to inject a Google ID Token directly
+        window.handleNativeGoogleToken = async (token: string) => {
+          if (!this.auth) return;
+          try {
+            const credential = GoogleAuthProvider.credential(token);
+            await signInWithCredential(this.auth, credential);
+            console.log("✅ Signed in using native token");
+          } catch (err) {
+            console.error("❌ Native token sign-in failed", err);
+          }
+        };
       }
 
       // Initialize Messaging

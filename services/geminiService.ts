@@ -232,7 +232,17 @@ export class GeminiService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(0, 3).map(m => m.content).join(' ');
       const target = lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English';
-      const prompt = `Short title (3-5 words) for this chat in ${target}: ${context}`;
+      const modeContext = modes.length > 0 ? `Used Modes: ${modes.join(', ')}` : "";
+      
+      const prompt = `Generate a very short, specific title (3-5 words) for this conversation in ${target}.
+      Conversation Start: "${context}"
+      ${modeContext}
+      
+      Rules:
+      - If 'maths' mode was used, mention the math topic (e.g., "Calculus Problem", "Solving Equations").
+      - If 'vision' mode was used, mention image analysis.
+      - If 'studio' mode was used, mention the image created.
+      - Keep it extremely concise. No quotes.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
