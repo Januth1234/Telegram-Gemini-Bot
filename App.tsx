@@ -44,6 +44,10 @@ const App: React.FC = () => {
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0];
+    
+    // Specific routing for return policy direct link
+    if (hash === 'returnterms') return 'privacy';
+
     const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
     return validViews.includes(hash as any) ? hash as AppView : 'landing';
   };
@@ -71,7 +75,14 @@ const App: React.FC = () => {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
 
   const navigate = (newView: AppView) => {
-    window.location.hash = newView === 'landing' ? '' : newView;
+    // If navigating to landing, clear hash. Otherwise set hash.
+    // Exception: If navigating to privacy via returnterms logic, we might want to keep the hash or reset it.
+    // For standard nav, we just set the view hash.
+    if (newView === 'landing') {
+        window.history.pushState(null, '', window.location.pathname);
+    } else {
+        window.location.hash = newView;
+    }
     setView(newView); 
   };
 

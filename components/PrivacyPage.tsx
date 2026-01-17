@@ -1,12 +1,12 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const isSinhala = document.documentElement.lang === 'si';
 
   const content = isSinhala ? {
     title: "පෞද්ගලිකත්ව ආරක්ෂාව",
-    version: "සරල දසුන v4.8",
+    version: "සරල දසුන v4.9",
     sections: [
       {
         head: "01. ඔබේ දත්ත, ඔබේ උපාංගයේ",
@@ -31,12 +31,16 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       {
         head: "06. හඬ විධාන",
         body: "ඔබ කතා කරන විට එම හඬ කෙලින්ම අකුරු බවට පත් කරන අතර, හඬ පටිගත කිරීම් කොහේවත් ගබඩා නොවේ."
+      },
+      {
+        head: "07. මුදල් ආපසු ගෙවීමේ ප්‍රතිපත්තිය (Return Policy)",
+        body: "මෙය ඩිජිටල් සේවාවක් බැවින්, සේවාව භාවිතා කිරීමෙන් පසු මුදල් ආපසු ගෙවීමක් (Refund) සිදු නොකෙරේ. නමුත් තාක්ෂණික දෝෂයක් නිසා සේවාව ලබා ගැනීමට නොහැකි වූ අවස්ථාවක දින 7ක් ඇතුලත අපව අමතන්න. දායකත්ව (Subscriptions) ඕනෑම වෙලාවක අවලංගු කළ හැකි අතර, එවිට ඊළඟ වාරිකය අය නොකෙරේ."
       }
     ],
     footer: "JN Productions Global ආරක්ෂණ ප්‍රතිපත්තිය"
   } : {
     title: "Privacy Policy",
-    version: "Simplified View v4.8",
+    version: "Simplified View v4.9",
     sections: [
       {
         head: "01. Your Data Stays on Your Device",
@@ -65,10 +69,30 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       {
         head: "07. Safety Standards",
         body: "We follow global safety standards to ensure Orin is safe for daily professional and personal use."
+      },
+      {
+        head: "08. Refund & Return Policy",
+        body: "Since Orin AI provides instant access to digital neural services, payments are generally non-refundable once the service is utilized. However, if a technical failure prevents service delivery, please contact support within 7 days for a full refund resolution. You may cancel subscriptions at any time to prevent future billing charges."
       }
     ],
     footer: "JN Productions Global Privacy Statement"
   };
+
+  useEffect(() => {
+    // Check if the URL hash is #returnterms and scroll to it
+    if (window.location.hash === '#returnterms') {
+      const el = document.getElementById('returnterms');
+      if (el) {
+        // Small delay to ensure rendering and animations are done
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // Optional: Add a highlight effect
+          el.classList.add('bg-cyan-50', 'dark:bg-cyan-900/20', 'rounded-2xl', 'p-4', '-mx-4');
+          setTimeout(() => el.classList.remove('bg-cyan-50', 'dark:bg-cyan-900/20', 'rounded-2xl', 'p-4', '-mx-4'), 3000);
+        }, 300);
+      }
+    }
+  }, []);
 
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
@@ -88,7 +112,12 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
         <div className="space-y-10 text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
           {content.sections.map((s, i) => (
-            <section key={i} className="space-y-3 animate-reveal" style={{ animationDelay: `${i * 0.05}s` }}>
+            <section 
+              key={i} 
+              className="space-y-3 animate-reveal transition-all duration-500" 
+              style={{ animationDelay: `${i * 0.05}s` }}
+              id={s.head.toLowerCase().includes('return') || s.head.includes('ආපසු') ? 'returnterms' : undefined}
+            >
               <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{s.head}</h3>
               <p className={isSinhala ? 'sinhala-text' : ''}>{s.body}</p>
             </section>
