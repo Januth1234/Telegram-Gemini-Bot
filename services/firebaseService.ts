@@ -52,10 +52,12 @@ class FirebaseService {
           if (!this.auth) return;
           try {
             const credential = GoogleAuthProvider.credential(token);
-            await signInWithCredential(this.auth, credential);
-            console.log("✅ Signed in using native token");
+            const result = await signInWithCredential(this.auth, credential);
+            console.log('Firebase sign-in successful:', result.user);
+            // Reload the page to ensure the web app reflects the new signed-in state.
+            window.location.reload();
           } catch (err) {
-            console.error("❌ Native token sign-in failed", err);
+            console.error('Firebase sign-in error:', err);
           }
         };
       }

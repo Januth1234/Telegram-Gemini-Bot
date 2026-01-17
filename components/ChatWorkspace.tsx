@@ -228,9 +228,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : activeTab === 'vision' ? 'Camera' : 'Chat'}</h2>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : 'Chat'}</h2>
                   <div className="flex flex-wrap justify-center gap-2 px-4">
-                     {(activeTab === 'studio' ? t.prompts.studio : activeTab === 'vision' ? t.prompts.vision : t.prompts.chat).map(s => (
+                     {(activeTab === 'studio' ? t.prompts.studio : t.prompts.chat).map(s => (
                         <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
                      ))}
                   </div>
@@ -396,7 +396,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {renderBody()}
 
         {/* Optimized input bar layout for Mobile Safe Area */}
-        {activeTab !== 'maths' && activeTab !== 'voice' && activeTab !== 'vision' && (
+        {(activeTab === 'chat' || activeTab === 'studio' || activeTab === 'translator' || activeTab === 'gethelp') && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent safe-pb">
              <div className="max-w-3xl mx-auto pointer-events-auto">
                 {/* File Preview in Input Bar */}
