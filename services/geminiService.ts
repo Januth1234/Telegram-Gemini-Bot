@@ -347,6 +347,40 @@ export class GeminiService {
     }
   }
 
+  async generateVideo(prompt: string, aspectRatio: '16:9' | '9:16', resolution: '720p' | '1080p' = '720p'): Promise<string> {
+    try {
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      let operation = await ai.models.generateVideos({
+        model: 'veo-3.1-fast-generate-preview',
+        prompt: prompt,
+        config: {
+          numberOfVideos: 1,
+          resolution: resolution,
+          aspectRatio: aspectRatio
+        }
+      });
+
+      while (!operation.done) {
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        operation = await ai.operations.getVideosOperation({operation: operation});
+      }
+
+      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (!videoUri) throw new Error("No video generated.");
+
+      // The response.body contains the MP4 bytes. Must append API key.
+      const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+      if (!response.ok) throw new Error("Failed to download video.");
+      
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (e: any) {
+      throw new AppError("Video generation failed: " + e.message, 'generic');
+    }
+  }
+
   async downloadImage(url: string, filename: string = "orin-image") {
     try {
       const response = await fetch(url);

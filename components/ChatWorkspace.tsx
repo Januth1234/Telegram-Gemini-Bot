@@ -418,7 +418,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'vision' ? t.placeholderVision : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat} 
+                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat} 
                     className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
                    <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-base"></i></button>

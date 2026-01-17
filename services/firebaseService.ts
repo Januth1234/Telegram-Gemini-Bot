@@ -2,7 +2,8 @@
 import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, Auth, User, onAuthStateChanged, setPersistence, browserLocalPersistence, signInWithCredential } from "firebase/auth";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
 import { getFirestore, doc, setDoc, getDoc, Firestore } from "firebase/firestore";
 import { Conversation } from "../types";
 
@@ -29,7 +30,7 @@ class FirebaseService {
   private messaging: Messaging | null = null;
   private token: string | null = null;
   private analytics: any = null;
-  private auth: Auth | null = null;
+  private auth: firebase.auth.Auth | null = null;
   private db: Firestore | null = null;
 
   constructor() {
@@ -39,11 +40,12 @@ class FirebaseService {
       // Initialize Analytics & Auth if in browser
       if (typeof window !== 'undefined') {
         this.analytics = getAnalytics(this.app);
-        this.auth = getAuth(this.app);
+        // Use compat auth to avoid module resolution issues
+        this.auth = firebase.auth(this.app);
         this.db = getFirestore(this.app);
         
         // Ensure persistence is set to LOCAL to survive refreshes
-        setPersistence(this.auth, browserLocalPersistence)
+        this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
           .catch((error) => console.error("Auth Persistence Error:", error));
 
         // ✅ Native Google Sign-In Handler for WebViews
@@ -51,8 +53,8 @@ class FirebaseService {
         window.handleNativeGoogleToken = async (token: string) => {
           if (!this.auth) return;
           try {
-            const credential = GoogleAuthProvider.credential(token);
-            const result = await signInWithCredential(this.auth, credential);
+            const credential = firebase.auth.GoogleAuthProvider.credential(token);
+            const result = await this.auth.signInWithCredential(credential);
             console.log('Firebase sign-in successful:', result.user);
             // Reload the page to ensure the web app reflects the new signed-in state.
             window.location.reload();
@@ -72,16 +74,16 @@ class FirebaseService {
   }
 
   // --- AUTHENTICATION ---
-  async loginWithGoogle(): Promise<User> {
+  async loginWithGoogle(): Promise<firebase.User> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     
-    const provider = new GoogleAuthProvider();
+    const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('profile');
     provider.addScope('email');
     
     try {
-      const result = await signInWithPopup(this.auth, provider);
-      return result.user;
+      const result = await this.auth.signInWithPopup(provider);
+      return result.user!;
     } catch (error: any) {
       console.error("Firebase Auth Error Full:", error);
       
@@ -103,14 +105,14 @@ class FirebaseService {
 
   async logout(): Promise<void> {
     if (this.auth) {
-      await signOut(this.auth);
+      await this.auth.signOut();
     }
   }
 
   // Add listener for auth state changes
-  onAuthStateChanged(callback: (user: User | null) => void) {
+  onAuthStateChanged(callback: (user: firebase.User | null) => void) {
     if (this.auth) {
-      return onAuthStateChanged(this.auth, callback);
+      return this.auth.onAuthStateChanged(callback);
     }
     return () => {};
   }

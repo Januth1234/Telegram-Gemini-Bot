@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 import { geminiService } from '../services/geminiService';
 import { AspectRatio, ImageSize } from '../types';
 
-interface GeneratedImage {
+interface GeneratedAsset {
   url: string;
   prompt: string;
   timestamp: number;
+  type: 'image' | 'video';
 }
 
 type StudioTab = 'image' | 'video';
@@ -16,8 +17,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [imageSize, setImageSize] = useState<ImageSize>('1K');
-  const [history, setHistory] = useState<GeneratedImage[]>([]);
+  const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>('720p');
+  const [history, setHistory] = useState<GeneratedAsset[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = async (customPrompt?: string) => {
@@ -26,31 +29,55 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     
     setIsLoading(true);
     setError(null);
+    
+    // Loading messages
+    const imageMessages = ["Synthesizing pixels...", "Refining details...", "Applying aesthetics...", "Final polish..."];
+    const videoMessages = ["Initializing Veo 3.1...", "Simulating physics...", "Rendering frames...", "Encoding stream..."];
+    const msgs = activeTab === 'video' ? videoMessages : imageMessages;
+    setLoadingMessage(msgs[0]);
+    
+    let msgIdx = 0;
+    const msgInterval = setInterval(() => {
+        msgIdx = (msgIdx + 1) % msgs.length;
+        setLoadingMessage(msgs[msgIdx]);
+    }, 3000);
+
     try {
-      const url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
-      const newImage: GeneratedImage = {
+      let url = "";
+      if (activeTab === 'image') {
+        url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
+      } else {
+        // Map UI aspect ratio to Veo supported ratios (16:9 or 9:16)
+        // If user selects something else, fallback to 16:9 or 9:16
+        const veoRatio = (aspectRatio === '9:16' || aspectRatio === '3:4') ? '9:16' : '16:9';
+        url = await geminiService.generateVideo(finalPrompt, veoRatio, videoResolution);
+      }
+
+      const newAsset: GeneratedAsset = {
         url,
         prompt: finalPrompt,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        type: activeTab
       };
-      setHistory(prev => [newImage, ...prev]);
+      setHistory(prev => [newAsset, ...prev]);
       setPrompt(''); 
     } catch (e: any) {
       setError(e.message || "Something went wrong. Please try again.");
     } finally {
+      clearInterval(msgInterval);
       setIsLoading(false);
     }
   };
 
-  const handleDownload = async (url: string, filename: string) => {
+  const handleDownload = async (asset: GeneratedAsset) => {
     try {
-      const response = await fetch(url);
+      const response = await fetch(asset.url);
       const blob = await response.blob();
       const blobUrl = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `${filename}.png`;
+      link.download = `orin-${asset.type}-${asset.timestamp}.${asset.type === 'video' ? 'mp4' : 'png'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -84,7 +111,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onClick={() => setActiveTab('video')}
                 className={`text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full transition-all border ${activeTab === 'video' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-600/20' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               >
-                Motion Synth
+                Veo Video
               </button>
             </div>
           </div>
@@ -96,24 +123,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
       </div>
 
-      {activeTab === 'video' ? (
-        <div className="flex flex-col items-center justify-center py-40 space-y-10 animate-reveal">
-           <div className="relative">
-              <div className="w-32 h-32 rounded-[48px] bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-300 dark:text-slate-700 animate-beta-pulse">
-                <i className="fa-solid fa-clapperboard text-6xl"></i>
-              </div>
-              <div className="absolute -top-4 -right-4 px-3 py-1 bg-cyan-600 text-white text-[8px] font-black uppercase tracking-widest rounded-full shadow-lg border-2 border-white dark:border-slate-950">In Progress</div>
-           </div>
-           <div className="text-center space-y-3">
-             <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">AI Video Generation</h3>
-             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.5em] animate-pulse">Orin Neural Motion v5.0-Preview</p>
-             <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-sm pt-4 leading-relaxed mx-auto opacity-70">
-               We are calibrating the neural pipeline for cinematic motion synthesis. This feature will be deployed in the upcoming major Orin update.
-             </p>
-           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-[440px,1fr] gap-10 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[440px,1fr] gap-10 items-start">
           {/* Left Control Panel */}
           <div className="space-y-6 lg:sticky lg:top-8 animate-reveal">
             <div className="glass-panel p-10 rounded-[48px] border border-slate-200 dark:border-white/10 shadow-2xl relative overflow-hidden bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
@@ -121,12 +131,12 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <div className="space-y-4">
                   <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
                     <i className="fa-solid fa-terminal text-cyan-500"></i>
-                    Neural Input Prompt
+                    {activeTab === 'video' ? 'Motion Prompt' : 'Neural Input Prompt'}
                   </label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder="Describe your vision in high detail..."
+                    placeholder={activeTab === 'video' ? "Describe the motion, camera angle, and scene..." : "Describe your vision in high detail..."}
                     className={`${inputStyle} h-56 resize-none leading-relaxed text-base`}
                   />
                 </div>
@@ -140,24 +150,46 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
                         className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
                       >
-                        {['1:1', '16:9', '9:16', '4:3', '21:9', '3:2'].map(r => <option key={r} value={r} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{r}</option>)}
+                        {activeTab === 'image' ? (
+                            ['1:1', '16:9', '9:16', '4:3', '21:9', '3:2'].map(r => <option key={r} value={r} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{r}</option>)
+                        ) : (
+                            ['16:9', '9:16'].map(r => <option key={r} value={r} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{r}</option>)
+                        )}
                       </select>
                       <i className="fa-solid fa-shapes absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Synthesis Quality</label>
-                    <div className="relative group">
-                      <select 
-                        value={imageSize} 
-                        onChange={(e) => setImageSize(e.target.value as ImageSize)}
-                        className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
-                      >
-                        {['1K', '2K', '4K'].map(s => <option key={s} value={s} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{s}</option>)}
-                      </select>
-                      <i className="fa-solid fa-microchip absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
+                  
+                  {activeTab === 'image' ? (
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Synthesis Quality</label>
+                        <div className="relative group">
+                        <select 
+                            value={imageSize} 
+                            onChange={(e) => setImageSize(e.target.value as ImageSize)}
+                            className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
+                        >
+                            {['1K', '2K', '4K'].map(s => <option key={s} value={s} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{s}</option>)}
+                        </select>
+                        <i className="fa-solid fa-microchip absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
+                        </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="space-y-3">
+                        <label className="text-[10px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Resolution</label>
+                        <div className="relative group">
+                        <select 
+                            value={videoResolution} 
+                            onChange={(e) => setVideoResolution(e.target.value as '720p' | '1080p')}
+                            className={`${inputStyle} pr-12 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}
+                        >
+                            <option value="720p" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">720p (Fast)</option>
+                            <option value="1080p" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">1080p (HD)</option>
+                        </select>
+                        <i className="fa-solid fa-film absolute right-5 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[12px]"></i>
+                        </div>
+                    </div>
+                  )}
                 </div>
 
                 <button 
@@ -168,12 +200,12 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   {isLoading ? (
                     <>
                       <i className="fa-solid fa-dna animate-spin"></i>
-                      <span>Synthesizing...</span>
+                      <span>{activeTab === 'video' ? 'Rendering...' : 'Synthesizing...'}</span>
                     </>
                   ) : (
                     <>
-                      <i className="fa-solid fa-sparkles transition-transform group-hover:rotate-45"></i>
-                      <span>Generate Asset</span>
+                      <i className={`fa-solid ${activeTab === 'video' ? 'fa-clapperboard' : 'fa-sparkles'} transition-transform group-hover:rotate-12`}></i>
+                      <span>{activeTab === 'video' ? 'Generate Video' : 'Generate Asset'}</span>
                     </>
                   )}
                 </button>
@@ -202,16 +234,16 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }}></div>
             
             {isLoading && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/40 dark:bg-slate-950/40 backdrop-blur-xl animate-fade">
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
                 <div className="text-center space-y-8 animate-reveal">
                   <div className="relative">
                     <div className="w-32 h-32 rounded-full border-2 border-cyan-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
-                      <i className="fa-solid fa-layer-group text-3xl text-cyan-500/40"></i>
+                      <i className={`fa-solid ${activeTab === 'video' ? 'fa-video' : 'fa-layer-group'} text-3xl text-cyan-500/40`}></i>
                     </div>
                   </div>
                   <div className="space-y-2">
                     <p className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Neural Handshake Active</p>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] font-black animate-pulse">Mapping Latent Space...</p>
+                    <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] font-black animate-pulse">{loadingMessage}</p>
                   </div>
                 </div>
               </div>
@@ -219,23 +251,32 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             {history.length > 0 ? (
               <div className="w-full space-y-28 relative z-10">
-                {history.map((img, idx) => (
-                  <div key={img.timestamp} className="w-full flex flex-col items-center gap-12 animate-scale-in max-w-4xl mx-auto group/item">
+                {history.map((asset, idx) => (
+                  <div key={asset.timestamp} className="w-full flex flex-col items-center gap-12 animate-scale-in max-w-4xl mx-auto group/item">
                     <div className="relative group/img w-full">
                       <div className="absolute -inset-4 bg-gradient-to-tr from-cyan-500/10 to-indigo-500/10 rounded-[56px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
                       <div className="relative rounded-[48px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700">
-                        <img 
-                          src={img.url} 
-                          className="max-w-full max-h-[80vh] object-contain transition-transform duration-1000 ease-out group-hover/item:scale-[1.04]" 
-                          alt={img.prompt} 
-                        />
+                        {asset.type === 'video' ? (
+                            <video 
+                                src={asset.url} 
+                                controls 
+                                className="max-w-full max-h-[80vh] object-contain"
+                                poster={asset.url + "#t=0.5"} // Trick to show thumbnail
+                            />
+                        ) : (
+                            <img 
+                                src={asset.url} 
+                                className="max-w-full max-h-[80vh] object-contain transition-transform duration-1000 ease-out group-hover/item:scale-[1.04]" 
+                                alt={asset.prompt} 
+                            />
+                        )}
                       </div>
                     </div>
 
                     <div className="w-full max-w-xl flex flex-col items-center gap-8">
                       <div className="w-full">
                         <button 
-                          onClick={() => handleDownload(img.url, `orin-asset-${img.timestamp}`)}
+                          onClick={() => handleDownload(asset)}
                           className="w-full py-5 bg-cyan-600 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.3em] shadow-xl shadow-cyan-600/10 hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-4"
                         >
                           <i className="fa-solid fa-download text-lg"></i>
@@ -245,7 +286,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                       <div className="text-center px-10">
                         <p className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-3">Generation Script</p>
-                        <p className="text-base font-bold text-slate-800 dark:text-slate-200 italic leading-relaxed">"{img.prompt}"</p>
+                        <p className="text-base font-bold text-slate-800 dark:text-slate-200 italic leading-relaxed">"{asset.prompt}"</p>
+                        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">{asset.type.toUpperCase()}</p>
                       </div>
                     </div>
                     {idx < history.length - 1 && <div className="w-32 h-[1px] bg-slate-200 dark:bg-white/5 rounded-full mt-10"></div>}
@@ -270,8 +312,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="absolute bottom-12 left-12 w-16 h-16 border-b border-l border-slate-200 dark:border-white/5 rounded-bl-[40px] pointer-events-none"></div>
             <div className="absolute bottom-12 right-12 w-16 h-16 border-b border-r border-slate-200 dark:border-white/5 rounded-br-[40px] pointer-events-none"></div>
           </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };
