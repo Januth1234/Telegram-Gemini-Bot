@@ -17,6 +17,22 @@ interface LandingPageProps {
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin }) => {
   const t = translations[lang];
 
+  // Promo Banner State
+  const [showBanner, setShowBanner] = useState(() => {
+    try {
+      return sessionStorage.getItem('promo_jan_30_dismissed') !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissBanner = () => {
+    setShowBanner(false);
+    try {
+      sessionStorage.setItem('promo_jan_30_dismissed', 'true');
+    } catch {}
+  };
+
   const context = useMemo(() => {
     const hour = new Date().getHours();
     const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -57,6 +73,33 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
+      
+      {/* Promo Banner */}
+      {showBanner && (
+        <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-4 py-3 shrink-0 relative z-50 shadow-lg animate-in slide-in-from-top duration-500">
+            <div className="max-w-6xl mx-auto flex items-center justify-center md:justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0 animate-pulse">
+                        <i className="fa-solid fa-gift text-xs"></i>
+                    </span>
+                    <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-center md:text-left">
+                        {lang === 'si' 
+                            ? "විශේෂ දැනුම්දීමයි: ජනවාරි 30 දක්වා සියලුම Orin සේවාවන් නොමිලේ!" 
+                            : lang === 'ta' 
+                            ? "ஜனவரி 30 வரை அனைத்து சேவைகளும் இலவசம்!" 
+                            : "Limited Offer: All services are FREE for everyone throughout January (until Jan 30)!"}
+                    </p>
+                </div>
+                <button 
+                    onClick={dismissBanner} 
+                    className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/30 transition-all shrink-0 absolute right-4 md:static"
+                >
+                    <i className="fa-solid fa-xmark text-[10px]"></i>
+                </button>
+            </div>
+        </div>
+      )}
+
       <article className="w-full max-w-6xl px-6 py-12 md:py-24 flex flex-col items-center gap-16 md:gap-24 text-center">
         
         {/* Hero Section */}
