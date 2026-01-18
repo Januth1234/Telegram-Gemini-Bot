@@ -74,6 +74,22 @@ const App: React.FC = () => {
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
 
+  // Handle URL Query Params (e.g. ?prompt=Hello)
+  useEffect(() => {
+    const handleUrlParams = () => {
+        const hash = window.location.hash;
+        const qIndex = hash.indexOf('?');
+        if (qIndex !== -1) {
+            const params = new URLSearchParams(hash.substring(qIndex + 1));
+            const p = params.get('prompt');
+            if (p) setGlobalPrompt(decodeURIComponent(p));
+        }
+    };
+    handleUrlParams(); // Check on mount
+    window.addEventListener('hashchange', handleUrlParams);
+    return () => window.removeEventListener('hashchange', handleUrlParams);
+  }, []);
+
   const navigate = (newView: AppView) => {
     // If navigating to landing, clear hash. Otherwise set hash.
     // Exception: If navigating to privacy via returnterms logic, we might want to keep the hash or reset it.

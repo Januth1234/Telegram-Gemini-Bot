@@ -10,7 +10,7 @@ interface DownloadsPageProps {
 
 const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
-  const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py'>('js');
+  const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py' | 'vue'>('js');
   const [downloading, setDownloading] = useState<string | null>(null);
 
   const handleDownload = (platform: string, arch?: string) => {
@@ -113,7 +113,44 @@ def orin_search_widget():
         st.markdown(f'<meta http-equiv="refresh" content="0;URL=\\'https://www.orinai.org/#chat?prompt={safe_q}\\'">', unsafe_allow_html=True)
     
     st.caption("ORIN AI | JN PRODUCTIONS | JANUTH NIMNAL")
-`
+`,
+    vue: `<!-- Orin AI Vue 3 Widget -->
+<template>
+  <div class="w-full max-w-lg mx-auto p-4 font-sans">
+    <form @submit.prevent="handleSearch" class="flex items-center gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl shadow-xl border border-slate-200 dark:border-white/10">
+      <div class="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center text-white shrink-0">
+         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+      </div>
+      <input 
+        v-model="query" 
+        type="text" 
+        placeholder="Ask Orin AI..." 
+        class="flex-1 bg-transparent border-none outline-none text-slate-800 dark:text-white placeholder-slate-400 font-medium"
+        required 
+      />
+      <button type="submit" class="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-transform">
+        GO
+      </button>
+    </form>
+    <div class="text-center mt-3">
+      <a href="https://www.orinai.org" target="_blank" class="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] hover:text-cyan-500 transition-colors">
+        Powered by Orin Neural
+      </a>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue';
+
+const query = ref('');
+
+const handleSearch = () => {
+  if (!query.value.trim()) return;
+  // Redirects to Orin AI with the prompt pre-filled
+  window.location.href = \`https://www.orinai.org/#chat?prompt=\${encodeURIComponent(query.value)}\`;
+};
+</script>`
   };
 
   return (
@@ -217,10 +254,11 @@ def orin_search_widget():
 
            <div className="glass-panel rounded-[40px] border border-black/5 dark:border-white/5 overflow-hidden shadow-sm">
               <div className="bg-slate-100/50 dark:bg-white/5 p-4 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 px-8">
-                 <div className="flex bg-white dark:bg-black/20 rounded-xl p-1 shadow-inner">
+                 <div className="flex flex-wrap gap-1 bg-white dark:bg-black/20 rounded-xl p-1 shadow-inner">
                     <button onClick={() => setActiveCodeTab('js')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'js' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>JavaScript</button>
                     <button onClick={() => setActiveCodeTab('ts')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'ts' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>TypeScript</button>
                     <button onClick={() => setActiveCodeTab('py')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'py' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Python</button>
+                    <button onClick={() => setActiveCodeTab('vue')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'vue' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Vue.js</button>
                  </div>
                  <button onClick={() => copyToClipboard(codeSnippets[activeCodeTab])} className="flex items-center gap-2 px-6 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500 transition-all shadow-lg active:scale-95">
                     <i className="fa-solid fa-copy"></i>
