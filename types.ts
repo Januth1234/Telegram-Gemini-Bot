@@ -1,6 +1,26 @@
 
 export type Language = 'en' | 'si' | 'ta';
-export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
+export type UserTier = 'Basic' | 'Pro' | 'Elite' | 'Verified Member';
+
+// Database Interfaces
+export interface DbPlan {
+  id: string;
+  name: string;
+  price_lkr: number;
+  daily_limit_text: number;
+  daily_limit_images: number;
+  features: string[];
+}
+
+export interface DbSubscription {
+  id: string;
+  user_id: string;
+  plan_id: string;
+  status: 'active' | 'cancelled' | 'expired';
+  start_date: string;
+  end_date: string | null;
+  plan?: DbPlan; // Joined data
+}
 
 export interface UserAccount {
   id: string;
@@ -14,6 +34,7 @@ export interface UserAccount {
     images: number;
     videos: number;
   };
+  subscription?: DbSubscription;
 }
 
 export interface GroundingLink {
@@ -31,7 +52,7 @@ export interface ChatMessage {
   imageUrl?: string;
   videoUrl?: string;
   fileName?: string;
-  reasoning_details?: any; // To support OpenRouter reasoning models
+  reasoning_details?: any;
 }
 
 export interface Conversation {

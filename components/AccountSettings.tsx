@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
-import { UserAccount, Language } from '../types';
+import { subscriptionService } from '../services/subscriptionService';
+import { UserAccount, Language, UserTier } from '../types';
 import { translations } from '../translations';
 
 interface AccountSettingsProps {
@@ -32,6 +34,20 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
         tier: 'Verified Member',
         dailyUsage: { text: 0, images: 0, videos: 0 }
       };
+
+      // Sync user to Supabase DB immediately
+      await subscriptionService.syncUser(newUser);
+
+      // Fetch subscription if exists
+      try {
+        const sub = await subscriptionService.getUserSubscription(newUser.id);
+        if (sub) {
+            newUser.subscription = sub;
+            if (sub.plan?.name) newUser.tier = sub.plan.name as UserTier;
+        }
+      } catch (e) {
+        console.warn("Could not fetch subscription on login:", e);
+      }
 
       geminiService.setSessionUser(newUser);
       setUser(newUser);

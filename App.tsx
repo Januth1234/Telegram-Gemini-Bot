@@ -13,10 +13,11 @@ import DownloadsPage from './components/DownloadsPage';
 import VoiceAssistant from './components/VoiceAssistant';
 import GetHelpMode from './components/GetHelpMode';
 import MathsMode from './components/MathsMode';
-import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
+import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, UserTier } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
 import { cacheService, CacheKey } from './services/cacheService';
+import { subscriptionService } from './services/subscriptionService';
 import { translations } from './translations';
 
 const App: React.FC = () => {
@@ -134,8 +135,22 @@ const App: React.FC = () => {
       if (authUser) {
          const newUser: UserAccount = { id: authUser.uid, name: authUser.displayName || "User", email: authUser.email || "user@orin.ai", avatar: authUser.photoURL || undefined, tier: 'Verified Member', dailyUsage: { text: 0, images: 0, videos: 0 } };
          
+         // Sync User to Supabase (Email storage)
+         subscriptionService.syncUser(newUser);
+
          // If switching users or logging in fresh
          if (user?.id !== newUser.id) { 
+           // Fetch Subscription Status from Supabase
+           try {
+              const sub = await subscriptionService.getUserSubscription(authUser.uid);
+              if (sub) {
+                  newUser.subscription = sub;
+                  if (sub.plan?.name) newUser.tier = sub.plan.name as UserTier;
+              }
+           } catch (e) {
+              console.warn("Failed to fetch subscription", e);
+           }
+
            geminiService.setSessionUser(newUser); 
            setUser(newUser);
            
