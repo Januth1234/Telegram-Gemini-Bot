@@ -146,22 +146,27 @@ const App: React.FC = () => {
             dailyUsage: { text: 0, images: 0, videos: 0 } 
          };
          
-         if (user?.id !== newUser.id) {
+         // 1. Sync User Profile to Firestore (Ensures they exist in DB)
+         await subscriptionService.syncUser(newUser);
+
+         // 2. Load Subscription Status
+         try {
+             const sub = await subscriptionService.getUserSubscription(authUser.uid);
+             if (sub) {
+                 newUser.subscription = sub;
+                 if (sub.plan?.name) newUser.tier = sub.plan.name as UserTier;
+             }
+         } catch (e) {
+             console.warn("Failed to load subscription:", e);
+         }
+
+         // Update local state if changed
+         if (user?.id !== newUser.id || user?.tier !== newUser.tier) {
             setUser(newUser);
             geminiService.setSessionUser(newUser); 
          }
-
-         subscriptionService.syncUser(newUser).catch(console.warn);
-
-         subscriptionService.getUserSubscription(authUser.uid).then(sub => {
-            if (sub) {
-                const updatedUser = { ...newUser, subscription: sub, tier: sub.plan?.name as UserTier || newUser.tier };
-                setUser(updatedUser);
-                geminiService.setSessionUser(updatedUser);
-            }
-         }).catch(console.warn);
          
-         // 4. MERGE HISTORIES (Local + Cloud)
+         // 3. MERGE HISTORIES (Local + Cloud)
          if (!isCloudHydrated) {
             setSyncStatus('syncing');
             try {
@@ -255,6 +260,21 @@ const App: React.FC = () => {
     });
   };
 
+  // Explicitly refresh subscription (called after a purchase)
+  const refreshSubscription = async () => {
+    if (!user?.id) return;
+    try {
+        const sub = await subscriptionService.getUserSubscription(user.id);
+        if (sub) {
+            const updatedUser = { ...user, subscription: sub, tier: (sub.plan?.name as UserTier) || user.tier };
+            setUser(updatedUser);
+            geminiService.setSessionUser(updatedUser);
+        }
+    } catch (e) {
+        console.error("Failed to refresh subscription", e);
+    }
+  };
+
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
 
   const renderContent = () => {
@@ -299,7 +319,7 @@ const App: React.FC = () => {
       case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} onPlanActivated={refreshSubscription} />;
       case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
       default: 
         return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={async () => navigate('account')} />;

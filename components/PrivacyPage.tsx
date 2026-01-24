@@ -34,7 +34,7 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "07. මුදල් ආපසු ගෙවීමේ ප්‍රතිපත්තිය (Return Policy)",
-        body: "මෙය ඩිජිටල් සේවාවක් බැවින්, සේවාව භාවිතා කිරීමෙන් පසු මුදල් ආපසු ගෙවීමක් (Refund) සිදු නොකෙරේ. නමුත් තාක්ෂණික දෝෂයක් නිසා සේවාව ලබා ගැනීමට නොහැකි වූ අවස්ථාවක දින 7ක් ඇතුලත අපව අමතන්න. දායකත්ව (Subscriptions) ඕනෑම වෙලාවක අවලංගු කළ හැකි අතර, එවිට ඊළඟ වාරිකය අය නොකෙරේ. මුදල් ආපසු ගෙවීම් (Refunds) ඔබ ගෙවීම් කළ මාධ්‍යයටම (Original Payment Method) බැර කෙරේ."
+        body: "මෙය ඩිජිටල් සේවාවක් බැවින්, සේවාව භාවිතා කිරීමෙන් පසු මුදල් ආපසු ගෙවීමක් (Refund) සිදු නොකෙරේ. නමුත් තාක්ෂණික දෝෂයක් නිසා සේවාව ලබා ගැනීමට නොහැකි වූ අවස්ථාවක දින 7ක් ඇතුලත අපව අමතන්න. දායකත්ව (Subscriptions) ඕනෑම වෙලාවක අවලංගු කළ හැකි අතර, එවිට ඊළඟ වාරිකය අය නොකෙරේ. ඕනෑම මුදල් ආපසු ගෙවීමක් (Refund) ඔබ මුලින් ගෙවීම් කළ මාධ්‍යයටම (Original Payment Method) බැර කෙරේ."
       }
     ],
     footer: "JN Productions Global ආරක්ෂණ ප්‍රතිපත්තිය"
@@ -72,21 +72,18 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "08. Refund & Return Policy",
-        body: "Since Orin AI provides instant access to digital neural services, payments are generally non-refundable once the service is utilized. However, if a technical failure prevents service delivery, please contact support within 7 days for a full refund resolution. You may cancel subscriptions at any time to prevent future billing charges. Refunds will be processed to the payment-initiated media itself."
+        body: "Since Orin AI provides instant access to digital neural services, payments are generally non-refundable once the service is utilized. However, if a technical failure prevents service delivery, please contact support within 7 days for a resolution. You may cancel subscriptions at any time. Important: Any approved refunds will be processed directly to the payment-initiated media (original payment method) itself."
       }
     ],
     footer: "JN Productions Global Privacy Statement"
   };
 
   useEffect(() => {
-    // Check if the URL hash is #returnterms and scroll to it
     if (window.location.hash === '#returnterms') {
       const el = document.getElementById('returnterms');
       if (el) {
-        // Small delay to ensure rendering and animations are done
         setTimeout(() => {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          // Optional: Add a highlight effect
           el.classList.add('bg-cyan-50', 'dark:bg-cyan-900/20', 'rounded-2xl', 'p-4', '-mx-4');
           setTimeout(() => el.classList.remove('bg-cyan-50', 'dark:bg-cyan-900/20', 'rounded-2xl', 'p-4', '-mx-4'), 3000);
         }, 300);

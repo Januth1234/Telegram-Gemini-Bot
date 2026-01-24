@@ -80,6 +80,11 @@ class FirebaseService {
     }
   }
 
+  // --- ACCESSORS ---
+  getDb(): Firestore | null {
+    return this.db;
+  }
+
   // --- AUTHENTICATION ---
   async loginWithGoogle(): Promise<User> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
@@ -127,11 +132,12 @@ class FirebaseService {
     try {
       const historyBlob = JSON.stringify(history);
       const userRef = doc(this.db, "users", uid);
+      // We store history inside the user document itself to save reads
       await setDoc(userRef, { historyBlob, lastUpdated: new Date() }, { merge: true });
       console.log("Cloud Sync: History saved to Google Account.");
     } catch (e) {
       console.error("Cloud Sync Error:", e);
-      throw e; // Propagate for UI handling
+      throw e; 
     }
   }
 
@@ -146,7 +152,6 @@ class FirebaseService {
             const rawData = JSON.parse(snap.data().historyBlob);
             if (!Array.isArray(rawData)) return [];
 
-            // Revive dates safely (JSON stringifies dates to strings)
             return rawData.map((c: any) => ({
                 ...c,
                 timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
@@ -157,13 +162,13 @@ class FirebaseService {
             }));
         } catch (parseError) {
             console.error("JSON Parse Error on Cloud History:", parseError);
-            return []; // Return empty on corrupt data
+            return [];
         }
       }
     } catch (e) {
       console.error("Cloud Fetch Error:", e);
     }
-    return []; // Return empty on fetch error or no document
+    return [];
   }
 
   // --- MESSAGING ---

@@ -8,9 +8,10 @@ import { geminiService } from '../services/geminiService';
 interface PricingPageProps {
   onClose: () => void;
   lang: Language;
+  onPlanActivated?: () => void;
 }
 
-const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
+const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang, onPlanActivated }) => {
   const t = translations[lang];
   const [plans, setPlans] = useState<DbPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,6 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
   const loadPlans = async () => {
     const data = await subscriptionService.getPlans();
     if (data.length === 0) {
-        // Fallback or empty state logic if DB is empty
         console.warn("No plans found in DB.");
     }
     setPlans(data);
@@ -47,7 +47,8 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
         
         if (success) {
             alert(lang === 'si' ? "පැකේජය සාර්ථකව සක්‍රිය විය!" : "Plan activated successfully!");
-            onClose(); // Close to refresh state or navigate
+            if (onPlanActivated) onPlanActivated();
+            onClose(); 
         } else {
             alert("Activation failed. Please try again.");
         }
