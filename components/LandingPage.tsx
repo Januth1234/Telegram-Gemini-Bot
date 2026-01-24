@@ -150,6 +150,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                 <button 
                     onClick={dismissBanner} 
                     className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/30 transition-all shrink-0 absolute right-4 md:static"
+                    aria-label="Dismiss Promo Banner"
                 >
                     <i className="fa-solid fa-xmark text-[10px]"></i>
                 </button>
@@ -199,6 +200,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                 <button 
                   onClick={handleSearch} 
                   disabled={isProcessing}
+                  aria-label="Start Generation"
                   className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-[20px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
                 >
                   {isProcessing ? (
@@ -246,10 +248,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         </section>
 
         {/* Feature Grid */}
-        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
+        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up" aria-label="Orin AI Features">
           <header className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
-             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Neural Tools</span>
+             <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Neural Tools</h3>
              <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
           </header>
           
@@ -264,9 +266,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         </section>
 
         {/* EXPANDED SEO CONTENT SECTION */}
-        <article className="w-full max-w-5xl py-12 text-left space-y-12 text-slate-600 dark:text-slate-400">
+        <article className="w-full max-w-5xl py-12 text-left space-y-16 text-slate-600 dark:text-slate-400">
            {/* Section 1: Introduction */}
-           <div className="space-y-6">
+           <section className="space-y-6">
               <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Your Intelligent Assistant for Sri Lanka</h2>
               <p className="leading-relaxed text-sm md:text-base font-medium">
                  Orin AI is designed to bridge the gap between global artificial intelligence capabilities and local usability. 
@@ -274,51 +276,73 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                  to access state-of-the-art neural reasoning without language barriers. Whether you need to draft emails, 
                  solve complex mathematics, or generate photorealistic images, Orin acts as your personal digital companion.
               </p>
-           </div>
+           </section>
 
-           {/* Section 2: Features List */}
-           <div className="grid md:grid-cols-2 gap-12">
-              <div className="space-y-6">
-                 <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Key Features</h3>
-                 <ul className="space-y-4">
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Bilingual Reasoning:</strong> Switch seamlessly between languages to get answers in the format you understand best.</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Visual Intelligence:</strong> Upload photos to extract text (OCR) or get detailed descriptions of scenes.</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Studio Create:</strong> Generate high-quality images and short videos using simple text prompts.</span>
-                    </li>
-                 </ul>
+           {/* Section 2: Detailed Features */}
+           <section className="space-y-8">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">Core Capabilities</h3>
+              <div className="grid md:grid-cols-2 gap-8">
+                 <div className="space-y-4">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-language text-cyan-500"></i> Bilingual Reasoning</h4>
+                    <p className="text-sm">Switch seamlessly between languages to get answers in the format you understand best. Orin understands local context, idioms, and cultural nuances in both Sinhala and Tamil.</p>
+                 </div>
+                 <div className="space-y-4">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-eye text-cyan-500"></i> Visual Intelligence (Vision)</h4>
+                    <p className="text-sm">Upload photos to extract text (OCR) or get detailed descriptions of scenes. Solve math problems simply by taking a picture of your notebook.</p>
+                 </div>
+                 <div className="space-y-4">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-palette text-cyan-500"></i> Studio Create</h4>
+                    <p className="text-sm">Generate high-quality images and short videos using simple text prompts. Perfect for content creators, marketers, and digital artists.</p>
+                 </div>
+                 <div className="space-y-4">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-microphone text-cyan-500"></i> Voice Assistant</h4>
+                    <p className="text-sm">Talk to Orin naturally. The voice mode supports real-time conversation, making it accessible for users who prefer speaking over typing.</p>
+                 </div>
               </div>
+           </section>
 
-              {/* Section 3: Use Cases */}
-              <div className="space-y-6">
-                 <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Who is Orin For?</h3>
-                 <ul className="space-y-4">
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-user-graduate text-indigo-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Students:</strong> Get help with math problems, summaries, and research in your mother tongue.</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-briefcase text-indigo-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Professionals:</strong> Draft emails, translate documents, and organize data instantly.</span>
-                    </li>
-                    <li className="flex items-start gap-3">
-                       <i className="fa-solid fa-pen-nib text-indigo-500 mt-1"></i>
-                       <span className="text-sm font-medium"><strong>Creators:</strong> Brainstorm ideas and visualize concepts with the Studio tool.</span>
-                    </li>
-                 </ul>
-              </div>
-           </div>
+           {/* Section 3: Use Cases */}
+           <section className="space-y-8">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">Who is Orin For?</h3>
+              <ul className="grid md:grid-cols-3 gap-6">
+                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
+                    <div className="flex items-center gap-3 mb-3">
+                        <i className="fa-solid fa-user-graduate text-indigo-500 text-xl"></i>
+                        <strong className="text-slate-900 dark:text-white">Students</strong>
+                    </div>
+                    <p className="text-xs">Get help with math problems, summaries, and research in your mother tongue. Clarify complex concepts instantly.</p>
+                 </li>
+                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
+                    <div className="flex items-center gap-3 mb-3">
+                        <i className="fa-solid fa-briefcase text-indigo-500 text-xl"></i>
+                        <strong className="text-slate-900 dark:text-white">Professionals</strong>
+                    </div>
+                    <p className="text-xs">Draft emails, translate documents, and organize data instantly. Boost your workflow efficiency.</p>
+                 </li>
+                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
+                    <div className="flex items-center gap-3 mb-3">
+                        <i className="fa-solid fa-pen-nib text-indigo-500 text-xl"></i>
+                        <strong className="text-slate-900 dark:text-white">Creators</strong>
+                    </div>
+                    <p className="text-xs">Brainstorm ideas, write scripts, and visualize concepts with the Studio tool. Overcome writer's block.</p>
+                 </li>
+              </ul>
+           </section>
+
+           {/* Section 4: Instructions */}
+           <section className="space-y-6">
+              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">How to Get Started</h3>
+              <ol className="list-decimal list-inside space-y-4 text-sm font-medium pl-2">
+                 <li><strong>Type a Prompt:</strong> Use the main input box above to ask a question or give a command in English, Sinhala, or Tamil.</li>
+                 <li><strong>Select a Mode:</strong> Click on specific tools like "Studio" for images or "Math" for calculations if you need specialized help.</li>
+                 <li><strong>Sign In (Optional):</strong> Create a free account to save your chat history and access higher usage limits.</li>
+                 <li><strong>Explore:</strong> Try the "Voice" mode for hands-free interaction or "Vision" to analyze images.</li>
+              </ol>
+           </section>
         </article>
 
         {/* Navigation Grid */}
-        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
+        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up" aria-label="Site Navigation">
           <header className="flex items-center gap-6 opacity-40">
              <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
              <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Archive</span>
@@ -339,11 +363,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         <footer className="w-full py-16 border-t border-black/5 dark:border-white/5 mt-12 flex flex-col items-center gap-8">
           {/* Social Media Links */}
           <div className="flex gap-6">
-             <a href="https://www.instagram.com/januth10.1/" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all"><i className="fa-brands fa-instagram text-lg"></i></a>
-             <a href="https://web.facebook.com/januth10.1/" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-facebook-f text-lg"></i></a>
-             <a href="https://www.tiktok.com/@januth10.1" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-black dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"><i className="fa-brands fa-tiktok text-lg"></i></a>
-             <a href="#" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"><i className="fa-brands fa-youtube text-lg"></i></a>
-             <a href="#" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-linkedin-in text-lg"></i></a>
+             <a href="https://www.instagram.com/januth10.1/" target="_blank" aria-label="Instagram" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all"><i className="fa-brands fa-instagram text-lg"></i></a>
+             <a href="https://web.facebook.com/januth10.1/" target="_blank" aria-label="Facebook" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-facebook-f text-lg"></i></a>
+             <a href="https://www.tiktok.com/@januth10.1" target="_blank" aria-label="TikTok" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-black dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"><i className="fa-brands fa-tiktok text-lg"></i></a>
+             <a href="#" aria-label="YouTube" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"><i className="fa-brands fa-youtube text-lg"></i></a>
+             <a href="#" aria-label="LinkedIn" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-linkedin-in text-lg"></i></a>
           </div>
           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • All Rights Reserved</p>
         </footer>
