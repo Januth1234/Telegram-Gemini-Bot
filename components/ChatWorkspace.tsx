@@ -7,6 +7,7 @@ import MathsMode from './MathsMode';
 import GetHelpMode from './GetHelpMode';
 import VoiceAssistant from './VoiceAssistant';
 import LiveVisionMode from './LiveVisionMode';
+import { markovService } from '../services/markovService';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -20,7 +21,7 @@ interface ChatWorkspaceProps {
   lang: Language;
   conversations: Conversation[];
   onSwitchConv: (id: string) => void;
-  onNewConv: (mode?: WorkspaceMode) => void; // Updated signature
+  onNewConv: (mode?: WorkspaceMode) => void; 
   onDeleteConv: (id: string) => void;
   activeConvId: string;
   onUpdateTitle: (title: string, modes?: WorkspaceMode[]) => void;
@@ -42,6 +43,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
+  
+  // Markov Placeholders
+  const [dynamicPlaceholder, setDynamicPlaceholder] = useState("");
 
   // Pagination for History
   const [historyPage, setHistoryPage] = useState(1);
@@ -74,6 +78,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  // Dynamic Placeholder Logic using Markov Chain
+  useEffect(() => {
+    setDynamicPlaceholder(markovService.generatePlaceholder());
+    const interval = setInterval(() => {
+        if (!localInput) {
+            setDynamicPlaceholder(markovService.generatePlaceholder());
+        }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [localInput]);
+
   const handleModeNav = (mode: WorkspaceMode) => {
     // Requirements: Maths, Get Help, and Voice should start a NEW conversation
     if (mode === 'maths' || mode === 'gethelp' || mode === 'voice') {
@@ -94,16 +109,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const startProgress = (mode: WorkspaceMode) => {
     setProgress(0);
-    const steps = mode === 'studio' 
-      ? [{ threshold: 20, label: lang === 'si' ? "සූදානම්..." : "Wait..." }, { threshold: 50, label: lang === 'si' ? "අඳිමින්..." : "Drawing..." }, { threshold: 85, label: lang === 'si' ? "අවසන් කරමින්..." : "Finishing..." }]
-      : [{ threshold: 30, label: lang === 'si' ? "බලමින්..." : "Reading..." }, { threshold: 60, label: lang === 'si' ? "සිතමින්..." : "Thinking..." }, { threshold: 90, label: lang === 'si' ? "ලියමින්..." : "Writing..." }];
-    setStepLabel(steps[0].label);
+    // Use Markov generated loading message for generic state
+    setStepLabel(markovService.generateLoadingMessage());
+    
     let currentProgress = 0;
     progressIntervalRef.current = window.setInterval(() => {
       currentProgress += Math.random() * 5;
       if (currentProgress > 95) currentProgress = 95;
-      const activeStep = [...steps].reverse().find(s => currentProgress >= s.threshold);
-      if (activeStep) setStepLabel(activeStep.label);
+      
+      // Periodically update the Markov text to show activity
+      if (currentProgress % 20 < 5) {
+         setStepLabel(markovService.generateLoadingMessage());
+      }
+      
       setProgress(currentProgress);
     }, 400);
   };
@@ -122,7 +140,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const fileToUse = overrideFile !== undefined ? overrideFile : selectedFile;
     
     if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
-    if (geminiService.hasReachedLimit()) return;
+    if (await geminiService.hasReachedLimit()) return;
 
     abortControllerRef.current = new AbortController();
     const signal = abortControllerRef.current.signal;
@@ -160,7 +178,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         role: 'user', 
         content: text || "", 
         timestamp: new Date(), 
-        type: fileToUse ? 'image' : 'text',
+        type: fileToUse ? 'image' : 'text', 
         imageUrl: fileToUse ? `data:${fileToUse.mimeType};base64,${fileToUse.data}` : undefined,
         fileName: fileToUse?.name 
     };
@@ -209,12 +227,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice' || m === 'vision';
 
-  // Pagination Logic
+  // Pagination Logic - Ensure we show items based on current page
   const visibleConversations = conversations.slice(0, historyPage * ITEMS_PER_PAGE);
   const hasMoreHistory = visibleConversations.length < conversations.length;
 
+  const handleHistoryClick = (id: string) => {
+    onSwitchConv(id);
+    setIsHistoryOpen(false);
+  };
+
   const handleDeleteClick = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
+    e.stopPropagation(); // Critical: Prevent opening the conversation while deleting
     if (window.confirm(lang === 'si' ? "මෙම සංවාදය මකා දැමීමට අවශ්‍යද?" : "Delete this conversation history?")) {
         onDeleteConv(id);
     }
@@ -227,7 +250,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={handleClose} lang={lang} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-48">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-36 md:pb-40">
         <div className="max-w-3xl mx-auto space-y-10">
           {messages.length === 0 ? (
             <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
@@ -299,46 +322,46 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   return (
     <div className={`flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans transition-colors duration-500 ${isPrivate ? 'dark:bg-slate-950' : ''}`}>
       
-      {/* History Sidebar Backdrop */}
+      {/* History Sidebar Backdrop - Fix: Covers entire screen, handles close logic */}
       {isHistoryOpen && (
         <div 
-          className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm z-[140] animate-fade" 
+          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-[140] animate-fade cursor-pointer" 
           onClick={() => setIsHistoryOpen(false)} 
         />
       )}
 
       {/* History Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-[150] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
-        <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+        <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-white dark:bg-slate-900 z-10">
           <h3 className={`text-[10px] font-black uppercase tracking-widest text-slate-500 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.memoryHistory}</h3>
           <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
         </div>
-        <div className="p-4">
+        <div className="p-4 bg-white dark:bg-slate-900 z-10">
           <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className={`w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
             + {t.newNeuralChat}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
+        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative">
           {visibleConversations.map(conv => (
             <div 
               key={conv.id}
-              onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }} 
-              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'} ${conv.isPrivate ? 'opacity-75' : ''}`}
+              onClick={() => handleHistoryClick(conv.id)}
+              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer select-none ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'} ${conv.isPrivate ? 'opacity-75' : ''}`}
             >
               <div className="flex items-start gap-3">
                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
                     <i className={`fa-solid ${conv.isPrivate ? 'fa-user-secret' : getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
                  </div>
-                 <div className="flex-1 min-w-0 pr-6">
+                 <div className="flex-1 min-w-0 pr-8">
                     <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'Private Session' : conv.title}</span>
                     <p className={`text-[10px] text-slate-400 truncate mt-1 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'History not saved' : (conv.messages[conv.messages.length - 1]?.content || "Empty")}</p>
                  </div>
               </div>
               
-              {/* Delete Button */}
+              {/* Delete Button - Better positioning and hit area */}
               <button 
                 onClick={(e) => handleDeleteClick(e, conv.id)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-0 group-hover:opacity-100 z-10"
+                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-20"
                 title="Delete Conversation"
               >
                 <i className="fa-solid fa-trash-can text-xs"></i>
@@ -373,7 +396,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
         {/* Sync Status in Sidebar Footer - Shows if syncing but we already have content */}
         {isSyncing && conversations.length > 0 && (
-           <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center">
+           <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center bg-white dark:bg-slate-900 z-10">
               <span className={`text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.syncingCloud}</span>
            </div>
         )}
@@ -383,12 +406,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <header className={`h-16 md:h-20 shrink-0 border-b flex items-center justify-between px-4 md:px-10 z-[60] backdrop-blur-2xl transition-all duration-300 ${isPrivate ? 'bg-indigo-950/90 border-white/5 shadow-2xl shadow-indigo-900/20' : 'bg-white/95 dark:bg-slate-950/95 border-slate-200 dark:border-white/5'}`}>
           <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
             <button onClick={() => setIsHistoryOpen(true)} className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl border flex items-center justify-center transition-all ${isPrivate ? 'text-indigo-200 border-white/10 hover:text-white' : 'border-slate-200 dark:border-white/10 text-slate-500 hover:text-cyan-600'}`}><i className="fa-solid fa-bars-staggered"></i></button>
-            <nav className={`flex items-center rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar scroll-smooth ${isPrivate ? 'bg-black/20' : 'bg-slate-100 dark:bg-white/5'}`}>
+            <nav className={`flex items-center rounded-[20px] p-1.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth ${isPrivate ? 'bg-black/20' : 'bg-slate-100 dark:bg-white/5'}`}>
               {(['chat', 'maths', 'studio', 'vision', 'gethelp', 'voice'] as WorkspaceMode[]).map(m => (
                 <button 
                   key={m} 
                   onClick={() => handleModeNav(m)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative shrink-0 ${
                     activeTab === m 
                       ? (isPrivate ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white') 
                       : (isPrivate ? 'text-indigo-300 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300')
@@ -431,8 +454,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {/* Optimized input bar layout for Mobile Safe Area */}
         {(activeTab === 'chat' || activeTab === 'studio' || activeTab === 'translator' || activeTab === 'gethelp') && (
-          <div className="fixed bottom-0 left-0 right-0 w-full p-4 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/80 dark:via-slate-950/80 to-transparent safe-pb">
-             <div className="max-w-3xl mx-auto pointer-events-auto">
+          <div className="fixed bottom-0 left-0 right-0 w-full z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent safe-pb pointer-events-none">
+             <div className="w-full max-w-3xl mx-auto px-4 pb-4 md:pb-6 pt-10 pointer-events-auto">
                 {/* File Preview in Input Bar */}
                 {selectedFile && (
                   <div className="mb-2 mx-2 p-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/10 shadow-lg flex items-center gap-4 animate-slide-in-up">
@@ -457,7 +480,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={isPrivate ? "Private chat active..." : (activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat)} 
+                    placeholder={isPrivate ? "Private chat active..." : (activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : dynamicPlaceholder)} 
                     className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-indigo-300' : 'dark:text-white placeholder:text-slate-400'} ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
                    <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className={`w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20 ${isPrivate ? 'bg-indigo-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}><i className="fa-solid fa-arrow-up text-base"></i></button>

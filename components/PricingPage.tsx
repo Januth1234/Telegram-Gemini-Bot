@@ -43,7 +43,9 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang, onPlanActivate
         : `Are you sure you want to subscribe to ${plan.name}? (LKR ${plan.price_lkr})`)) {
         
         setProcessingId(plan.id);
-        const success = await subscriptionService.subscribeUser(user.id, plan);
+        
+        // Pass email to ensure robust user record creation in Firestore
+        const success = await subscriptionService.subscribeUser(user.id, plan, user.email);
         
         if (success) {
             alert(lang === 'si' ? "පැකේජය සාර්ථකව සක්‍රිය විය!" : "Plan activated successfully!");

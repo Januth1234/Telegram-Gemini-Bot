@@ -41,8 +41,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
         email: googleUser.email || "user@orin.ai",
         avatar: googleUser.photoURL || undefined,
         tier: 'Verified Member',
+        plan: 'free',
         neuralBio: cloudBio || "",
-        dailyUsage: { text: 0, images: 0, videos: 0 }
+        usage: { prompts: 0, images: 0, videos: 0, lastReset: new Date() }
       };
 
       await subscriptionService.syncUser(newUser);
@@ -219,11 +220,11 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
               {/* Usage Grid */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="glass-panel p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.text}</span>
+                  <span className="text-2xl font-black text-slate-900 dark:text-white">{user.usage?.prompts || 0}</span>
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sessions</span>
                 </div>
                 <div className="glass-panel p-6 rounded-[32px] border border-black/5 dark:border-white/5 flex flex-col items-center justify-center gap-2 hover:bg-white dark:hover:bg-slate-800 transition-colors">
-                  <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.images}</span>
+                  <span className="text-2xl font-black text-slate-900 dark:text-white">{user.usage?.images || 0}</span>
                   <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Assets</span>
                 </div>
               </div>

@@ -22,20 +22,29 @@ export interface DbSubscription {
   plan?: DbPlan; // Joined data
 }
 
+export interface UserUsage {
+  prompts: number;
+  images: number;
+  videos: number;
+  lastReset: any; // Firestore Timestamp or Date
+  lastImageGenerated?: any;
+  lastVideoGenerated?: any;
+  lastImageReset?: any; // Specific for Free tier 3-day window
+}
+
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
   avatar?: string;
-  tier: UserTier;
+  tier: UserTier; // Display label
+  plan: string; // Internal plan ID: 'free', 'basic', 'pro', 'elite'
   token?: string;
-  neuralBio?: string; // New: AI Memory of the user
-  dailyUsage: {
-    text: number;
-    images: number;
-    videos: number;
-  };
-  subscription?: DbSubscription;
+  neuralBio?: string;
+  usage?: UserUsage;
+  subscriptionStatus?: string;
+  planStartedAt?: any;
+  subscription?: DbSubscription; // Legacy support if needed
 }
 
 export interface GroundingLink {
@@ -63,7 +72,7 @@ export interface Conversation {
   timestamp: Date;
   mode: WorkspaceMode;
   modesUsed?: WorkspaceMode[];
-  isPrivate?: boolean; // New: Private Mode Flag
+  isPrivate?: boolean;
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";

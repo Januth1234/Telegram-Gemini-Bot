@@ -3,6 +3,7 @@ import { GoogleGenAI, Modality, Type } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
+import { subscriptionService } from "./subscriptionService";
 
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
@@ -12,6 +13,7 @@ export class AppError extends Error {
 }
 
 const getToneInstruction = (tone: string) => {
+  // ... (previous tone logic kept same)
   switch (tone) {
     case 'unhinged': return "You are a chaotic, unpredictable, and slightly unhinged AI. Be wild, spontaneous, say unexpected things, and don't be boring. Use slang and be expressive.";
     case 'romantic': return "You are a flirtatious, charming, and romantic companion. Speak in a warm, intimate, and affectionate manner. Compliment the user and build an emotional connection.";
@@ -23,6 +25,7 @@ const getToneInstruction = (tone: string) => {
 };
 
 const getSystemInstruction = (tone: string = 'neutral', bio: string = "") => {
+  // ... (previous instruction logic kept same)
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', { 
     timeZone: 'Asia/Colombo',
@@ -41,7 +44,18 @@ ADHERE TO THE ABOVE FACTS. If the user asks about themselves, use this data. If 
 
   return `${base}
 ${bioSection}
-  
+
+MATH OUTPUT STANDARDS (STUDENT NOTEBOOK STYLE):
+1. FORMAT: Write answers as if in a student's notebook. Use clean, readable plain text.
+2. FRACTIONS: ALWAYS convert decimals to simplified fractions (e.g., use '1/2' instead of '0.5', '3/4' instead of '0.75') unless the problem explicitly uses decimal inputs.
+3. ALGEBRA: ALWAYS combine like terms (e.g., '2x + 3x' must become '5x'). Never leave expressions unsimplified.
+4. NOTATION:
+   - Roots: Use the '√' symbol. Simplify radicals (e.g., '√8' -> '2√2'). NEVER use fractional exponents like '8^(1/2)' for final answers.
+   - Exponents: Use standard 'x^2' notation or unicode superscripts.
+   - Parentheses: Use strictly to clarify grouping (e.g., '(x+1)/2').
+   - Mixed Numbers: Use mixed numbers for final answers if appropriate for the context (e.g., '1 1/2').
+5. STEPS: When solving, show clear, logical steps before the final answer.
+
 RULES:
 1. RESPONSE: Respond IMMEDIATELY. Be extremely concise.
 2. IDENTITY: You are Orin AI.
@@ -51,25 +65,24 @@ RULES:
 
 export class GeminiService {
   private currentUser: UserAccount | null = null;
-  private freeUsageLimit = 200;
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
     this.initFirebaseListener();
-    this.checkAndResetUsage();
   }
 
   private initFirebaseListener() {
     firebaseService.onAuthStateChanged((firebaseUser) => {
       if (firebaseUser) {
         if (!this.currentUser) {
-           const newUser: UserAccount = {
+           // We do minimal init here, detailed hydration happens in App.tsx via getUserData
+           const newUser: any = {
               id: firebaseUser.uid,
               name: firebaseUser.displayName || "User",
               email: firebaseUser.email || "user@orin.ai",
               avatar: firebaseUser.photoURL || undefined,
               tier: 'Verified Member',
-              dailyUsage: { text: 0, images: 0, videos: 0 }
+              plan: 'free' // Default until sync
            };
            this.setSessionUser(newUser);
         }
@@ -77,19 +90,7 @@ export class GeminiService {
     });
   }
 
-  private checkAndResetUsage() {
-    const lastReset = cacheService.get<string | null>(CacheKey.LAST_RESET, null);
-    const now = new Date().getTime();
-    const oneDay = 24 * 60 * 60 * 1000;
-
-    if (!lastReset || (now - parseInt(lastReset)) > oneDay) {
-      cacheService.set(CacheKey.USAGE_COUNT, 0);
-      cacheService.set(CacheKey.LAST_RESET, now.toString());
-    }
-  }
-
   setSessionUser(user: UserAccount) {
-    // Preserve existing bio if new object doesn't have it but old one did
     if (this.currentUser?.neuralBio && !user.neuralBio) {
         user.neuralBio = this.currentUser.neuralBio;
     }
@@ -109,25 +110,14 @@ export class GeminiService {
     return this.currentUser;
   }
 
-  getUsageCount(): number {
-    this.checkAndResetUsage();
-    return cacheService.get<number>(CacheKey.USAGE_COUNT, 0);
-  }
-
-  incrementUsage() {
-    const current = this.getUsageCount();
-    cacheService.set(CacheKey.USAGE_COUNT, current + 1);
-  }
-
-  hasReachedLimit(): boolean {
-    if (this.currentUser) return false; 
-    return this.getUsageCount() >= this.freeUsageLimit;
+  async hasReachedLimit(): Promise<boolean> {
+      const allowed = await subscriptionService.checkAllowance(this.currentUser, 'text');
+      return !allowed;
   }
 
   private async checkApiKey(): Promise<boolean> {
     const key = process.env.API_KEY;
     if (key) return true;
-    
     if (typeof window !== 'undefined' && (window as any).aistudio) {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (hasKey) return true;
@@ -145,6 +135,7 @@ export class GeminiService {
 
   // --- MEMORY CORE ---
   async evolveUserBio(currentBio: string, recentMessages: ChatMessage[]): Promise<string> {
+    // ... (previous implementation)
     if (recentMessages.length === 0) return currentBio;
     if (!await this.checkApiKey()) return currentBio;
 
@@ -274,13 +265,26 @@ export class GeminiService {
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
+      if (!await this.checkApiKey()) return "New Chat";
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Title for conversation. Max 4 words. Lang: ${lang}.`;
+      
+      const contextText = messages.slice(-3).map(m => m.content).join('\n');
+      const modeStr = modes.join(', ');
+      
+      const prompt = `
+      Summarize this conversation into a short title (Max 5 words).
+      Language: ${lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English'}.
+      Modes Used: ${modeStr}.
+      Context: ${contextText}
+      
+      Output ONLY the title.
+      `;
+      
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      return response.text?.trim() || "Chat";
+      return response.text?.trim() || "New Chat";
     } catch {
       return "New Chat";
     }
@@ -295,8 +299,11 @@ export class GeminiService {
     history?: ChatMessage[];
     signal?: AbortSignal;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
-    if (this.hasReachedLimit()) throw new AppError("Limit reached.", "limit_reached");
     
+    // --- LIMIT CHECK ---
+    const allowed = await subscriptionService.checkAllowance(this.currentUser, 'text');
+    if (!allowed) throw new AppError("Daily/Monthly Limit Reached. Please Upgrade.", "limit_reached");
+
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -328,7 +335,9 @@ export class GeminiService {
         config
       });
 
-      this.incrementUsage();
+      // --- INCREMENT USAGE ---
+      await subscriptionService.incrementUsage(this.currentUser, 'text');
+
       const links: GroundingLink[] = [];
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
       if (groundingChunks) {
@@ -340,12 +349,17 @@ export class GeminiService {
 
       return { text: response.text || "", links };
     } catch (e: any) {
+      if (e.name === 'AppError') throw e;
       if (e.name === 'AbortError') throw e;
       throw new AppError("Failed to chat.", 'generic');
     }
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
+    // --- LIMIT CHECK ---
+    const allowed = await subscriptionService.checkAllowance(this.currentUser, 'image');
+    if (!allowed) throw new AppError("Image Generation Limit Reached. Upgrade Plan.", "limit_reached");
+
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -356,15 +370,24 @@ export class GeminiService {
       });
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+        if (part.inlineData) {
+            // --- INCREMENT USAGE ---
+            await subscriptionService.incrementUsage(this.currentUser, 'image');
+            return `data:image/png;base64,${part.inlineData.data}`;
+        }
       }
       throw new Error("No image generated.");
     } catch (e: any) {
+      if (e.name === 'AppError') throw e;
       throw new AppError("Drawing failed.", 'generic');
     }
   }
 
   async generateVideo(prompt: string, aspectRatio: '16:9' | '9:16', resolution: '720p' | '1080p' = '720p'): Promise<string> {
+    // --- LIMIT CHECK ---
+    const allowed = await subscriptionService.checkAllowance(this.currentUser, 'video');
+    if (!allowed) throw new AppError("Video Limit Reached. Upgrade Plan.", "limit_reached");
+
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -374,8 +397,13 @@ export class GeminiService {
       if (!videoUri) throw new Error("No video.");
       const res = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
       const blob = await res.blob();
+      
+      // --- INCREMENT USAGE ---
+      await subscriptionService.incrementUsage(this.currentUser, 'video');
+      
       return URL.createObjectURL(blob);
     } catch (e: any) {
+      if (e.name === 'AppError') throw e;
       throw new AppError("Video generation failed.", 'generic');
     }
   }

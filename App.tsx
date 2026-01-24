@@ -51,7 +51,8 @@ const App: React.FC = () => {
   };
 
   const [view, setView] = useState<AppView>(getInitialView());
-  const [user, setUser] = useState(geminiService.getCurrentUser());
+  const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
+  const [isAuthReady, setIsAuthReady] = useState(false); // Track if Firebase auth check is complete
   const [globalPrompt, setGlobalPrompt] = useState(() => cacheService.get<string>(CacheKey.DRAFT_PROMPT, ''));
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   
@@ -94,7 +95,9 @@ const App: React.FC = () => {
 
   const navigate = (newView: AppView) => {
     if (newView === 'landing') {
-        window.history.pushState(null, '', window.location.pathname);
+        // Explicitly use /# for landing/home to distinguish from root /
+        // This prevents the auth redirect loop for logged-in users who want to see the home page
+        window.history.pushState(null, '', '/#');
     } else {
         window.location.hash = newView;
     }
@@ -106,6 +109,44 @@ const App: React.FC = () => {
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
+
+  // --- ROUTING GUARD ---
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    const hash = window.location.hash;
+    // Check if URL ends with # (explicit home) or matches #landing
+    const isExplicitHome = window.location.href.endsWith('#') || hash === '#landing';
+    // Root is empty hash AND NOT explicit home
+    const isRoot = (hash === '' || hash === '#') && !isExplicitHome && !window.location.href.endsWith('#');
+    
+    // Protected routes: Chat interface and tools
+    const isProtected = hash.startsWith('#chat') || 
+                        hash.startsWith('#art') || 
+                        hash.startsWith('#camera') || 
+                        hash.startsWith('#voice') || 
+                        hash.startsWith('#math') || 
+                        hash.startsWith('#help') || 
+                        hash.startsWith('#account');
+
+    if (user) {
+      // LOGGED IN
+      // 1. Visit Root (orinai.org) -> Redirect to #chat
+      // 2. Visit Explicit Home (orinai.org/#) -> Stay
+      // 3. Visit Protected -> Stay
+      if (hash === '' && !isExplicitHome) {
+         navigate('chat');
+      }
+    } else {
+      // LOGGED OUT
+      // 1. Visit Root -> Stay
+      // 2. Visit Explicit Home -> Stay
+      // 3. Visit Protected -> Redirect to Landing
+      if (isProtected) {
+         navigate('landing');
+      }
+    }
+  }, [isAuthReady, user, view]); // Re-run on auth state or view change
 
   // --- LOCAL PERSISTENCE ---
   useEffect(() => {
@@ -176,8 +217,9 @@ const App: React.FC = () => {
             name: authUser.displayName || "User", 
             email: authUser.email || "user@orin.ai", 
             avatar: authUser.photoURL || undefined, 
-            tier: 'Verified Member', 
-            dailyUsage: { text: 0, images: 0, videos: 0 } 
+            tier: 'Verified Member',
+            plan: 'free',
+            usage: { prompts: 0, images: 0, videos: 0, lastReset: new Date() }
          };
          
          await subscriptionService.syncUser(newUser);
@@ -238,6 +280,7 @@ const App: React.FC = () => {
             setIsCloudHydrated(false); 
         }
       }
+      setIsAuthReady(true); // Allow routing logic to proceed
     });
     return () => unsubscribe();
   }, [user?.id, isCloudHydrated]);
@@ -289,7 +332,11 @@ const App: React.FC = () => {
   const handleDeleteConversation = (id: string) => {
     setConversations(prev => {
         const filtered = prev.filter(c => c.id !== id);
-        if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
+        // If we just deleted the active conversation, switch to the first available one, or null
+        if (activeConversationId === id) {
+            const nextConv = filtered.length > 0 ? filtered[0].id : null;
+            setActiveConversationId(nextConv);
+        }
         return filtered;
     });
   };
