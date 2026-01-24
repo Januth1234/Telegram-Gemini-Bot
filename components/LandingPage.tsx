@@ -68,12 +68,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const getLocalGreeting = () => {
     if (lang === 'si') {
       const timeStr = context.timeOfDay === 'morning' ? 'සුබ උදෑසනක්' : context.timeOfDay === 'afternoon' ? 'සුබ දහවලක්' : 'සුබ සැන්දෑවක්';
-      return `${timeStr} වේවා ඔරින් AI වෙතින් ඔබට`;
+      return `${timeStr} වේවා`;
     } else if (lang === 'ta') {
       const timeStr = context.timeOfDay === 'morning' ? 'காலை வணக்கம்' : context.timeOfDay === 'afternoon' ? 'மதிய வணக்கம்' : 'மாலை வணக்கம்';
-      return `ஓரின் AI உங்களுக்கு ${timeStr} தெரிவிக்கிறது`;
+      return `ஓரின் AI உடன் ${timeStr}`;
     } else {
-      return `Good ${context.timeOfDay} and welcome to Orin AI`;
+      return `Good ${context.timeOfDay}`;
     }
   };
 
@@ -168,8 +168,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
             </div>
             
             <div className="space-y-6">
+              {/* Corrected H1 Strategy for SEO */}
               <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.85]">
-                {t.welcome}
+                Orin AI
               </h1>
               <div className="min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
                   <h2 className="text-xl md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal max-w-2xl leading-snug">
@@ -262,6 +263,60 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </div>
         </section>
 
+        {/* EXPANDED SEO CONTENT SECTION */}
+        <article className="w-full max-w-5xl py-12 text-left space-y-12 text-slate-600 dark:text-slate-400">
+           {/* Section 1: Introduction */}
+           <div className="space-y-6">
+              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Your Intelligent Assistant for Sri Lanka</h2>
+              <p className="leading-relaxed text-sm md:text-base font-medium">
+                 Orin AI is designed to bridge the gap between global artificial intelligence capabilities and local usability. 
+                 Supporting <strong>Sinhala, Tamil, and English</strong> natively, Orin empowers students, professionals, and creatives 
+                 to access state-of-the-art neural reasoning without language barriers. Whether you need to draft emails, 
+                 solve complex mathematics, or generate photorealistic images, Orin acts as your personal digital companion.
+              </p>
+           </div>
+
+           {/* Section 2: Features List */}
+           <div className="grid md:grid-cols-2 gap-12">
+              <div className="space-y-6">
+                 <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Key Features</h3>
+                 <ul className="space-y-4">
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Bilingual Reasoning:</strong> Switch seamlessly between languages to get answers in the format you understand best.</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Visual Intelligence:</strong> Upload photos to extract text (OCR) or get detailed descriptions of scenes.</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-check text-cyan-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Studio Create:</strong> Generate high-quality images and short videos using simple text prompts.</span>
+                    </li>
+                 </ul>
+              </div>
+
+              {/* Section 3: Use Cases */}
+              <div className="space-y-6">
+                 <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200">Who is Orin For?</h3>
+                 <ul className="space-y-4">
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-user-graduate text-indigo-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Students:</strong> Get help with math problems, summaries, and research in your mother tongue.</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-briefcase text-indigo-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Professionals:</strong> Draft emails, translate documents, and organize data instantly.</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                       <i className="fa-solid fa-pen-nib text-indigo-500 mt-1"></i>
+                       <span className="text-sm font-medium"><strong>Creators:</strong> Brainstorm ideas and visualize concepts with the Studio tool.</span>
+                    </li>
+                 </ul>
+              </div>
+           </div>
+        </article>
+
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-12 animate-slide-in-up">
           <header className="flex items-center gap-6 opacity-40">
@@ -280,10 +335,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               <NavCard href="#terms" icon="fa-file-contract" color="indigo" title={t.terms} lang={lang} />
           </div>
         </section>
-
-        {/* ... (SEO Article kept as is) ... */}
         
-        <footer className="w-full py-16 opacity-30 border-t border-black/5 dark:border-white/5 mt-12">
+        <footer className="w-full py-16 border-t border-black/5 dark:border-white/5 mt-12 flex flex-col items-center gap-8">
+          {/* Social Media Links */}
+          <div className="flex gap-6">
+             <a href="https://www.instagram.com/januth10.1/" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all"><i className="fa-brands fa-instagram text-lg"></i></a>
+             <a href="https://web.facebook.com/januth10.1/" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-facebook-f text-lg"></i></a>
+             <a href="https://www.tiktok.com/@januth10.1" target="_blank" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-black dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"><i className="fa-brands fa-tiktok text-lg"></i></a>
+             <a href="#" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"><i className="fa-brands fa-youtube text-lg"></i></a>
+             <a href="#" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-linkedin-in text-lg"></i></a>
+          </div>
           <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • All Rights Reserved</p>
         </footer>
       </article>

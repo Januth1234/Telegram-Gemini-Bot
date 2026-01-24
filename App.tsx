@@ -397,8 +397,8 @@ const App: React.FC = () => {
         );
       case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
       case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
-      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} />;
-      case 'terms': return <TermsPage onClose={() => navigate('landing')} />;
+      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'terms': return <TermsPage onClose={() => navigate('landing')} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
