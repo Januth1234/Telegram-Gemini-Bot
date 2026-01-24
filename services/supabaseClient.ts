@@ -25,4 +25,10 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl === "https://placeholder.sup
   console.warn("Supabase keys are missing or placeholder. Database features will not work.");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+});

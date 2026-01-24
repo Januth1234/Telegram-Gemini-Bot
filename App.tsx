@@ -45,10 +45,7 @@ const App: React.FC = () => {
 
   const getInitialView = (): AppView => {
     const hash = window.location.hash.replace('#', '').split('?')[0];
-    
-    // Specific routing for return policy direct link
     if (hash === 'returnterms') return 'privacy';
-
     const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
     return validViews.includes(hash as any) ? hash as AppView : 'landing';
   };
@@ -57,8 +54,10 @@ const App: React.FC = () => {
   const [user, setUser] = useState(geminiService.getCurrentUser());
   const [globalPrompt, setGlobalPrompt] = useState(() => cacheService.get<string>(CacheKey.DRAFT_PROMPT, ''));
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
+  
+  // Sync States
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [hasSyncedWithCloud, setHasSyncedWithCloud] = useState(false);
+  const [isCloudHydrated, setIsCloudHydrated] = useState(false); 
   
   const saveTimeoutRef = useRef<number | null>(null);
 
@@ -75,7 +74,7 @@ const App: React.FC = () => {
 
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
 
-  // Handle URL Query Params (e.g. ?prompt=Hello)
+  // Handle URL Query Params
   useEffect(() => {
     const handleUrlParams = () => {
         const hash = window.location.hash;
@@ -86,15 +85,12 @@ const App: React.FC = () => {
             if (p) setGlobalPrompt(decodeURIComponent(p));
         }
     };
-    handleUrlParams(); // Check on mount
+    handleUrlParams(); 
     window.addEventListener('hashchange', handleUrlParams);
     return () => window.removeEventListener('hashchange', handleUrlParams);
   }, []);
 
   const navigate = (newView: AppView) => {
-    // If navigating to landing, clear hash. Otherwise set hash.
-    // Exception: If navigating to privacy via returnterms logic, we might want to keep the hash or reset it.
-    // For standard nav, we just set the view hash.
     if (newView === 'landing') {
         window.history.pushState(null, '', window.location.pathname);
     } else {
@@ -109,14 +105,19 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, []);
 
-  // Save to Local Storage & Cloud
+  // --- LOCAL PERSISTENCE ---
   useEffect(() => {
     cacheService.set(CacheKey.HISTORY, conversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     else cacheService.remove(CacheKey.ACTIVE_CONV);
+  }, [conversations, activeConversationId]);
 
-    if (user?.id) {
+  // --- CLOUD SYNC (SAVE) ---
+  // Debounced save to cloud. Reduced to 1s for faster feedback.
+  useEffect(() => {
+    if (user?.id && isCloudHydrated) {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
+      
       saveTimeoutRef.current = window.setTimeout(() => {
         setSyncStatus('syncing');
         firebaseService.saveHistory(user.id, conversations)
@@ -124,70 +125,89 @@ const App: React.FC = () => {
             setSyncStatus('success');
             setTimeout(() => setSyncStatus('idle'), 2000);
           })
-          .catch(() => setSyncStatus('error'));
-      }, 3000);
+          .catch((e) => {
+            console.error("Auto-save failed", e);
+            setSyncStatus('error');
+          });
+      }, 1000); // 1 second debounce
     }
-  }, [conversations, activeConversationId, user?.id]);
+  }, [conversations, user?.id, isCloudHydrated]);
 
-  // Auth Listener & Cloud Merge
+  // --- AUTH & CLOUD HYDRATION (LOAD) ---
   useEffect(() => {
     const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
       if (authUser) {
-         const newUser: UserAccount = { id: authUser.uid, name: authUser.displayName || "User", email: authUser.email || "user@orin.ai", avatar: authUser.photoURL || undefined, tier: 'Verified Member', dailyUsage: { text: 0, images: 0, videos: 0 } };
+         const newUser: UserAccount = { 
+            id: authUser.uid, 
+            name: authUser.displayName || "User", 
+            email: authUser.email || "user@orin.ai", 
+            avatar: authUser.photoURL || undefined, 
+            tier: 'Verified Member', 
+            dailyUsage: { text: 0, images: 0, videos: 0 } 
+         };
          
-         // Sync User to Supabase (Email storage)
-         subscriptionService.syncUser(newUser);
-
-         // If switching users or logging in fresh
-         if (user?.id !== newUser.id) { 
-           // Fetch Subscription Status from Supabase
-           try {
-              const sub = await subscriptionService.getUserSubscription(authUser.uid);
-              if (sub) {
-                  newUser.subscription = sub;
-                  if (sub.plan?.name) newUser.tier = sub.plan.name as UserTier;
-              }
-           } catch (e) {
-              console.warn("Failed to fetch subscription", e);
-           }
-
-           geminiService.setSessionUser(newUser); 
-           setUser(newUser);
-           
-           // Fetch Cloud History and Merge
-           try {
-             setSyncStatus('syncing');
-             const cloudHistory = await firebaseService.getHistory(authUser.uid);
-             if (cloudHistory && cloudHistory.length > 0) {
-               setConversations(prevLocal => {
-                 // Map by ID
-                 const combinedMap = new Map<string, Conversation>();
-                 [...prevLocal, ...cloudHistory].forEach(conv => {
-                   const existing = combinedMap.get(conv.id);
-                   // Keep the one with the later timestamp if conflict, otherwise add
-                   if (!existing || new Date(conv.timestamp) > new Date(existing.timestamp)) {
-                     combinedMap.set(conv.id, conv);
-                   }
-                 });
-                 // Convert back to array and sort desc
-                 return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-               });
-             }
-             setHasSyncedWithCloud(true);
-             setSyncStatus('success');
-             setTimeout(() => setSyncStatus('idle'), 2000);
-           } catch (e) {
-             console.error("Sync merge failed", e);
-             setSyncStatus('error');
-           }
+         if (user?.id !== newUser.id) {
+            setUser(newUser);
+            geminiService.setSessionUser(newUser); 
          }
+
+         subscriptionService.syncUser(newUser).catch(console.warn);
+
+         subscriptionService.getUserSubscription(authUser.uid).then(sub => {
+            if (sub) {
+                const updatedUser = { ...newUser, subscription: sub, tier: sub.plan?.name as UserTier || newUser.tier };
+                setUser(updatedUser);
+                geminiService.setSessionUser(updatedUser);
+            }
+         }).catch(console.warn);
+         
+         // 4. MERGE HISTORIES (Local + Cloud)
+         if (!isCloudHydrated) {
+            setSyncStatus('syncing');
+            try {
+               const cloudHistory = await firebaseService.getHistory(authUser.uid);
+               
+               if (cloudHistory && cloudHistory.length > 0) {
+                 setConversations(prevLocal => {
+                   const combinedMap = new Map<string, Conversation>();
+                   
+                   // Add all local conversations first
+                   prevLocal.forEach(c => combinedMap.set(c.id, c));
+                   
+                   // Merge cloud conversations
+                   cloudHistory.forEach(cloudConv => {
+                     const existing = combinedMap.get(cloudConv.id);
+                     if (!existing || new Date(cloudConv.timestamp) > new Date(existing.timestamp)) {
+                       combinedMap.set(cloudConv.id, cloudConv);
+                     }
+                   });
+                   
+                   return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+                 });
+               } else {
+                 // Cloud empty? Force a re-set to trigger dependent effects
+                 setConversations(prev => [...prev]);
+               }
+               setSyncStatus('success');
+            } catch (e) {
+               console.error("History hydration failed", e);
+               setSyncStatus('error');
+            } finally {
+               setIsCloudHydrated(true); // Mark ready to save
+               setTimeout(() => setSyncStatus('idle'), 2000);
+            }
+         }
+
       } else {
-        if (user) { setUser(null); geminiService.logout(); }
-        setHasSyncedWithCloud(false);
+        if (user) { 
+            setUser(null); 
+            geminiService.logout(); 
+            setIsCloudHydrated(false); 
+        }
       }
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user?.id, isCloudHydrated]);
 
   const cycleLanguage = () => {
     let next: Language = 'en';
@@ -204,22 +224,22 @@ const App: React.FC = () => {
     
     const activeConv = conversations.find(c => c.id === activeConversationId);
     
-    // Only create new if we are on landing page OR the current active conversation has messages
     if (!activeConv || activeConv.messages.length > 0) {
       const newId = Date.now().toString();
       const newTitle = lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat";
       
-      setConversations(prev => [{ 
+      const newConv: Conversation = { 
         id: newId, 
         title: newTitle, 
         messages: [], 
         timestamp: new Date(), 
         mode, 
         modesUsed: [mode] 
-      }, ...prev]);
+      };
+
+      setConversations(prev => [newConv, ...prev]);
       setActiveConversationId(newId);
     } else {
-      // Reuse empty conversation but update mode
       setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode, modesUsed: [...(c.modesUsed || []), mode] } : c));
     }
 
@@ -231,14 +251,6 @@ const App: React.FC = () => {
     setConversations(prev => {
         const filtered = prev.filter(c => c.id !== id);
         if (activeConversationId === id) setActiveConversationId(filtered[0]?.id || null);
-        
-        // Immediate Cloud Sync for Deletions to avoid zombie data
-        if (user?.id) {
-            firebaseService.saveHistory(user.id, filtered)
-                .then(() => console.log("Deletion synced"))
-                .catch(e => console.error("Deletion sync failed", e));
-        }
-        
         return filtered;
     });
   };

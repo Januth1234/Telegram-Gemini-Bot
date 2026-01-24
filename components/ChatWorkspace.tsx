@@ -43,7 +43,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
   // Pagination for History
   const [historyPage, setHistoryPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+  const ITEMS_PER_PAGE = 8;
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -348,13 +348,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           
           {conversations.length === 0 && (
              <div className="text-center py-20 opacity-40">
-                <i className="fa-solid fa-box-open text-3xl mb-4 text-slate-300"></i>
-                <p className="text-[9px] font-black uppercase tracking-widest">No History</p>
+                {isSyncing ? (
+                   <>
+                     <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                     <p className="text-[9px] font-black uppercase tracking-widest">Loading History...</p>
+                   </>
+                ) : (
+                   <>
+                    <i className="fa-solid fa-box-open text-3xl mb-4 text-slate-300"></i>
+                    <p className="text-[9px] font-black uppercase tracking-widest">No History</p>
+                   </>
+                )}
              </div>
           )}
         </div>
-        {/* Sync Status in Sidebar Footer */}
-        {isSyncing && (
+        {/* Sync Status in Sidebar Footer - Shows if syncing but we already have content */}
+        {isSyncing && conversations.length > 0 && (
            <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center">
               <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing with Cloud...</span>
            </div>

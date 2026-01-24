@@ -34,7 +34,7 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "07. මුදල් ආපසු ගෙවීමේ ප්‍රතිපත්තිය (Return Policy)",
-        body: "මෙය ඩිජිටල් සේවාවක් බැවින්, සේවාව භාවිතා කිරීමෙන් පසු මුදල් ආපසු ගෙවීමක් (Refund) සිදු නොකෙරේ. නමුත් තාක්ෂණික දෝෂයක් නිසා සේවාව ලබා ගැනීමට නොහැකි වූ අවස්ථාවක දින 7ක් ඇතුලත අපව අමතන්න. දායකත්ව (Subscriptions) ඕනෑම වෙලාවක අවලංගු කළ හැකි අතර, එවිට ඊළඟ වාරිකය අය නොකෙරේ."
+        body: "මෙය ඩිජිටල් සේවාවක් බැවින්, සේවාව භාවිතා කිරීමෙන් පසු මුදල් ආපසු ගෙවීමක් (Refund) සිදු නොකෙරේ. නමුත් තාක්ෂණික දෝෂයක් නිසා සේවාව ලබා ගැනීමට නොහැකි වූ අවස්ථාවක දින 7ක් ඇතුලත අපව අමතන්න. දායකත්ව (Subscriptions) ඕනෑම වෙලාවක අවලංගු කළ හැකි අතර, එවිට ඊළඟ වාරිකය අය නොකෙරේ. මුදල් ආපසු ගෙවීම් (Refunds) ඔබ ගෙවීම් කළ මාධ්‍යයටම (Original Payment Method) බැර කෙරේ."
       }
     ],
     footer: "JN Productions Global ආරක්ෂණ ප්‍රතිපත්තිය"
@@ -72,7 +72,7 @@ const PrivacyPage: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       },
       {
         head: "08. Refund & Return Policy",
-        body: "Since Orin AI provides instant access to digital neural services, payments are generally non-refundable once the service is utilized. However, if a technical failure prevents service delivery, please contact support within 7 days for a full refund resolution. You may cancel subscriptions at any time to prevent future billing charges."
+        body: "Since Orin AI provides instant access to digital neural services, payments are generally non-refundable once the service is utilized. However, if a technical failure prevents service delivery, please contact support within 7 days for a full refund resolution. You may cancel subscriptions at any time to prevent future billing charges. Refunds will be processed to the payment-initiated media itself."
       }
     ],
     footer: "JN Productions Global Privacy Statement"

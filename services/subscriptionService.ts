@@ -33,24 +33,33 @@ export class SubscriptionService {
    * This ensures we have a record of every logged-in user's email.
    */
   async syncUser(user: UserAccount): Promise<void> {
+    if (!user || !user.id) return;
+    
+    console.log(`[Supabase] Syncing user: ${user.email} (${user.id})`);
+    
     try {
-      const { error } = await supabase
+      const payload = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatar_url: user.avatar || "",
+        last_login: new Date().toISOString()
+      };
+
+      // Upsert: Create if not exists, update if exists
+      const { data, error } = await supabase
         .from('users')
-        .upsert({
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          avatar_url: user.avatar || null,
-          last_login: new Date().toISOString()
-        }, { onConflict: 'id' });
+        .upsert(payload, { onConflict: 'id' })
+        .select();
 
       if (error) {
-        console.error("Failed to sync user to Supabase:", error.message);
+        console.error("[Supabase] Sync Error:", error.message, error.details);
+        // Fallback: If table doesn't exist, we can't do much from frontend logic alone
       } else {
-        console.log("User synced to Supabase DB:", user.email);
+        console.log("[Supabase] User synced successfully.", data);
       }
     } catch (e) {
-      console.error("Exception syncing user:", e);
+      console.error("[Supabase] Sync Exception:", e);
     }
   }
 
@@ -65,13 +74,13 @@ export class SubscriptionService {
       .order('price_lkr', { ascending: true });
 
     if (error) {
-      console.error("Error fetching plans:", error);
-      return [];
+      console.error("[Supabase] Error fetching plans:", error.message);
+      return DEFAULT_PLANS.map((p, i) => ({ ...p, id: `local-${i}` })) as DbPlan[];
     }
 
     // Auto-seed if empty
-    if (data.length === 0) {
-      console.log("No plans found in DB. Attempting to seed defaults...");
+    if (!data || data.length === 0) {
+      console.log("[Supabase] No plans found. Seeding defaults...");
       return await this.seedPlans();
     }
 
@@ -88,8 +97,7 @@ export class SubscriptionService {
       .select();
 
     if (error) {
-      console.error("Seeding failed:", error);
-      // Return local defaults with fake IDs if DB insert fails (fallback mode)
+      console.error("[Supabase] Seeding failed:", error.message);
       return DEFAULT_PLANS.map((p, i) => ({ ...p, id: `local-${i}` })) as DbPlan[];
     }
     
@@ -108,7 +116,6 @@ export class SubscriptionService {
       .single();
 
     if (error) {
-      // It's normal to have no rows if user hasn't subscribed
       return null;
     }
     return data as DbSubscription;
@@ -116,13 +123,16 @@ export class SubscriptionService {
 
   /**
    * Subscribe a user to a plan. 
-   * NOTE: In a real production app, this would happen AFTER a successful payment gateway callback.
-   * For this phase, we are directly inserting the record to simulate a successful purchase.
    */
   async subscribeUser(userId: string, plan: DbPlan): Promise<boolean> {
-    // 1. Check if user already has a sub, if so, we might want to update it or cancel old one
-    // For simplicity, we just insert a new active one.
-    
+    // 1. Deactivate any existing active subscriptions
+    await supabase
+      .from('subscriptions')
+      .update({ status: 'cancelled', end_date: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('status', 'active');
+
+    // 2. Create new subscription
     const { error } = await supabase
       .from('subscriptions')
       .insert({
@@ -133,11 +143,11 @@ export class SubscriptionService {
       });
 
     if (error) {
-      console.error("Subscription failed:", error);
+      console.error("[Supabase] Subscription failed:", error.message);
       return false;
     }
 
-    // Record the "Payment" in history
+    // 3. Log payment
     await supabase.from('payments').insert({
         user_id: userId,
         amount_lkr: plan.price_lkr,

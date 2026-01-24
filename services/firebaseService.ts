@@ -58,14 +58,12 @@ class FirebaseService {
           .catch((error) => console.error("Auth Persistence Error:", error));
 
         // ✅ Native Google Sign-In Handler for WebViews
-        // This allows the mobile app to inject a Google ID Token directly
         window.handleNativeGoogleToken = async (token: string) => {
           if (!this.auth) return;
           try {
             const credential = GoogleAuthProvider.credential(token);
             const result = await signInWithCredential(this.auth, credential);
             console.log('Firebase sign-in successful:', result.user);
-            // Reload the page to ensure the web app reflects the new signed-in state.
             window.location.reload();
           } catch (err) {
             console.error('Firebase sign-in error:', err);
@@ -98,9 +96,7 @@ class FirebaseService {
       
       if (error.code === 'auth/unauthorized-domain') {
         const hostname = window.location.hostname;
-        const host = window.location.host;
-        // Fallback to host if hostname is empty (can happen in some preview environments)
-        const currentDomain = hostname || host || window.location.href;
+        const currentDomain = hostname || window.location.host || window.location.href;
         throw new Error(`Domain not authorized (${currentDomain}). Please add "${currentDomain}" to the Firebase Console.`);
       } else if (error.code === 'auth/popup-closed-by-user') {
         throw new Error("Sign-in cancelled by user.");
@@ -118,7 +114,6 @@ class FirebaseService {
     }
   }
 
-  // Add listener for auth state changes
   onAuthStateChanged(callback: (user: User | null) => void) {
     if (this.auth) {
       return onAuthStateChanged(this.auth, callback);
@@ -130,35 +125,45 @@ class FirebaseService {
   async saveHistory(uid: string, history: Conversation[]) {
     if (!this.db) return;
     try {
-      // We store history as a JSON string blob to preserve structure and avoid
-      // Firestore recursion limits or field mapping issues with complex nested objects.
       const historyBlob = JSON.stringify(history);
       const userRef = doc(this.db, "users", uid);
       await setDoc(userRef, { historyBlob, lastUpdated: new Date() }, { merge: true });
       console.log("Cloud Sync: History saved to Google Account.");
     } catch (e) {
       console.error("Cloud Sync Error:", e);
+      throw e; // Propagate for UI handling
     }
   }
 
-  async getHistory(uid: string): Promise<Conversation[] | null> {
-    if (!this.db) return null;
+  async getHistory(uid: string): Promise<Conversation[]> {
+    if (!this.db) return [];
     try {
       const userRef = doc(this.db, "users", uid);
       const snap = await getDoc(userRef);
+      
       if (snap.exists() && snap.data().historyBlob) {
-        const parsed = JSON.parse(snap.data().historyBlob);
-        // Revive dates (JSON.parse leaves them as strings)
-        return parsed.map((c: any) => ({
-            ...c,
-            timestamp: new Date(c.timestamp),
-            messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-        }));
+        try {
+            const rawData = JSON.parse(snap.data().historyBlob);
+            if (!Array.isArray(rawData)) return [];
+
+            // Revive dates safely (JSON stringifies dates to strings)
+            return rawData.map((c: any) => ({
+                ...c,
+                timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
+                messages: Array.isArray(c.messages) ? c.messages.map((m: any) => ({ 
+                    ...m, 
+                    timestamp: m.timestamp ? new Date(m.timestamp) : new Date() 
+                })) : []
+            }));
+        } catch (parseError) {
+            console.error("JSON Parse Error on Cloud History:", parseError);
+            return []; // Return empty on corrupt data
+        }
       }
     } catch (e) {
       console.error("Cloud Fetch Error:", e);
     }
-    return null;
+    return []; // Return empty on fetch error or no document
   }
 
   // --- MESSAGING ---
@@ -171,8 +176,7 @@ class FirebaseService {
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
-        // VAPID Key provided by user
-        const vapidKey = "BMz4Zssv3qb7H5GI-hEdYBGQ32QQ65Qj6gHwT1dTJy5NnPd38UrnRunrIWeFxDNsUJyard-mhXkur13D2fVlf48"; 
+        const vapidKey = process.env.VAPID_KEY || "BMz4Zssv3qb7H5GI-hEdYBGQ32QQ65Qj6gHwT1dTJy5NnPd38UrnRunrIWeFxDNsUJyard-mhXkur13D2fVlf48"; 
 
         try {
           const currentToken = await getToken(this.messaging, {
