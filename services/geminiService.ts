@@ -31,7 +31,13 @@ const getSystemInstruction = (tone: string = 'neutral', bio: string = "") => {
   });
 
   const base = getToneInstruction(tone);
-  const bioSection = bio ? `\n\nUSER MEMORY (Personalization):\n${bio}\n(Use this information to personalize responses, but do not explicitly mention you are reading from memory unless asked.)` : "";
+  const bioSection = bio ? `
+CRITICAL USER PROFILE DATA (MANDATORY PERSONALIZATION):
+-------------------------------------------------------
+${bio}
+-------------------------------------------------------
+ADHERE TO THE ABOVE FACTS. If the user asks about themselves, use this data. If the user mentions preferences listed here, acknowledge them implicitly or explicitly.
+` : "";
 
   return `${base}
 ${bioSection}
@@ -83,7 +89,7 @@ export class GeminiService {
   }
 
   setSessionUser(user: UserAccount) {
-    // Preserve existing bio if new object doesn't have it but old one did (during quick re-renders)
+    // Preserve existing bio if new object doesn't have it but old one did
     if (this.currentUser?.neuralBio && !user.neuralBio) {
         user.neuralBio = this.currentUser.neuralBio;
     }
@@ -142,10 +148,9 @@ export class GeminiService {
     if (recentMessages.length === 0) return currentBio;
     if (!await this.checkApiKey()) return currentBio;
 
-    // Filter user messages only to save tokens
     const userInputs = recentMessages
         .filter(m => m.role === 'user')
-        .slice(-5) // Only last 5 messages
+        .slice(-10) 
         .map(m => m.content)
         .join('\n');
 
@@ -155,20 +160,20 @@ export class GeminiService {
     
     const prompt = `
     You are the "Memory Core" for Orin AI.
-    Your task is to update the user's biography based on new conversation data.
+    Update the user's short biography profile based on new conversation data.
     
-    CURRENT BIO:
-    ${currentBio || "No prior information."}
+    CURRENT PROFILE:
+    ${currentBio || "New User."}
     
-    NEW USER INPUTS:
+    NEW CHAT LOGS:
     ${userInputs}
     
-    INSTRUCTIONS:
-    1. Extract key facts about the user (name, preferences, work, hobbies, language style).
-    2. Merge new facts into the CURRENT BIO.
-    3. Keep it concise (max 100 words).
-    4. If nothing new or relevant is found, return the CURRENT BIO exactly as is.
-    5. Output ONLY the updated bio text.
+    TASK:
+    1. Identify NEW facts about the user (identity, preferences, tech stack, location, occupation).
+    2. Merge them into a single coherent paragraph.
+    3. Keep it under 150 words.
+    4. Maintain existing important facts while refining them.
+    5. Output ONLY the updated profile text.
     `;
 
     try {
@@ -211,15 +216,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
         },
-        systemInstruction: `You are a professional real-time interpreter.
-        Your task is to translate spoken audio between ${options.source} and ${options.target}.
-        
-        RULES:
-        1. If you hear ${options.source}, translate it to ${options.target}.
-        2. If you hear ${options.target}, translate it to ${options.source}.
-        3. Speak the translation CLEARLY and IMMEDIATELY.
-        4. Do NOT add introductory phrases like "He said" or "Translating". Just speak the translated text.
-        5. Detect the input language automatically between ${options.source} and ${options.target}.`,
+        systemInstruction: `You are a professional real-time interpreter. Translate between ${options.source} and ${options.target}. Respond concisly.`,
       },
     });
   }
@@ -238,13 +235,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
         },
-        systemInstruction: `${instruction}
-        You are receiving a live video stream from the user's camera along with their audio.
-        
-        RULES:
-        1. Watch the video stream attentively and answer questions about what you see.
-        2. Remember details shown earlier.
-        3. Support English, Sinhala, and Tamil languages.`,
+        systemInstruction: `${instruction}\nYou are receiving a live video stream. Describe what you see accurately.`,
       },
     });
   }
@@ -252,20 +243,16 @@ export class GeminiService {
   async generateWelcomeMessage(options: { timeOfDay: string; weather: string; lang: Language }): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : options.lang === 'ta' ? 'Tamil' : 'English'}.
-      Context: It is a ${options.weather} ${options.timeOfDay} in Sri Lanka.
-      User Bio: ${this.currentUser?.neuralBio || "Generic user"}
-      STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols. Personalized if bio exists.`;
+      const prompt = `Greeting in ${options.lang === 'si' ? 'Sinhala' : options.lang === 'ta' ? 'Tamil' : 'English'}.
+      Context: ${options.weather} ${options.timeOfDay} in Sri Lanka.
+      User Profile: ${this.currentUser?.neuralBio || "New User"}
+      Max 7 words. No emojis. Personalized.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      
-      let text = response.text?.trim() || "";
-      const words = text.split(/\s+/);
-      if (words.length > 7) text = words.slice(0, 7).join(' ');
-      return text;
+      return response.text?.trim() || "";
     } catch {
       return "";
     }
@@ -288,33 +275,12 @@ export class GeminiService {
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const firstMsg = messages.length > 0 ? messages[0].content : "";
-      const lastMsg = messages.length > 1 ? messages[messages.length - 1].content : "";
-      const target = lang === 'si' ? 'Sinhala' : lang === 'ta' ? 'Tamil' : 'English';
-      const modeContext = modes.length > 0 ? `Used Modes: ${modes.join(', ')}` : "";
-      
-      const prompt = `Generate a very short, specific title (3-5 words) for this conversation in ${target}.
-      Conversation Start: "${firstMsg.substring(0, 100)}"
-      Latest Update: "${lastMsg.substring(0, 100)}"
-      ${modeContext}
-      
-      Rules:
-      - Summarize the main topic based on the entire context.
-      - If 'maths' mode was used, mention the math topic (e.g., "Calculus Problem").
-      - If 'vision' mode was used, mention what was analyzed.
-      - If 'studio' mode was used, mention the art subject.
-      - If multiple modes were used, combine them concisely.
-      - Keep it extremely concise (max 5 words). No quotes.`;
-
+      const prompt = `Title for conversation. Max 4 words. Lang: ${lang}.`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: prompt,
       });
-      
-      let title = response.text?.trim() || (lang === 'si' ? "නව පිළිසඳර" : "New Chat");
-      const words = title.split(' ');
-      if (words.length > 5) title = words.slice(0, 5).join(' ');
-      return title;
+      return response.text?.trim() || "Chat";
     } catch {
       return "New Chat";
     }
@@ -338,12 +304,8 @@ export class GeminiService {
       
       let contents: any[] = [];
       if (options.history && options.history.length > 0) {
-          options.history.slice(-10).forEach(msg => {
-              if (msg.role === 'user' && msg.imageUrl) {
-                 contents.push({ role: 'user', parts: [{ text: msg.content + " [Image sent]" }] });
-              } else {
-                 contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
-              }
+          options.history.slice(-12).forEach(msg => {
+              contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
           });
       }
 
@@ -406,33 +368,15 @@ export class GeminiService {
     try {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
-      let operation = await ai.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: prompt,
-        config: {
-          numberOfVideos: 1,
-          resolution: resolution,
-          aspectRatio: aspectRatio
-        }
-      });
-
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
-        operation = await ai.operations.getVideosOperation({operation: operation});
-      }
-
-      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (!videoUri) throw new Error("No video generated.");
-
-      // The response.body contains the MP4 bytes. Must append API key.
-      const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
-      if (!response.ok) throw new Error("Failed to download video.");
-      
-      const blob = await response.blob();
+      let op = await ai.models.generateVideos({ model: 'veo-3.1-fast-generate-preview', prompt, config: { numberOfVideos: 1, resolution, aspectRatio } });
+      while (!op.done) { await new Promise(r => setTimeout(r, 5000)); op = await ai.operations.getVideosOperation({operation: op}); }
+      const videoUri = op.response?.generatedVideos?.[0]?.video?.uri;
+      if (!videoUri) throw new Error("No video.");
+      const res = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+      const blob = await res.blob();
       return URL.createObjectURL(blob);
     } catch (e: any) {
-      throw new AppError("Video generation failed: " + e.message, 'generic');
+      throw new AppError("Video generation failed.", 'generic');
     }
   }
 
