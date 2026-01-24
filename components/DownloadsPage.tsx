@@ -131,10 +131,103 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   };
 
   const codeSnippets = {
-    js: `<!-- Orin AI Search Widget -->\n...`, // Kept shortened for brevity in response, assumig same code
-    ts: `// Orin AI React Component\n...`,
-    py: `# Python Streamlit / Flask Integration\n...`,
-    vue: `<!-- Orin AI Vue 3 Widget -->\n...`
+    js: `<!-- Orin AI Embed Snippet (HTML/JS) -->
+<div id="orin-widget-container"></div>
+<script src="https://cdn.orinai.org/sdk/v4/widget.min.js"></script>
+<script>
+  OrinAI.init({
+    container: '#orin-widget-container',
+    apiKey: 'YOUR_PUBLIC_KEY',
+    theme: 'system', // 'light' | 'dark' | 'system'
+    language: 'si-LK', // Optional: Force Sinhala
+    config: {
+      enableVoice: true,
+      mode: 'reasoning'
+    }
+  });
+</script>`,
+    ts: `// React / Next.js Implementation
+import { OrinClient } from '@orinai/sdk';
+
+const orin = new OrinClient({
+  apiKey: process.env.NEXT_PUBLIC_ORIN_KEY,
+  region: 'asia-south1'
+});
+
+export async function generateResponse(prompt: string) {
+  try {
+    const result = await orin.reasoning.create({
+      prompt: prompt,
+      depth: 'high', // 'normal' | 'high' | 'research'
+      grounding: true,
+      maxTokens: 2048
+    });
+    return result.text;
+  } catch (error) {
+    console.error("Orin Neural Error:", error);
+    return null;
+  }
+}`,
+    py: `# Python Integration (Flask/FastAPI/Streamlit)
+import requests
+import os
+
+def query_orin_neural_engine(prompt, lang="en"):
+    endpoint = "https://api.orinai.org/v4/generate"
+    headers = {
+        "Authorization": f"Bearer {os.getenv('ORIN_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "prompt": prompt,
+        "mode": "deep_reasoning",
+        "target_lang": lang,
+        "safety_settings": "balanced"
+    }
+    
+    response = requests.post(endpoint, json=payload, headers=headers)
+    if response.status_code == 200:
+        return response.json()['output']
+    return None
+
+# Usage
+print(query_orin_neural_engine("Explain Quantum Physics in simple terms", "si"))`,
+    vue: `<!-- Vue 3 Composition API -->
+<script setup>
+import { ref } from 'vue'
+
+const answer = ref('')
+const loading = ref(false)
+
+const askOrin = async (question) => {
+  loading.value = true
+  try {
+    const req = await fetch('https://api.orinai.org/v4/ask', {
+      method: 'POST',
+      headers: { 
+        'Authorization': 'Bearer YOUR_KEY',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ prompt: question })
+    })
+    const res = await req.json()
+    answer.value = res.data.content
+  } catch (e) {
+    answer.value = "Connection failed"
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="orin-chat">
+    <button @click="askOrin('Hello')" :disabled="loading">
+      {{ loading ? 'Thinking...' : 'Ask AI' }}
+    </button>
+    <div v-if="answer" class="response">{{ answer }}</div>
+  </div>
+</template>`
   };
 
   return (
@@ -244,7 +337,7 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
                     <button onClick={() => setActiveCodeTab('py')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'py' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Python</button>
                     <button onClick={() => setActiveCodeTab('vue')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'vue' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Vue.js</button>
                  </div>
-                 <button onClick={() => copyToClipboard('Example Code')} className="flex items-center gap-2 px-6 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500 transition-all shadow-lg active:scale-95">
+                 <button onClick={() => copyToClipboard(codeSnippets[activeCodeTab])} className="flex items-center gap-2 px-6 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500 transition-all shadow-lg active:scale-95">
                     <i className="fa-solid fa-copy"></i>
                     Copy Snippet
                  </button>

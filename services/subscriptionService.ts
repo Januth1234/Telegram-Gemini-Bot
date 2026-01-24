@@ -221,7 +221,7 @@ export class SubscriptionService {
     const localPlans = Object.keys(PLANS).map(key => ({
       id: key,
       name: key.charAt(0).toUpperCase() + key.slice(1),
-      price_lkr: key === 'free' ? 0 : (key === 'basic' ? 1500 : (key === 'pro' ? 3500 : 5000)),
+      price_lkr: key === 'free' ? 0 : (key === 'basic' ? 300 : (key === 'pro' ? 1500 : 3000)),
       daily_limit_text: PLANS[key].prompts,
       daily_limit_images: PLANS[key].images,
       features: [`${PLANS[key].prompts} Prompts`, `${PLANS[key].images} Images`, `${PLANS[key].videos} Videos`]

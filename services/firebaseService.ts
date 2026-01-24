@@ -1,5 +1,4 @@
-
-import { initializeApp } from "firebase/app";
+import firebase from "firebase/compat/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 import { 
@@ -45,7 +44,7 @@ class FirebaseService {
 
   constructor() {
     try {
-      this.app = initializeApp(firebaseConfig);
+      this.app = firebase.initializeApp(firebaseConfig);
       
       // Initialize Analytics & Auth if in browser
       if (typeof window !== 'undefined') {
