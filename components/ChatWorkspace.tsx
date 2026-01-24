@@ -31,6 +31,22 @@ interface ChatWorkspaceProps {
   isSyncing?: boolean;
 }
 
+const AUTO_SUGGESTIONS: Record<string, string[]> = {
+  chat: [
+    "Explain", "Summarize", "Write a story about", "Debug this code", "Translate to Sinhala", 
+    "Create a marketing plan", "What is the history of", "How does AI work", 
+    "Compare", "List the benefits of", "Generate a python script"
+  ],
+  studio: [
+    "Cyberpunk city", "Minimalist logo", "Oil painting of", "3D render of", "Portrait of", 
+    "Landscape with", "Anime style", "Watercolor sketch", "Futuristic vehicle"
+  ],
+  gethelp: [
+    "Write a Python script", "Build a landing page", "Fix this bug", "Explain this concept", 
+    "Create a SQL query", "Design a database schema", "Refactor this code"
+  ]
+};
+
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
   conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, onTogglePrivate, isPrivate = false, isSyncing = false
@@ -43,6 +59,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   
   // Markov Placeholders
   const [dynamicPlaceholder, setDynamicPlaceholder] = useState("");
@@ -88,6 +105,31 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }, 5000);
     return () => clearInterval(interval);
   }, [localInput]);
+
+  // Auto-Suggest Logic
+  useEffect(() => {
+    if (!localInput.trim()) {
+        setSuggestions([]);
+        return;
+    }
+    const mode = activeTab === 'studio' ? 'studio' : activeTab === 'gethelp' ? 'gethelp' : 'chat';
+    const pool = AUTO_SUGGESTIONS[mode] || AUTO_SUGGESTIONS['chat'];
+    const inputLower = localInput.toLowerCase();
+    
+    // Find matches that start with input, exclude exact match
+    const matches = pool.filter(s => 
+        s.toLowerCase().startsWith(inputLower) && s.toLowerCase() !== inputLower
+    ).slice(0, 3);
+    
+    setSuggestions(matches);
+  }, [localInput, activeTab]);
+
+  const applySuggestion = (s: string) => {
+    setLocalInput(s + " "); // Add space for continuity
+    onInputChange(s + " ");
+    setSuggestions([]);
+    inputRef.current?.focus();
+  };
 
   const handleModeNav = (mode: WorkspaceMode) => {
     // Requirements: Maths, Get Help, and Voice should start a NEW conversation
@@ -146,6 +188,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const signal = abortControllerRef.current.signal;
 
     setIsTyping(true);
+    setSuggestions([]); // Clear suggestions on send
     startProgress(activeTab);
     setLocalInput('');
     onInputChange('');
@@ -455,7 +498,23 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* Optimized input bar layout for Mobile Safe Area */}
         {(activeTab === 'chat' || activeTab === 'studio' || activeTab === 'translator' || activeTab === 'gethelp') && (
           <div className="fixed bottom-0 left-0 right-0 w-full z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent safe-pb pointer-events-none">
-             <div className="w-full max-w-3xl mx-auto px-4 pb-4 md:pb-6 pt-10 pointer-events-auto">
+             <div className="w-full max-w-3xl mx-auto px-4 pb-4 md:pb-6 pt-10 pointer-events-auto relative">
+                {/* Auto Suggestions UI */}
+                {suggestions.length > 0 && (
+                  <div className="absolute bottom-full left-4 right-4 mb-2 flex flex-col items-start gap-1 z-50">
+                    {suggestions.map((s, i) => (
+                      <button
+                        key={i}
+                        onClick={() => applySuggestion(s)}
+                        className="glass-panel px-4 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 shadow-lg hover:bg-white dark:hover:bg-slate-700 hover:scale-105 transition-all animate-slide-in-up bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10"
+                        style={{ animationDelay: `${i * 0.05}s` }}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 {/* File Preview in Input Bar */}
                 {selectedFile && (
                   <div className="mb-2 mx-2 p-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/10 shadow-lg flex items-center gap-4 animate-slide-in-up">
