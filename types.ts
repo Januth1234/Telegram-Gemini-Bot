@@ -63,6 +63,7 @@ export interface Conversation {
   timestamp: Date;
   mode: WorkspaceMode;
   modesUsed?: WorkspaceMode[];
+  isPrivate?: boolean; // New: Private Mode Flag
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";

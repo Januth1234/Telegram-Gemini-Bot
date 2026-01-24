@@ -109,9 +109,17 @@ const App: React.FC = () => {
 
   // --- LOCAL PERSISTENCE ---
   useEffect(() => {
-    cacheService.set(CacheKey.HISTORY, conversations);
-    if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
-    else cacheService.remove(CacheKey.ACTIVE_CONV);
+    // Only save public conversations to local storage
+    const publicConversations = conversations.filter(c => !c.isPrivate);
+    cacheService.set(CacheKey.HISTORY, publicConversations);
+    
+    // If active conversation is private, don't persist its ID as "last active"
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    if (activeConversationId && activeConv && !activeConv.isPrivate) {
+      cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
+    } else {
+      cacheService.remove(CacheKey.ACTIVE_CONV);
+    }
   }, [conversations, activeConversationId]);
 
   // --- MEMORY EVOLUTION & CLOUD SYNC (SAVE) ---
@@ -123,26 +131,30 @@ const App: React.FC = () => {
         setSyncStatus('syncing');
         
         // 1. Evolve Bio if needed (every 5 messages roughly)
-        // We calculate delta since last sync implicitly by checking message count or just running it occasionally.
-        // For robustness, let's just run it if we have active messages.
         let newBio = user.neuralBio || "";
-        const activeMsgs = conversations.find(c => c.id === activeConversationId)?.messages || [];
+        const activeConv = conversations.find(c => c.id === activeConversationId);
         
-        // Only evolve if there are new messages since last check (simple heuristic: msg count > 0)
-        if (activeMsgs.length > 0 && activeMsgs.length % 5 === 0) {
-             console.log("Memory Core: Evolving user bio...");
-             newBio = await geminiService.evolveUserBio(newBio, activeMsgs);
-             
-             // Update local user state with new bio
-             if (newBio !== user.neuralBio) {
-                 const updatedUser = { ...user, neuralBio: newBio };
-                 setUser(updatedUser);
-                 geminiService.setSessionUser(updatedUser);
-             }
+        // Skip bio evolution for private chats
+        if (activeConv && !activeConv.isPrivate) {
+            const activeMsgs = activeConv.messages || [];
+            
+            if (activeMsgs.length > 0 && activeMsgs.length % 5 === 0) {
+                 console.log("Memory Core: Evolving user bio...");
+                 newBio = await geminiService.evolveUserBio(newBio, activeMsgs);
+                 
+                 // Update local user state with new bio
+                 if (newBio !== user.neuralBio) {
+                     const updatedUser = { ...user, neuralBio: newBio };
+                     setUser(updatedUser);
+                     geminiService.setSessionUser(updatedUser);
+                 }
+            }
         }
 
-        // 2. Save everything to Firestore
-        firebaseService.saveUserData(user.id, conversations, newBio)
+        // 2. Save ONLY PUBLIC conversations to Firestore
+        const publicConversations = conversations.filter(c => !c.isPrivate);
+        
+        firebaseService.saveUserData(user.id, publicConversations, newBio)
           .then(() => {
             setSyncStatus('success');
             setTimeout(() => setSyncStatus('idle'), 2000);
@@ -153,7 +165,7 @@ const App: React.FC = () => {
           });
       }, 2000); // 2 second debounce to allow typing to finish
     }
-  }, [conversations, user?.id, isCloudHydrated]); // Dependency on conversations ensures this runs on chat updates
+  }, [conversations, user?.id, isCloudHydrated]);
 
   // --- AUTH & CLOUD HYDRATION (LOAD) ---
   useEffect(() => {
@@ -168,10 +180,8 @@ const App: React.FC = () => {
             dailyUsage: { text: 0, images: 0, videos: 0 } 
          };
          
-         // 1. Sync User Profile to Firestore (Ensures they exist in DB)
          await subscriptionService.syncUser(newUser);
 
-         // 2. Load Subscription Status
          try {
              const sub = await subscriptionService.getUserSubscription(authUser.uid);
              if (sub) {
@@ -182,17 +192,14 @@ const App: React.FC = () => {
              console.warn("Failed to load subscription:", e);
          }
 
-         // Update local state temporarily
          setUser(newUser);
          geminiService.setSessionUser(newUser); 
          
-         // 3. MERGE HISTORY & LOAD BIO (Local + Cloud)
          if (!isCloudHydrated) {
             setSyncStatus('syncing');
             try {
                const { history: cloudHistory, bio: cloudBio } = await firebaseService.getUserData(authUser.uid);
                
-               // Update Bio if found
                if (cloudBio) {
                    newUser.neuralBio = cloudBio;
                    setUser(newUser);
@@ -202,10 +209,8 @@ const App: React.FC = () => {
                if (cloudHistory && cloudHistory.length > 0) {
                  setConversations(prevLocal => {
                    const combinedMap = new Map<string, Conversation>();
-                   
-                   // Add all local conversations first
+                   // Add all local conversations (even private ones if they existed in session, though reload wipes private)
                    prevLocal.forEach(c => combinedMap.set(c.id, c));
-                   
                    // Merge cloud conversations
                    cloudHistory.forEach(cloudConv => {
                      const existing = combinedMap.get(cloudConv.id);
@@ -213,18 +218,15 @@ const App: React.FC = () => {
                        combinedMap.set(cloudConv.id, cloudConv);
                      }
                    });
-                   
                    return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
                  });
-               } else {
-                 setConversations(prev => [...prev]);
                }
                setSyncStatus('success');
             } catch (e) {
                console.error("History hydration failed", e);
                setSyncStatus('error');
             } finally {
-               setIsCloudHydrated(true); // Mark ready to save
+               setIsCloudHydrated(true); 
                setTimeout(() => setSyncStatus('idle'), 2000);
             }
          }
@@ -253,8 +255,12 @@ const App: React.FC = () => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
+    // Create new conversation ALWAYS if we are triggered with a specific intent to "Start"
+    // But if active conversation is empty, reuse it.
+    
     const activeConv = conversations.find(c => c.id === activeConversationId);
     
+    // Logic: If active conv has messages, or we want to force a specific mode that might differ
     if (!activeConv || activeConv.messages.length > 0) {
       const newId = Date.now().toString();
       const newTitle = lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat";
@@ -265,12 +271,14 @@ const App: React.FC = () => {
         messages: [], 
         timestamp: new Date(), 
         mode, 
-        modesUsed: [mode] 
+        modesUsed: [mode],
+        isPrivate: false // Default to public
       };
 
       setConversations(prev => [newConv, ...prev]);
       setActiveConversationId(newId);
     } else {
+      // Reuse empty conversation but switch mode
       setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode, modesUsed: [...(c.modesUsed || []), mode] } : c));
     }
 
@@ -286,7 +294,6 @@ const App: React.FC = () => {
     });
   };
 
-  // Explicitly refresh subscription (called after a purchase)
   const refreshSubscription = async () => {
     if (!user?.id) return;
     try {
@@ -302,6 +309,7 @@ const App: React.FC = () => {
   };
 
   const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
+  const activeConv = conversations.find(c => c.id === activeConversationId);
 
   const renderContent = () => {
     switch (view) {
@@ -330,11 +338,13 @@ const App: React.FC = () => {
             lang={lang}
             conversations={conversations}
             onSwitchConv={setActiveConversationId}
-            onNewConv={() => handleStartWorkspace('', 'chat')}
+            onNewConv={(m) => handleStartWorkspace('', m || 'chat')}
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
             onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
+            onTogglePrivate={() => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, isPrivate: !c.isPrivate } : c))}
+            isPrivate={activeConv?.isPrivate || false}
             isSyncing={syncStatus === 'syncing'}
           />
         );

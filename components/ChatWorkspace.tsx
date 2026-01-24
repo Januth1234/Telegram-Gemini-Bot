@@ -20,17 +20,19 @@ interface ChatWorkspaceProps {
   lang: Language;
   conversations: Conversation[];
   onSwitchConv: (id: string) => void;
-  onNewConv: () => void;
+  onNewConv: (mode?: WorkspaceMode) => void; // Updated signature
   onDeleteConv: (id: string) => void;
   activeConvId: string;
   onUpdateTitle: (title: string, modes?: WorkspaceMode[]) => void;
   onModeSwitch?: (mode: WorkspaceMode) => void;
+  onTogglePrivate?: () => void;
+  isPrivate?: boolean;
   isSyncing?: boolean;
 }
 
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
-  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, isSyncing = false
+  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, onTogglePrivate, isPrivate = false, isSyncing = false
 }) => {
   const t = translations[lang];
   const [activeTab, setActiveTab] = useState<WorkspaceMode>(initialMode);
@@ -72,9 +74,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleModeChange = (mode: WorkspaceMode) => {
-    setActiveTab(mode);
-    if (onModeSwitch) onModeSwitch(mode);
+  const handleModeNav = (mode: WorkspaceMode) => {
+    // Requirements: Maths, Get Help, and Voice should start a NEW conversation
+    if (mode === 'maths' || mode === 'gethelp' || mode === 'voice') {
+       onNewConv(mode);
+    } else {
+       setActiveTab(mode);
+       if (onModeSwitch) onModeSwitch(mode);
+    }
   };
 
   const handleClose = useCallback(() => {
@@ -290,7 +297,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
+    <div className={`flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans transition-colors duration-500 ${isPrivate ? 'dark:bg-slate-950' : ''}`}>
       
       {/* History Sidebar Backdrop */}
       {isHistoryOpen && (
@@ -316,15 +323,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <div 
               key={conv.id}
               onClick={() => { onSwitchConv(conv.id); setIsHistoryOpen(false); }} 
-              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'} ${conv.isPrivate ? 'opacity-75' : ''}`}
             >
               <div className="flex items-start gap-3">
                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
-                    <i className={`fa-solid ${getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
+                    <i className={`fa-solid ${conv.isPrivate ? 'fa-user-secret' : getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
                  </div>
                  <div className="flex-1 min-w-0 pr-6">
-                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.title}</span>
-                    <p className={`text-[10px] text-slate-400 truncate mt-1 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
+                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'Private Session' : conv.title}</span>
+                    <p className={`text-[10px] text-slate-400 truncate mt-1 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'History not saved' : (conv.messages[conv.messages.length - 1]?.content || "Empty")}</p>
                  </div>
               </div>
               
@@ -373,21 +380,25 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className="h-16 md:h-20 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 md:px-10 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-2xl">
+        <header className={`h-16 md:h-20 shrink-0 border-b flex items-center justify-between px-4 md:px-10 z-[60] backdrop-blur-2xl transition-all duration-300 ${isPrivate ? 'bg-indigo-950/90 border-white/5 shadow-2xl shadow-indigo-900/20' : 'bg-white/95 dark:bg-slate-950/95 border-slate-200 dark:border-white/5'}`}>
           <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
-            <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-500 hover:text-cyan-600 transition-all"><i className="fa-solid fa-bars-staggered"></i></button>
-            <nav className="flex items-center bg-slate-100 dark:bg-white/5 rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar scroll-smooth">
+            <button onClick={() => setIsHistoryOpen(true)} className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl border flex items-center justify-center transition-all ${isPrivate ? 'text-indigo-200 border-white/10 hover:text-white' : 'border-slate-200 dark:border-white/10 text-slate-500 hover:text-cyan-600'}`}><i className="fa-solid fa-bars-staggered"></i></button>
+            <nav className={`flex items-center rounded-2xl p-1 gap-1 overflow-x-auto no-scrollbar scroll-smooth ${isPrivate ? 'bg-black/20' : 'bg-slate-100 dark:bg-white/5'}`}>
               {(['chat', 'maths', 'studio', 'vision', 'gethelp', 'voice'] as WorkspaceMode[]).map(m => (
                 <button 
                   key={m} 
-                  onClick={() => handleModeChange(m)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${activeTab === m ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+                  onClick={() => handleModeNav(m)}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${
+                    activeTab === m 
+                      ? (isPrivate ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white') 
+                      : (isPrivate ? 'text-indigo-300 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300')
+                  }`}
                 >
                   <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
                   <span className={`text-[9px] font-black uppercase tracking-widest hidden sm:inline ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
                     {m === 'chat' ? t.reasoning : m === 'maths' ? t.maths : m === 'studio' ? t.creative : m === 'vision' ? t.vision : m === 'gethelp' ? t.getHelp : t.voice}
                   </span>
-                  {isBETA(m) && (
+                  {isBETA(m) && !isPrivate && (
                     <span className="absolute -top-1 -right-1 flex h-2 w-2">
                        <span className="animate-beta-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
@@ -398,8 +409,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </nav>
           </div>
           <div className="flex items-center gap-2 ml-2">
+             {/* Private Mode Toggle */}
+             {onTogglePrivate && (
+                <button 
+                  onClick={onTogglePrivate}
+                  className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all duration-300 relative group overflow-hidden ${isPrivate ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/50' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-indigo-500'}`}
+                  title={isPrivate ? "Disable Private Mode" : "Enable Private Mode"}
+                >
+                   <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                   <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-mask'} text-sm md:text-lg transition-transform ${isPrivate ? 'scale-110' : ''}`}></i>
+                </button>
+             )}
+             
              {isTyping && <button onClick={() => { abortControllerRef.current?.abort(); setIsTyping(false); stopProgress(); }} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-stop"></i></button>}
-             <button onClick={handleClose} className="w-10 h-10 md:w-12 md:h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 transition-all border border-slate-200 dark:border-white/10 shadow-sm"><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
+             <button onClick={handleClose} className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all border shadow-sm ${isPrivate ? 'bg-white/10 text-white border-transparent hover:bg-red-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 border-slate-200 dark:border-white/10'}`}><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
           </div>
           {progress > 0 && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-100 dark:bg-slate-900"><div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${progress}%` }}></div></div>}
         </header>
@@ -422,17 +445,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   </div>
                 )}
 
-                <div className="glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border border-slate-300 dark:border-white/10 flex items-center gap-1 backdrop-blur-3xl bg-white/95 dark:bg-slate-900/95 relative">
-                   <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-all"><i className="fa-solid fa-paperclip text-base"></i></button>
+                <div className={`glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border flex items-center gap-1 backdrop-blur-3xl relative transition-all duration-500 ${isPrivate ? 'bg-indigo-950/80 border-indigo-500/30' : 'bg-white/95 dark:bg-slate-900/95 border-slate-300 dark:border-white/10'}`}>
+                   {isPrivate && (
+                      <div className="absolute -top-3 left-6 px-3 py-0.5 bg-indigo-600 rounded-full shadow-lg animate-fade">
+                         <span className="text-[8px] font-black text-white uppercase tracking-widest">Incognito</span>
+                      </div>
+                   )}
+                   <button onClick={() => fileInputRef.current?.click()} className={`w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center transition-all ${isPrivate ? 'text-indigo-300 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}><i className="fa-solid fa-paperclip text-base"></i></button>
                    <input 
                     ref={inputRef} 
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat} 
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 dark:text-white placeholder:text-slate-400 font-medium ${lang === 'si' ? 'sinhala-text' : ''}`} 
+                    placeholder={isPrivate ? "Private chat active..." : (activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : t.placeholderChat)} 
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-indigo-300' : 'dark:text-white placeholder:text-slate-400'} ${lang === 'si' ? 'sinhala-text' : ''}`} 
                    />
-                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] bg-slate-900 dark:bg-white text-white dark:text-slate-950 flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20"><i className="fa-solid fa-arrow-up text-base"></i></button>
+                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className={`w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20 ${isPrivate ? 'bg-indigo-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}><i className="fa-solid fa-arrow-up text-base"></i></button>
                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
