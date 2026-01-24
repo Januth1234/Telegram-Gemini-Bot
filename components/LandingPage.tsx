@@ -167,12 +167,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </header>
           
           <div className="flex flex-wrap justify-center gap-4 md:gap-8">
-            <FeatureCard icon="fa-message" title={t.reasoning} desc="Chat" onClick={() => onStartChat(prompt, 'chat')} color="cyan" lang={lang} />
-            <FeatureCard icon="fa-calculator" title={t.maths} desc="Solve" onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta lang={lang} />
-            <FeatureCard icon="fa-palette" title={t.creative} desc="Create" onClick={() => onStartChat(prompt, 'studio')} color="purple" lang={lang} />
-            <FeatureCard icon="fa-camera" title={t.vision} desc="Visuals" onClick={() => onStartChat(prompt, 'vision')} color="emerald" lang={lang} />
-            <FeatureCard icon="fa-microphone-lines" title={t.voice} desc="Voice" onClick={onVoiceOpen} color="blue" isBeta lang={lang} />
-            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc="Agents" onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta lang={lang} />
+            <FeatureCard icon="fa-message" title={t.reasoning} desc={t.featureDesc.chat} onClick={() => onStartChat(prompt, 'chat')} color="cyan" lang={lang} />
+            <FeatureCard icon="fa-calculator" title={t.maths} desc={t.featureDesc.solve} onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta lang={lang} />
+            <FeatureCard icon="fa-palette" title={t.creative} desc={t.featureDesc.create} onClick={() => onStartChat(prompt, 'studio')} color="purple" lang={lang} />
+            <FeatureCard icon="fa-camera" title={t.vision} desc={t.featureDesc.visuals} onClick={() => onStartChat(prompt, 'vision')} color="emerald" lang={lang} />
+            <FeatureCard icon="fa-microphone-lines" title={t.voice} desc={t.featureDesc.voice} onClick={onVoiceOpen} color="blue" isBeta lang={lang} />
+            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc={t.featureDesc.agents} onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta lang={lang} />
           </div>
         </section>
 
@@ -286,7 +286,7 @@ const FeatureCard = ({ icon, title, desc, onClick, color, isBeta, lang }: any) =
       </div>
       <div className="space-y-0.5 px-4 text-center">
         <h4 className={`text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h4>
-        <p className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter opacity-60">{desc}</p>
+        <p className={`text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter opacity-60 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
       </div>
     </button>
   );

@@ -59,6 +59,8 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [isCloudHydrated, setIsCloudHydrated] = useState(false); 
   
+  // Memory Core Logic
+  const msgCounterRef = useRef(0);
   const saveTimeoutRef = useRef<number | null>(null);
 
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -112,15 +114,35 @@ const App: React.FC = () => {
     else cacheService.remove(CacheKey.ACTIVE_CONV);
   }, [conversations, activeConversationId]);
 
-  // --- CLOUD SYNC (SAVE) ---
-  // Debounced save to cloud. Reduced to 1s for faster feedback.
+  // --- MEMORY EVOLUTION & CLOUD SYNC (SAVE) ---
   useEffect(() => {
     if (user?.id && isCloudHydrated) {
       if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
       
-      saveTimeoutRef.current = window.setTimeout(() => {
+      saveTimeoutRef.current = window.setTimeout(async () => {
         setSyncStatus('syncing');
-        firebaseService.saveHistory(user.id, conversations)
+        
+        // 1. Evolve Bio if needed (every 5 messages roughly)
+        // We calculate delta since last sync implicitly by checking message count or just running it occasionally.
+        // For robustness, let's just run it if we have active messages.
+        let newBio = user.neuralBio || "";
+        const activeMsgs = conversations.find(c => c.id === activeConversationId)?.messages || [];
+        
+        // Only evolve if there are new messages since last check (simple heuristic: msg count > 0)
+        if (activeMsgs.length > 0 && activeMsgs.length % 5 === 0) {
+             console.log("Memory Core: Evolving user bio...");
+             newBio = await geminiService.evolveUserBio(newBio, activeMsgs);
+             
+             // Update local user state with new bio
+             if (newBio !== user.neuralBio) {
+                 const updatedUser = { ...user, neuralBio: newBio };
+                 setUser(updatedUser);
+                 geminiService.setSessionUser(updatedUser);
+             }
+        }
+
+        // 2. Save everything to Firestore
+        firebaseService.saveUserData(user.id, conversations, newBio)
           .then(() => {
             setSyncStatus('success');
             setTimeout(() => setSyncStatus('idle'), 2000);
@@ -129,9 +151,9 @@ const App: React.FC = () => {
             console.error("Auto-save failed", e);
             setSyncStatus('error');
           });
-      }, 1000); // 1 second debounce
+      }, 2000); // 2 second debounce to allow typing to finish
     }
-  }, [conversations, user?.id, isCloudHydrated]);
+  }, [conversations, user?.id, isCloudHydrated]); // Dependency on conversations ensures this runs on chat updates
 
   // --- AUTH & CLOUD HYDRATION (LOAD) ---
   useEffect(() => {
@@ -160,18 +182,23 @@ const App: React.FC = () => {
              console.warn("Failed to load subscription:", e);
          }
 
-         // Update local state if changed
-         if (user?.id !== newUser.id || user?.tier !== newUser.tier) {
-            setUser(newUser);
-            geminiService.setSessionUser(newUser); 
-         }
+         // Update local state temporarily
+         setUser(newUser);
+         geminiService.setSessionUser(newUser); 
          
-         // 3. MERGE HISTORIES (Local + Cloud)
+         // 3. MERGE HISTORY & LOAD BIO (Local + Cloud)
          if (!isCloudHydrated) {
             setSyncStatus('syncing');
             try {
-               const cloudHistory = await firebaseService.getHistory(authUser.uid);
+               const { history: cloudHistory, bio: cloudBio } = await firebaseService.getUserData(authUser.uid);
                
+               // Update Bio if found
+               if (cloudBio) {
+                   newUser.neuralBio = cloudBio;
+                   setUser(newUser);
+                   geminiService.setSessionUser(newUser);
+               }
+
                if (cloudHistory && cloudHistory.length > 0) {
                  setConversations(prevLocal => {
                    const combinedMap = new Map<string, Conversation>();
@@ -190,7 +217,6 @@ const App: React.FC = () => {
                    return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
                  });
                } else {
-                 // Cloud empty? Force a re-set to trigger dependent effects
                  setConversations(prev => [...prev]);
                }
                setSyncStatus('success');

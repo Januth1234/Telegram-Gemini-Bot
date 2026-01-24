@@ -22,7 +22,7 @@ const getToneInstruction = (tone: string) => {
   }
 };
 
-const getSystemInstruction = (tone: string = 'neutral') => {
+const getSystemInstruction = (tone: string = 'neutral', bio: string = "") => {
   const now = new Date();
   const timeStr = now.toLocaleString('en-US', { 
     timeZone: 'Asia/Colombo',
@@ -31,8 +31,10 @@ const getSystemInstruction = (tone: string = 'neutral') => {
   });
 
   const base = getToneInstruction(tone);
+  const bioSection = bio ? `\n\nUSER MEMORY (Personalization):\n${bio}\n(Use this information to personalize responses, but do not explicitly mention you are reading from memory unless asked.)` : "";
 
   return `${base}
+${bioSection}
   
 RULES:
 1. RESPONSE: Respond IMMEDIATELY. Be extremely concise.
@@ -81,6 +83,10 @@ export class GeminiService {
   }
 
   setSessionUser(user: UserAccount) {
+    // Preserve existing bio if new object doesn't have it but old one did (during quick re-renders)
+    if (this.currentUser?.neuralBio && !user.neuralBio) {
+        user.neuralBio = this.currentUser.neuralBio;
+    }
     this.currentUser = user;
     this.saveUser();
   }
@@ -131,6 +137,53 @@ export class GeminiService {
     try { await firebaseService.logout(); } catch(e) {}
   }
 
+  // --- MEMORY CORE ---
+  async evolveUserBio(currentBio: string, recentMessages: ChatMessage[]): Promise<string> {
+    if (recentMessages.length === 0) return currentBio;
+    if (!await this.checkApiKey()) return currentBio;
+
+    // Filter user messages only to save tokens
+    const userInputs = recentMessages
+        .filter(m => m.role === 'user')
+        .slice(-5) // Only last 5 messages
+        .map(m => m.content)
+        .join('\n');
+
+    if (!userInputs.trim()) return currentBio;
+
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const prompt = `
+    You are the "Memory Core" for Orin AI.
+    Your task is to update the user's biography based on new conversation data.
+    
+    CURRENT BIO:
+    ${currentBio || "No prior information."}
+    
+    NEW USER INPUTS:
+    ${userInputs}
+    
+    INSTRUCTIONS:
+    1. Extract key facts about the user (name, preferences, work, hobbies, language style).
+    2. Merge new facts into the CURRENT BIO.
+    3. Keep it concise (max 100 words).
+    4. If nothing new or relevant is found, return the CURRENT BIO exactly as is.
+    5. Output ONLY the updated bio text.
+    `;
+
+    try {
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt
+        });
+        const newBio = response.text?.trim();
+        return newBio || currentBio;
+    } catch (e) {
+        console.warn("Memory Evolution Failed:", e);
+        return currentBio;
+    }
+  }
+
   async connectLive(callbacks: any, config: { voiceName?: string; tone?: string } = {}) {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -142,7 +195,7 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
         },
-        systemInstruction: getSystemInstruction(config.tone || 'neutral'),
+        systemInstruction: getSystemInstruction(config.tone || 'neutral', this.currentUser?.neuralBio),
       },
     });
   }
@@ -175,7 +228,7 @@ export class GeminiService {
     if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
-    const toneInstruction = getToneInstruction(config.tone || 'neutral');
+    const instruction = getSystemInstruction(config.tone || 'neutral', this.currentUser?.neuralBio);
     
     return ai.live.connect({
       model: 'gemini-2.5-flash-native-audio-preview-12-2025',
@@ -185,14 +238,13 @@ export class GeminiService {
         speechConfig: {
           voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
         },
-        systemInstruction: `${toneInstruction}
+        systemInstruction: `${instruction}
         You are receiving a live video stream from the user's camera along with their audio.
         
         RULES:
         1. Watch the video stream attentively and answer questions about what you see.
         2. Remember details shown earlier.
-        3. Be helpful, concise, and friendly (unless instructed otherwise by tone).
-        4. Support English, Sinhala, and Tamil languages.`,
+        3. Support English, Sinhala, and Tamil languages.`,
       },
     });
   }
@@ -202,7 +254,8 @@ export class GeminiService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `Generate a very cheerful greeting in ${options.lang === 'si' ? 'Sinhala' : options.lang === 'ta' ? 'Tamil' : 'English'}.
       Context: It is a ${options.weather} ${options.timeOfDay} in Sri Lanka.
-      STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols.`;
+      User Bio: ${this.currentUser?.neuralBio || "Generic user"}
+      STRICT RULE: It MUST be exactly 6 to 7 words long. No emojis. No symbols. Personalized if bio exists.`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -301,7 +354,9 @@ export class GeminiService {
       currentParts.push({ text: prompt || "Continue." });
       contents.push({ role: 'user', parts: currentParts });
 
-      const config: any = { systemInstruction: getSystemInstruction() };
+      const config: any = { 
+          systemInstruction: getSystemInstruction('neutral', this.currentUser?.neuralBio) 
+      };
       if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
       else if (options.grounding === 'maps') config.tools = [{ googleMaps: {} }];
 

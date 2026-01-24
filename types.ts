@@ -29,6 +29,7 @@ export interface UserAccount {
   avatar?: string;
   tier: UserTier;
   token?: string;
+  neuralBio?: string; // New: AI Memory of the user
   dailyUsage: {
     text: number;
     images: number;

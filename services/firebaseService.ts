@@ -126,49 +126,64 @@ class FirebaseService {
     return () => {};
   }
 
-  // --- FIRESTORE HISTORY SYNC ---
-  async saveHistory(uid: string, history: Conversation[]) {
+  // --- FIRESTORE HISTORY & BIO SYNC ---
+  async saveUserData(uid: string, history: Conversation[], bio: string = "") {
     if (!this.db) return;
     try {
       const historyBlob = JSON.stringify(history);
       const userRef = doc(this.db, "users", uid);
-      // We store history inside the user document itself to save reads
-      await setDoc(userRef, { historyBlob, lastUpdated: new Date() }, { merge: true });
-      console.log("Cloud Sync: History saved to Google Account.");
+      
+      // Save history and bio together
+      const payload: any = { 
+        historyBlob, 
+        lastUpdated: new Date() 
+      };
+      
+      if (bio) payload.neuralBio = bio;
+
+      await setDoc(userRef, payload, { merge: true });
+      console.log("Cloud Sync: User Data (History + Memory) saved.");
     } catch (e) {
       console.error("Cloud Sync Error:", e);
       throw e; 
     }
   }
 
-  async getHistory(uid: string): Promise<Conversation[]> {
-    if (!this.db) return [];
+  async getUserData(uid: string): Promise<{ history: Conversation[], bio: string }> {
+    if (!this.db) return { history: [], bio: "" };
     try {
       const userRef = doc(this.db, "users", uid);
       const snap = await getDoc(userRef);
       
-      if (snap.exists() && snap.data().historyBlob) {
-        try {
-            const rawData = JSON.parse(snap.data().historyBlob);
-            if (!Array.isArray(rawData)) return [];
+      let history: Conversation[] = [];
+      let bio = "";
 
-            return rawData.map((c: any) => ({
-                ...c,
-                timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
-                messages: Array.isArray(c.messages) ? c.messages.map((m: any) => ({ 
-                    ...m, 
-                    timestamp: m.timestamp ? new Date(m.timestamp) : new Date() 
-                })) : []
-            }));
-        } catch (parseError) {
-            console.error("JSON Parse Error on Cloud History:", parseError);
-            return [];
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.historyBlob) {
+            try {
+                const rawData = JSON.parse(data.historyBlob);
+                if (Array.isArray(rawData)) {
+                    history = rawData.map((c: any) => ({
+                        ...c,
+                        timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
+                        messages: Array.isArray(c.messages) ? c.messages.map((m: any) => ({ 
+                            ...m, 
+                            timestamp: m.timestamp ? new Date(m.timestamp) : new Date() 
+                        })) : []
+                    }));
+                }
+            } catch (parseError) {
+                console.error("JSON Parse Error on Cloud History:", parseError);
+            }
         }
+        if (data.neuralBio) bio = data.neuralBio;
       }
+      return { history, bio };
     } catch (e) {
       console.error("Cloud Fetch Error:", e);
+      return { history: [], bio: "" };
     }
-    return [];
   }
 
   // --- MESSAGING ---

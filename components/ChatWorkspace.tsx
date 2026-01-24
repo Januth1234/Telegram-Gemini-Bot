@@ -228,7 +228,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
                </div>
                <div className="space-y-4">
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Ready to {activeTab === 'studio' ? 'Create' : 'Chat'}</h2>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                    {t.readyTo} {activeTab === 'studio' ? t.featureDesc.create : t.featureDesc.chat}
+                  </h2>
                   <div className="flex flex-wrap justify-center gap-2 px-4">
                      {(activeTab === 'studio' ? t.prompts.studio : t.prompts.chat).map(s => (
                         <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
@@ -301,12 +303,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {/* History Sidebar */}
       <div className={`fixed inset-y-0 left-0 z-[150] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
         <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
-          <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</h3>
+          <h3 className={`text-[10px] font-black uppercase tracking-widest text-slate-500 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.memoryHistory}</h3>
           <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
         </div>
         <div className="p-4">
-          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all">
-            + New Chat
+          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className={`w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
+            + {t.newNeuralChat}
           </button>
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
@@ -321,8 +323,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <i className={`fa-solid ${getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
                  </div>
                  <div className="flex-1 min-w-0 pr-6">
-                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'}`}>{conv.title}</span>
-                    <p className="text-[10px] text-slate-400 truncate mt-1">{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
+                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.title}</span>
+                    <p className={`text-[10px] text-slate-400 truncate mt-1 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.messages[conv.messages.length - 1]?.content || "Empty"}</p>
                  </div>
               </div>
               
@@ -340,9 +342,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           {hasMoreHistory && (
              <button 
                onClick={() => setHistoryPage(prev => prev + 1)}
-               className="w-full py-4 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest"
+               className={`w-full py-4 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}
              >
-               Load Older Conversations
+               {t.olderMemories}
              </button>
           )}
           
@@ -351,12 +353,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 {isSyncing ? (
                    <>
                      <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                     <p className="text-[9px] font-black uppercase tracking-widest">Loading History...</p>
+                     <p className={`text-[9px] font-black uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.loadingHistory}</p>
                    </>
                 ) : (
                    <>
                     <i className="fa-solid fa-box-open text-3xl mb-4 text-slate-300"></i>
-                    <p className="text-[9px] font-black uppercase tracking-widest">No History</p>
+                    <p className={`text-[9px] font-black uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.noHistory}</p>
                    </>
                 )}
              </div>
@@ -365,7 +367,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {/* Sync Status in Sidebar Footer - Shows if syncing but we already have content */}
         {isSyncing && conversations.length > 0 && (
            <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center">
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse">Syncing with Cloud...</span>
+              <span className={`text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.syncingCloud}</span>
            </div>
         )}
       </div>
@@ -382,8 +384,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                   className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative ${activeTab === m ? 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
                 >
                   <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
-                  <span className="text-[9px] font-black uppercase tracking-widest hidden sm:inline">
-                    {m === 'chat' ? 'Chat' : m === 'maths' ? 'Math' : m === 'studio' ? 'Create' : m === 'vision' ? 'Camera' : m === 'gethelp' ? 'Help' : 'Voice'}
+                  <span className={`text-[9px] font-black uppercase tracking-widest hidden sm:inline ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
+                    {m === 'chat' ? t.reasoning : m === 'maths' ? t.maths : m === 'studio' ? t.creative : m === 'vision' ? t.vision : m === 'gethelp' ? t.getHelp : t.voice}
                   </span>
                   {isBETA(m) && (
                     <span className="absolute -top-1 -right-1 flex h-2 w-2">
