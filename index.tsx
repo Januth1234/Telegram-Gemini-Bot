@@ -27,10 +27,11 @@ const startApp = () => {
   // Register Main Service Worker (Caching + Messaging)
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
+      // FORCE ROOT SCOPE for proper caching across all routes
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
         .then((registration) => {
-          console.log('Orin SW registered with scope:', registration.scope);
+          console.log('Orin SW registered with root scope:', registration.scope);
         })
         .catch((err) => {
           console.debug('Orin SW registration skipped:', err);

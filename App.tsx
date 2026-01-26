@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -32,17 +32,49 @@ const App: React.FC = () => {
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
-  // Viewport Height Fix
-  useEffect(() => {
-    const setVh = () => document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
-    setVh();
-    window.addEventListener('resize', setVh);
-    return () => window.removeEventListener('resize', setVh);
+  // Viewport Scaling & Height Fix for Small Devices
+  useLayoutEffect(() => {
+    const handleResize = () => {
+      const root = document.getElementById('root');
+      if (!root) return;
+
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      
+      // Update VH variable for 100vh calculation
+      document.documentElement.style.setProperty('--vh', `${height * 0.01}px`);
+
+      // SCALING LOGIC:
+      const MIN_WIDTH = 375;
+      if (width < MIN_WIDTH) {
+         const scale = width / MIN_WIDTH;
+         root.style.transform = `scale(${scale})`;
+         root.style.transformOrigin = 'top left';
+         root.style.width = `${MIN_WIDTH}px`;
+         root.style.height = `${height / scale}px`;
+         root.style.position = 'absolute'; 
+         root.style.overflow = 'hidden';
+      } else {
+         root.style.transform = '';
+         root.style.transformOrigin = '';
+         root.style.width = '';
+         root.style.height = '';
+         root.style.position = '';
+         root.style.overflow = '';
+      }
+    };
+
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
-    // Safety timeout to prevent infinite loading if Firebase hangs
     const safetyTimeout = setTimeout(() => {
       if (!authInitialized) {
         console.warn("Auth initialization timed out, falling back to guest mode.");
@@ -84,28 +116,24 @@ const App: React.FC = () => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').split('?')[0];
       
-      // If user is logged in and visits root (empty hash), redirect to chat
-      // Unless they explicitly navigated to #home (which we map to landing)
+      // 1. If user is logged in and visits root, redirect to chat
       if (user && (hash === '' || hash === '/')) {
          window.location.hash = 'chat';
          return;
       }
 
-      // Map #home to landing view for logged in users who want to see it
+      // 2. Map specific hash '#home' to landing for logged in users
       if (hash === 'home') {
           setView('landing');
           return;
       }
 
-      // Protection Rule: 'chat' requires Auth (handled below in validViews check usually, but redundant safety)
-      // Note: We allow landing page to be viewed even if logged in (via #home)
-      
       const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
       
       if (validViews.includes(hash as any)) {
-          // If trying to access secure routes without auth, redirect to landing (empty hash)
+          // 3. Security Check: Protect workspaces
           if (['chat', 'art', 'camera', 'voice', 'math', 'help'].includes(hash) && !user && authInitialized) {
-              window.location.hash = '';
+              window.location.hash = ''; // Redirect guest to landing
               return;
           }
           setView(hash as AppView);
@@ -130,17 +158,20 @@ const App: React.FC = () => {
   });
   const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
 
-  // Sync to LocalStorage & Cloud
   const saveTimeoutRef = useRef<number | null>(null);
   useEffect(() => {
-    cacheService.set(CacheKey.HISTORY, conversations);
+    // FILTER: Only save conversations that actually have messages.
+    // This prevents blank "New Chat" sessions from cluttering history/storage.
+    const meaningfulConversations = conversations.filter(c => c.messages.length > 0);
+
+    cacheService.set(CacheKey.HISTORY, meaningfulConversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     
     if (user?.id) {
        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
        saveTimeoutRef.current = window.setTimeout(() => {
           setSyncStatus('syncing');
-          firebaseService.saveHistory(user.id, conversations).then(() => {
+          firebaseService.saveHistory(user.id, meaningfulConversations).then(() => {
              setSyncStatus('success');
              setTimeout(() => setSyncStatus('idle'), 2000);
           }).catch(() => setSyncStatus('error'));
@@ -158,17 +189,19 @@ const App: React.FC = () => {
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     if (!user) {
-        // Guest Mode on Landing
         setGlobalPrompt(prompt);
         return; 
     }
-    
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
-    // Logic to create new chat or reuse
+    // Switch or create chat logic
     const activeConv = conversations.find(c => c.id === activeConversationId);
-    if (!activeConv || activeConv.messages.length > 0 || activeConv.mode !== mode) {
+    
+    // Check if we can reuse the current empty conversation
+    const canReuseActive = activeConv && activeConv.messages.length === 0 && activeConv.mode === mode;
+
+    if (!canReuseActive) {
        const newId = Date.now().toString();
        setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
        setActiveConversationId(newId);
@@ -182,12 +215,24 @@ const App: React.FC = () => {
      setConversations(prev => {
         const next = prev.filter(c => c.id !== id);
         if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
-        if (user?.id) firebaseService.saveHistory(user.id, next);
+        // Note: The useEffect will handle saving the updated list
         return next;
      });
   };
 
-  // Nav Button Helper
+  const handleClearHistory = async () => {
+    if (window.confirm("Are you sure you want to delete all chat history? This cannot be undone.")) {
+       setConversations([]);
+       setActiveConversationId(null);
+       cacheService.remove(CacheKey.HISTORY);
+       cacheService.remove(CacheKey.ACTIVE_CONV);
+       if (user?.id) {
+           await firebaseService.saveHistory(user.id, []);
+       }
+       window.location.hash = 'chat';
+    }
+  };
+
   const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
     <button 
       onClick={onClick}
@@ -198,18 +243,24 @@ const App: React.FC = () => {
     </button>
   );
 
-  // --- RENDER ---
   const renderContent = () => {
-    // Magic Loading Screen
+    // Magic Loading Screen - Neural Core
     if (!authInitialized) return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-8 bg-slate-50 dark:bg-slate-950">
          <div className="relative">
-            <div className="w-16 h-16 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+            {/* Outer Orbital */}
+            <div className="w-20 h-20 rounded-full border-2 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+            {/* Inner Core */}
             <div className="absolute inset-0 flex items-center justify-center">
-               <div className="w-8 h-8 rounded-full bg-cyan-500/10 animate-pulse"></div>
+               <div className="w-10 h-10 rounded-full bg-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.6)] animate-pulse"></div>
             </div>
+            {/* Particles */}
+            <div className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
          </div>
-         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 animate-pulse">Initializing Neural Core...</p>
+         <div className="text-center space-y-2">
+            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-[0.2em]">Neural Sync</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading Workspace...</p>
+         </div>
       </div>
     );
 
@@ -218,7 +269,8 @@ const App: React.FC = () => {
         const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat' };
         return (
           <ChatWorkspace 
-            onClose={() => window.location.hash = user ? 'home' : ''} 
+            // Closing a specific tool mode goes back to general chat
+            onClose={() => window.location.hash = 'chat'}
             hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
             initialMode={modeMap[view]}
@@ -227,7 +279,25 @@ const App: React.FC = () => {
             messages={conversations.find(c => c.id === activeConversationId)?.messages || []}
             setMessages={(updater) => {
                if(!activeConversationId) return;
-               setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: typeof updater === 'function' ? updater(c.messages) : updater, timestamp: new Date() } : c));
+               setConversations(prev => {
+                  const existing = prev.find(c => c.id === activeConversationId);
+                  const newMessages = typeof updater === 'function' ? updater(existing?.messages || []) : updater;
+                  
+                  // Resurrection Logic: If conversation was filtered out (empty), recreate it now that it has messages
+                  if (!existing) {
+                      const newConv: Conversation = {
+                          id: activeConversationId,
+                          title: "New Chat",
+                          messages: newMessages,
+                          timestamp: new Date(),
+                          mode: modeMap[view],
+                          modesUsed: [modeMap[view]]
+                      };
+                      return [newConv, ...prev];
+                  }
+
+                  return prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages, timestamp: new Date() } : c);
+               });
             }}
             lang={lang}
             conversations={conversations}
@@ -240,8 +310,10 @@ const App: React.FC = () => {
             isSyncing={syncStatus === 'syncing'}
           />
         );
-      case 'voice': return <VoiceAssistant onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} user={user} />;
+      case 'voice': 
+        // Closing voice mode goes back to chat
+        return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} user={user} onClearHistory={handleClearHistory} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = user ? 'home' : ''} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = user ? 'home' : ''} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
@@ -257,13 +329,14 @@ const App: React.FC = () => {
   return (
     <div className={`w-screen h-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}>
       <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
+        {/* Logo redirect logic: If logged in -> Home, else -> Root */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
           <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
 
-        {/* TOP NAVIGATION BAR - Show on all logged in pages except purely Landing (unless logic dictates otherwise, but view logic handles visibility) */}
-        {user && view !== 'landing' && (
+        {/* TOP NAVIGATION BAR - Only show on workspace views, hide on informational pages (Downloads, Creator, etc.) */}
+        {user && ['chat', 'art', 'camera', 'voice', 'math', 'help'].includes(view) && (
            <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50">
               <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
@@ -283,7 +356,7 @@ const App: React.FC = () => {
               </button>
            )}
 
-           {syncStatus !== 'idle' && view !== 'landing' && (
+           {syncStatus !== 'idle' && user && (
              <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5">
                 <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                 <span className="text-[7px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Sync' : syncStatus === 'success' ? 'Saved' : 'Err'}</span>

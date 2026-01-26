@@ -9,9 +9,10 @@ interface AccountSettingsProps {
   onClose: () => void;
   lang: Language;
   user: UserAccount | null;
+  onClearHistory: () => void;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -134,21 +135,34 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user }
                  />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                 <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.text}</span>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
-                 </div>
-                 <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                    <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.images + user.dailyUsage.videos}</span>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Generations</span>
+              {/* Stats */}
+              <div className="w-full space-y-4">
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Activity (Today)</h4>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.text}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.images + user.dailyUsage.videos}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Generations</span>
+                    </div>
                  </div>
               </div>
 
-              <button onClick={handleLogout} className="w-full py-5 rounded-2xl bg-red-500/10 text-red-500 font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2">
-                <i className="fa-solid fa-power-off"></i>
-                <span>Sign Out</span>
-              </button>
+              {/* Danger Zone */}
+              <div className="pt-4 border-t border-black/5 dark:border-white/5 w-full space-y-4">
+                 <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest px-1">Danger Zone</h4>
+                 <div className="grid grid-cols-2 gap-4">
+                    <button onClick={onClearHistory} className="py-4 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                        Delete History
+                    </button>
+                    <button onClick={handleLogout} className="py-4 rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">
+                        Sign Out
+                    </button>
+                 </div>
+              </div>
+
             </div>
           )}
         </div>

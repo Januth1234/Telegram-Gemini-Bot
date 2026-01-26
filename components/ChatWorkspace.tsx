@@ -131,7 +131,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     try {
       const res = await geminiService.chat(text || "Continue.", { 
         fileData: selectedFile || undefined, 
-        useThinking: true, 
+        useThinking: false, // OPTIMIZED: Changed from true (Pro) to false (Flash) for speed
         history: isPrivate ? privateMessages : messages, 
         signal: abortControllerRef.current.signal,
         isPrivate: isPrivate 

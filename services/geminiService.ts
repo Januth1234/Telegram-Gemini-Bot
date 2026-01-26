@@ -282,10 +282,34 @@ export class GeminiService {
   }
 
   // --- LIVE HELPERS ---
+
+  /**
+   * Connects to Gemini Live.
+   * If `config` contains 'voiceName' or 'tone', it's treated as a simplified config and transformed.
+   * Otherwise, `config` is passed directly to the API.
+   */
   async connectLive(callbacks: any, config: any) {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      return ai.live.connect({ model: 'gemini-2.5-flash-native-audio-preview-12-2025', callbacks, config });
+      
+      let finalConfig = config;
+
+      // Detect simplified config from VoiceAssistant and transform it
+      if (config.voiceName || config.tone) {
+         finalConfig = {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: { 
+                voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } 
+            },
+            systemInstruction: getToneInstruction(config.tone || 'neutral')
+         };
+      }
+
+      return ai.live.connect({ 
+        model: 'gemini-2.5-flash-native-audio-preview-12-2025', 
+        callbacks, 
+        config: finalConfig 
+      });
   }
 
   async connectTranslator(callbacks: any, options: any) {
@@ -297,6 +321,8 @@ export class GeminiService {
   }
 
   async connectMultimodal(callbacks: any, config: any) {
+     // This helper uses the same logic as connectLive but adds video context to system instruction
+     // Since LiveVisionMode uses this, we construct the full config here.
      return this.connectLive(callbacks, {
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },

@@ -140,8 +140,9 @@ class FirebaseService {
     } else {
       userData = snap.data();
       
-      // Update avatar if changed
       const updates: any = {};
+      
+      // Update avatar if changed (Sync Google Profile Pic)
       if (photoURL && userData.avatar !== photoURL) {
           updates.avatar = photoURL;
           userData.avatar = photoURL;
