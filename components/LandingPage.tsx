@@ -245,7 +245,7 @@ const NavCard = ({ href, icon, title, color, lang }: any) => {
   const colors: Record<string, string> = { cyan: "group-hover:text-cyan-500", indigo: "group-hover:text-indigo-500", purple: "group-hover:text-purple-500", emerald: "group-hover:text-emerald-500", orange: "group-hover:text-orange-500", pink: "group-hover:text-pink-500", violet: "group-hover:text-violet-500", blue: "group-hover:text-blue-500" };
   return (
     <a href={href} className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
-      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner group-hover:text-pink-500 ${colors[color]}`}><i className={`fa-solid ${icon} text-lg`}></i></div>
+      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner group-hover:text-pink-500 ${colors[color]}`}><i className={`fa-solid ${icon} text-sm`}></i></div>
       <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );

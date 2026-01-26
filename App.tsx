@@ -91,12 +91,8 @@ const App: React.FC = () => {
          return;
       }
 
-      // Root Rule: If Auth & Root, go to Chat
-      if (!hash && user && authInitialized) {
-         window.location.hash = 'chat';
-         return;
-      }
-
+      // Root Rule: Redirect logic removed to allow access to Landing Page via logo or empty hash
+      
       const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
       setView(validViews.includes(hash as any) ? hash as AppView : 'landing');
     };
@@ -174,6 +170,17 @@ const App: React.FC = () => {
      });
   };
 
+  // Nav Button Helper
+  const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
+    <button 
+      onClick={onClick}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+    >
+      <i className={`fa-solid ${icon} text-xs`}></i>
+      <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline-block">{label}</span>
+    </button>
+  );
+
   // --- RENDER ---
   const renderContent = () => {
     if (!authInitialized) return <div className="flex h-full w-full items-center justify-center"><i className="fa-solid fa-circle-notch animate-spin text-cyan-600 text-3xl"></i></div>;
@@ -221,11 +228,23 @@ const App: React.FC = () => {
 
   return (
     <div className={`w-screen h-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}>
-      <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt">
+      <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = ''}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
           <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
+
+        {/* TOP NAVIGATION BAR */}
+        {user && view !== 'landing' && (
+           <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5">
+              <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => window.location.hash = 'chat'} />
+              <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => window.location.hash = 'art'} />
+              <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => window.location.hash = 'camera'} />
+              <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => window.location.hash = 'voice'} />
+              <NavTab active={view === 'math'} icon="fa-calculator" label={t.maths} onClick={() => window.location.hash = 'math'} />
+           </div>
+        )}
+
         <div className="flex items-center gap-2">
            {syncStatus !== 'idle' && view !== 'landing' && (
              <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5">
