@@ -46,6 +46,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -56,10 +57,58 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   // Active messages based on mode
   const currentMessages = isPrivate ? privateMessages : messages;
 
+  // --- MARKOV CHAIN SUGGESTION GENERATOR ---
+  const generateSuggestions = useCallback((mode: WorkspaceMode) => {
+    const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+    
+    // Vocabulary Banks
+    const verbs = {
+      chat: ["Explain", "Summarize", "Analyze", "Debate", "Critique"],
+      code: ["Write", "Debug", "Refactor", "Optimize", "Document"],
+      creative: ["Write a story about", "Compose a poem for", "Brainstorm ideas for", "Script a scene about"],
+      local: ["Tell me about", "History of", "Recipe for", "Travel guide to"]
+    };
+
+    const nouns = {
+      tech: ["Quantum Computing", "Neural Networks", "React Hooks", "Rust Ownership", "Docker Containers"],
+      science: ["Black Holes", "CRISPR", "String Theory", "Photosynthesis", "Dark Matter"],
+      local: ["Sigiriya", "Kandy Perahera", "Ceylon Tea", "Colombo Street Food", "Ella Rock"],
+      abstract: ["the concept of Time", "Stoicism", "Global Economics", "Modern Art", "Consciousness"]
+    };
+
+    const modifiers = {
+      simple: ["in simple terms", "for a 5-year-old", "like I'm a beginner"],
+      pro: ["professionally", "with technical detail", "in bullet points"],
+      code: ["in Python", "using TypeScript", "in SQL", "with comments"]
+    };
+
+    const generate = () => {
+       const type = Math.random();
+       if (mode === 'chat') {
+           if (type < 0.3) return `${pick(verbs.code)} ${pick(nouns.tech)} ${pick(modifiers.code)}`;
+           if (type < 0.6) return `${pick(verbs.chat)} ${pick(nouns.science)} ${pick(modifiers.simple)}`;
+           if (type < 0.8) return `${pick(verbs.local)} ${pick(nouns.local)}`;
+           return `${pick(verbs.chat)} ${pick(nouns.abstract)} ${pick(modifiers.pro)}`;
+       }
+       // Fallbacks for other modes if input bar becomes visible
+       if (mode === 'studio') return `A ${pick(["cyberpunk", "watercolor", "photorealistic"])} image of ${pick(nouns.local)}`;
+       return "How can I help?";
+    };
+
+    // Generate 3 unique suggestions
+    const newSet = new Set<string>();
+    while(newSet.size < 3) {
+        newSet.add(generate());
+    }
+    setSuggestions(Array.from(newSet));
+  }, []);
+
+  useEffect(() => {
+    generateSuggestions(activeTab);
+  }, [activeTab, generateSuggestions]);
+
   useEffect(() => {
     setActiveTab(initialMode);
-    // Reset private mode if switching from landing to chat via deep link might be handled elsewhere, 
-    // but here we ensure consistency.
   }, [initialMode]);
 
   useEffect(() => {
@@ -73,9 +122,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   // When switching tools, start fresh if needed or just handle context
   const handleModeSwitch = (mode: WorkspaceMode) => {
       setActiveTab(mode);
+      generateSuggestions(mode);
       if (onModeSwitch) onModeSwitch(mode);
       if (isPrivate) {
-          // In private mode, switching tools effectively clears context to keep it secure/fresh per tool use
           setPrivateMessages([]);
       }
   };
@@ -112,6 +161,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     startProgress(activeTab);
     setLocalInput('');
     onInputChange('');
+    
+    // Regenerate suggestions after sending to keep it fresh (Markov style)
+    generateSuggestions(activeTab);
 
     const userMsg: ChatMessage = { 
         id: Date.now().toString(), 
@@ -163,7 +215,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
        stopProgress(); 
        setSelectedFile(null);
     }
-  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages]);
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, generateSuggestions]);
 
   const togglePrivate = () => {
       const newState = !isPrivate;
@@ -254,11 +306,18 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && activeTab !== 'maths' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
                <div className="max-w-3xl mx-auto pointer-events-auto relative">
-                  {/* Auto Suggest */}
+                  {/* Markov Chain Suggestions */}
                   {!localInput && currentMessages.length === 0 && !isPrivate && (
                      <div className="absolute -top-12 left-0 right-0 flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
-                        {["Summarize this", "Write code", "Explain quantum physics"].map(s => (
-                           <button key={s} onClick={() => setLocalInput(s)} className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 shadow-sm whitespace-nowrap">{s}</button>
+                        {suggestions.map((s, i) => (
+                           <button 
+                             key={i} 
+                             onClick={() => handleSend(s)} 
+                             className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all shadow-sm whitespace-nowrap active:scale-95 animate-reveal"
+                             style={{ animationDelay: `${i * 100}ms` }}
+                           >
+                             {s}
+                           </button>
                         ))}
                      </div>
                   )}
