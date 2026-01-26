@@ -11,29 +11,6 @@ interface CreatorPageProps {
 const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
 
-  const content = {
-    en: {
-        role: "Project Lead & Full Stack Engineer",
-        bioHeading: "Executive Profile",
-        bio: "\"I created Orin AI with a single vision: to democratize advanced neural technology for every Sri Lankan. Bridging the gap between global AI capabilities and our local languages (Sinhala & Tamil) was not just a technical challenge, but a personal mission.\"",
-        footer: "JN Productions • 2026"
-    },
-    si: {
-        role: "ව්‍යාපෘති ප්‍රධානී සහ මෘදුකාංග ඉංජිනේරු",
-        bioHeading: "විධායක පැතිකඩ",
-        bio: "\"මම ඔරින් AI නිර්මාණය කළේ එකම අරමුණක් ඇතිවයි: සෑම ශ්‍රී ලාංකිකයෙකුටම උසස් කෘතිම බුද්ධි තාක්ෂණය ලබා දීම. ගෝලීය AI හැකියාවන් සහ අපගේ දේශීය භාෂාවන් (සිංහල සහ දෙමළ) අතර පරතරය නැති කිරීම තාක්ෂණික අභියෝගයක් පමණක් නොව, පුද්ගලික මෙහෙයුමක් ද විය.\"",
-        footer: "JN Productions • 2026"
-    },
-    ta: {
-        role: "திட்டத் தலைவர் & மென்பொருள் பொறியாளர்",
-        bioHeading: "நிர்வாகச் சுயவிவரம்",
-        bio: "\"ஒவ்வொரு இலங்கையருக்கும் மேம்பட்ட AI தொழில்நுட்பத்தைக் கொண்டு செல்வதே எனது ஒரே நோக்கம். உலகளாவிய AI திறன்களுக்கும் நமது உள்ளூர் மொழிகளுக்கும் (சிங்களம் & தமிழ்) இடையிலான இடைவெளியைக் குறைப்பது ஒரு தொழில்நுட்ப சவால் மட்டுமல்ல, அது ஒரு தனிப்பட்ட குறிக்கோளும் கூட.\"",
-        footer: "JN Productions • 2026"
-    }
-  };
-
-  const text = content[lang];
-
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
       <div className="max-w-3xl mx-auto px-6 py-12 pb-32">
@@ -44,7 +21,7 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
             </div>
             <div>
               <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">{t.creator}</h2>
-              <p className={`text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em] ${lang !== 'en' ? 'sinhala-text' : ''}`}>{t.creatorRole}</p>
+              <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.3em]">{t.creatorRole}</p>
             </div>
           </div>
           <button 
@@ -72,14 +49,14 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
 
              <div className="space-y-2 opacity-0 animate-reveal">
                 <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Januth Nimnal</h1>
-                <p className={`text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em] ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.role}</p>
+                <p className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-[0.4em]">{t.creatorTitle}</p>
              </div>
           </div>
 
           <div className="glass-panel p-8 md:p-12 rounded-[48px] border border-black/5 dark:border-white/5 space-y-8 animate-reveal" style={{ animationDelay: '0.2s' }}>
-             <h3 className={`text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] border-b border-black/5 dark:border-white/5 pb-4 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.bioHeading}</h3>
-             <p className={`text-sm md:text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium italic ${lang !== 'en' ? 'sinhala-text' : ''}`}>
-                {text.bio}
+             <h3 className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] border-b border-black/5 dark:border-white/5 pb-4">{t.execProfile}</h3>
+             <p className={`text-sm md:text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium italic ${lang === 'si' ? 'sinhala-text' : ''}`}>
+                {t.creatorQuote}
              </p>
           </div>
 
@@ -90,8 +67,8 @@ const CreatorPage: React.FC<CreatorPageProps> = ({ onClose, lang }) => {
           </div>
 
           <footer className="pt-20 pb-12 text-center opacity-30">
-             <p className={`text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 dark:text-slate-400 ${lang !== 'en' ? 'sinhala-text' : ''}`}>
-               {text.footer}
+             <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500 dark:text-slate-400">
+               {t.footerRights}
              </p>
           </footer>
         </div>

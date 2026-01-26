@@ -1,20 +1,11 @@
-import firebase from "firebase/compat/app";
+
+import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
-import { 
-  getAuth, 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  signOut, 
-  onAuthStateChanged, 
-  setPersistence, 
-  browserLocalPersistence, 
-  signInWithCredential,
-  Auth,
-  User
-} from "firebase/auth";
-import { getFirestore, doc, setDoc, getDoc, Firestore } from "firebase/firestore";
-import { Conversation } from "../types";
+import firebase from "firebase/compat/app";
+import "firebase/compat/auth";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp } from "firebase/firestore";
+import { Conversation, UserAccount } from "../types";
 
 // Configuration
 const firebaseConfig = {
@@ -27,7 +18,6 @@ const firebaseConfig = {
   measurementId: "G-57DHESH4ZJ"
 };
 
-// Add global declaration for the native handler
 declare global {
   interface Window {
     handleNativeGoogleToken?: (token: string) => Promise<void>;
@@ -39,30 +29,26 @@ class FirebaseService {
   private messaging: Messaging | null = null;
   private token: string | null = null;
   private analytics: any = null;
-  private auth: Auth | null = null;
+  private auth: firebase.auth.Auth | null = null;
   private db: Firestore | null = null;
 
   constructor() {
     try {
-      this.app = firebase.initializeApp(firebaseConfig);
+      this.app = initializeApp(firebaseConfig);
       
-      // Initialize Analytics & Auth if in browser
       if (typeof window !== 'undefined') {
         this.analytics = getAnalytics(this.app);
-        this.auth = getAuth(this.app);
+        this.auth = firebase.auth(this.app);
         this.db = getFirestore(this.app);
         
-        // Ensure persistence is set to LOCAL to survive refreshes
-        setPersistence(this.auth, browserLocalPersistence)
+        this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
           .catch((error) => console.error("Auth Persistence Error:", error));
 
-        // ✅ Native Google Sign-In Handler for WebViews
         window.handleNativeGoogleToken = async (token: string) => {
           if (!this.auth) return;
           try {
-            const credential = GoogleAuthProvider.credential(token);
-            const result = await signInWithCredential(this.auth, credential);
-            console.log('Firebase sign-in successful:', result.user);
+            const credential = firebase.auth.GoogleAuthProvider.credential(token);
+            await this.auth.signInWithCredential(credential);
             window.location.reload();
           } catch (err) {
             console.error('Firebase sign-in error:', err);
@@ -70,7 +56,6 @@ class FirebaseService {
         };
       }
 
-      // Initialize Messaging
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         this.messaging = getMessaging(this.app);
       }
@@ -79,147 +64,177 @@ class FirebaseService {
     }
   }
 
-  // --- ACCESSORS ---
-  getDb(): Firestore | null {
-    return this.db;
-  }
-
   // --- AUTHENTICATION ---
-  async loginWithGoogle(): Promise<User> {
+  async loginWithGoogle(): Promise<firebase.User> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     
-    const provider = new GoogleAuthProvider();
+    const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('profile');
     provider.addScope('email');
     
     try {
-      const result = await signInWithPopup(this.auth, provider);
-      return result.user;
+      const result = await this.auth.signInWithPopup(provider);
+      return result.user!;
     } catch (error: any) {
-      console.error("Firebase Auth Error Full:", error);
-      
-      if (error.code === 'auth/unauthorized-domain') {
-        const hostname = window.location.hostname;
-        const currentDomain = hostname || window.location.host || window.location.href;
-        throw new Error(`Domain not authorized (${currentDomain}). Please add "${currentDomain}" to the Firebase Console.`);
-      } else if (error.code === 'auth/popup-closed-by-user') {
-        throw new Error("Sign-in cancelled by user.");
-      } else if (error.code === 'auth/popup-blocked') {
-        throw new Error("Popup blocked. Please allow popups for this site.");
-      }
-      
+      if (error.code === 'auth/popup-closed-by-user') throw new Error("Sign-in cancelled.");
       throw error;
     }
   }
 
   async logout(): Promise<void> {
-    if (this.auth) {
-      await signOut(this.auth);
-    }
+    if (this.auth) await this.auth.signOut();
   }
 
-  onAuthStateChanged(callback: (user: User | null) => void) {
-    if (this.auth) {
-      return onAuthStateChanged(this.auth, callback);
-    }
+  onAuthStateChanged(callback: (user: firebase.User | null) => void) {
+    if (this.auth) return this.auth.onAuthStateChanged(callback);
     return () => {};
   }
 
-  // --- FIRESTORE HISTORY & BIO SYNC ---
-  async saveUserData(uid: string, history: Conversation[], bio: string = "") {
+  // --- FIRESTORE USER SYNC ---
+  async syncUserSession(uid: string, email: string): Promise<UserAccount> {
+    if (!this.db) throw new Error("DB not init");
+    
+    const userRef = doc(this.db, "users", uid);
+    const snap = await getDoc(userRef);
+    
+    let userData: any;
+
+    if (!snap.exists()) {
+      // Create new user profile
+      userData = {
+        email,
+        plan: 'starter',
+        subscriptionStatus: 'active',
+        createdAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+        usage: { text: 0, images: 0, videos: 0 },
+        memory: "User is new to Orin AI.",
+        lastReset: Date.now()
+      };
+      await setDoc(userRef, userData);
+    } else {
+      userData = snap.data();
+      // Check for daily reset logic (client-side calculation for now, robust solution would be cloud function)
+      const lastReset = userData.lastReset || 0;
+      if (Date.now() - lastReset > 86400000) {
+        userData.usage = { text: 0, images: 0, videos: 0 };
+        userData.lastReset = Date.now();
+        await updateDoc(userRef, { usage: userData.usage, lastReset: userData.lastReset });
+      }
+    }
+
+    // Convert to App Type
+    return {
+      id: uid,
+      name: userData.name || email.split('@')[0],
+      email: email,
+      tier: userData.plan === 'elite' ? 'Verified Member' : userData.plan === 'pro' ? 'Pro (BYO-Google)' : 'Basic',
+      dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },
+      // Memory is handled separately or can be added to UserAccount type if needed globally
+    };
+  }
+
+  async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
+    if (!this.db) return false;
+    const userRef = doc(this.db, "users", uid);
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) return false;
+    
+    const data = snap.data();
+    const plan = data.plan || 'starter';
+    const usage = data.usage?.[type] || 0;
+
+    // Limits
+    const limits: any = {
+       starter: { text: 200, images: 10, videos: 0 },
+       pro: { text: 500, images: 50, videos: 5 },
+       elite: { text: 999999, images: 9999, videos: 999 }
+    };
+
+    return usage >= limits[plan][type];
+  }
+
+  async incrementUsage(uid: string, type: 'text' | 'images' | 'videos') {
+    if (!this.db) return;
+    const userRef = doc(this.db, "users", uid);
+    const snap = await getDoc(userRef);
+    if (snap.exists()) {
+       const current = snap.data().usage?.[type] || 0;
+       await updateDoc(userRef, { [`usage.${type}`]: current + 1 });
+    }
+  }
+
+  async updatePlan(uid: string, plan: string) {
+    if (!this.db) return;
+    await updateDoc(doc(this.db, "users", uid), {
+      plan: plan.toLowerCase(),
+      lastUpdated: serverTimestamp()
+    });
+  }
+
+  async getUserMemory(uid: string): Promise<string> {
+    if (!this.db) return "";
+    const snap = await getDoc(doc(this.db, "users", uid));
+    return snap.exists() ? (snap.data().memory || "") : "";
+  }
+
+  async updateUserMemory(uid: string, memory: string) {
+    if (!this.db) return;
+    await updateDoc(doc(this.db, "users", uid), { memory });
+  }
+
+  // --- HISTORY SYNC ---
+  async saveHistory(uid: string, history: Conversation[]) {
     if (!this.db) return;
     try {
       const historyBlob = JSON.stringify(history);
       const userRef = doc(this.db, "users", uid);
-      
-      // Save history and bio together
-      const payload: any = { 
-        historyBlob, 
-        lastUpdated: new Date() 
-      };
-      
-      if (bio) payload.neuralBio = bio;
-
-      await setDoc(userRef, payload, { merge: true });
-      console.log("Cloud Sync: User Data (History + Memory) saved.");
+      await setDoc(userRef, { historyBlob, lastUpdated: serverTimestamp() }, { merge: true });
     } catch (e) {
       console.error("Cloud Sync Error:", e);
-      throw e; 
     }
   }
 
-  async getUserData(uid: string): Promise<{ history: Conversation[], bio: string }> {
-    if (!this.db) return { history: [], bio: "" };
+  async getHistory(uid: string): Promise<Conversation[] | null> {
+    if (!this.db) return null;
     try {
       const userRef = doc(this.db, "users", uid);
       const snap = await getDoc(userRef);
-      
-      let history: Conversation[] = [];
-      let bio = "";
-
-      if (snap.exists()) {
-        const data = snap.data();
-        if (data.historyBlob) {
-            try {
-                const rawData = JSON.parse(data.historyBlob);
-                if (Array.isArray(rawData)) {
-                    history = rawData.map((c: any) => ({
-                        ...c,
-                        timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
-                        messages: Array.isArray(c.messages) ? c.messages.map((m: any) => ({ 
-                            ...m, 
-                            timestamp: m.timestamp ? new Date(m.timestamp) : new Date() 
-                        })) : []
-                    }));
-                }
-            } catch (parseError) {
-                console.error("JSON Parse Error on Cloud History:", parseError);
-            }
-        }
-        if (data.neuralBio) bio = data.neuralBio;
+      if (snap.exists() && snap.data().historyBlob) {
+        const parsed = JSON.parse(snap.data().historyBlob);
+        return parsed.map((c: any) => ({
+            ...c,
+            timestamp: new Date(c.timestamp),
+            messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+        }));
       }
-      return { history, bio };
     } catch (e) {
       console.error("Cloud Fetch Error:", e);
-      return { history: [], bio: "" };
     }
+    return null;
   }
 
   // --- MESSAGING ---
   async requestPermission(): Promise<string | null> {
-    if (!this.messaging) {
-      console.warn("Messaging not initialized (Service Workers not supported or blocked).");
-      return null;
-    }
-
+    if (!this.messaging) return null;
     try {
       const permission = await Notification.requestPermission();
       if (permission === 'granted') {
         const vapidKey = process.env.VAPID_KEY || "BMz4Zssv3qb7H5GI-hEdYBGQ32QQ65Qj6gHwT1dTJy5NnPd38UrnRunrIWeFxDNsUJyard-mhXkur13D2fVlf48"; 
-
-        try {
-          const currentToken = await getToken(this.messaging, {
-            vapidKey: vapidKey
-          });
-          
-          if (currentToken) {
-            this.token = currentToken;
-            console.log("FCM Token Generated:", currentToken);
-            return currentToken;
-          } else {
-            console.warn("No registration token available. Request permission to generate one.");
-          }
-        } catch (tokenError) {
-          console.error("Error fetching FCM token:", tokenError);
-          throw new Error("Failed to generate token. Ensure Service Worker is registered.");
+        
+        let serviceWorkerRegistration = undefined;
+        if ('serviceWorker' in navigator) {
+             serviceWorkerRegistration = await navigator.serviceWorker.getRegistration();
         }
-      } else {
-        console.warn("Notification permission denied.");
-        throw new Error("Permission denied. Please enable notifications in browser settings.");
+
+        const currentToken = await getToken(this.messaging, { vapidKey, serviceWorkerRegistration });
+        if (currentToken) {
+          this.token = currentToken;
+          return currentToken;
+        }
       }
     } catch (err) {
-      console.error("An error occurred while retrieving token. ", err);
-      throw err;
+      console.error("Token Error", err);
     }
     return null;
   }
@@ -228,18 +243,6 @@ class FirebaseService {
     if (Notification.permission === 'granted') {
        new Notification(title, { body, icon: '/favicon.svg' });
     }
-  }
-
-  onForegroundMessage(callback: (payload: any) => void) {
-    if (!this.messaging) return;
-    return onMessage(this.messaging, (payload) => {
-      console.log("Foreground Message received: ", payload);
-      callback(payload);
-    });
-  }
-
-  getCurrentToken() {
-    return this.token;
   }
 }
 

@@ -65,11 +65,16 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   const animationFrameRef = useRef<number>(0);
 
   useEffect(() => {
-    navigator.mediaDevices.enumerateDevices().then(devices => {
-      const cams = devices.filter(d => d.kind === 'videoinput');
-      setCameraList(cams);
-      if (cams.length > 0) setActiveCameraId(cams[0].deviceId);
-    });
+    // Safety check: enumerateDevices might not exist in some webviews
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+        navigator.mediaDevices.enumerateDevices().then(devices => {
+        const cams = devices.filter(d => d.kind === 'videoinput');
+        setCameraList(cams);
+        if (cams.length > 0) setActiveCameraId(cams[0].deviceId);
+        }).catch(err => {
+            console.warn("Device enumeration failed:", err);
+        });
+    }
     return () => stopSession();
   }, []);
 
@@ -108,12 +113,17 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   }
 
   async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
-    const dataInt16 = new Int16Array(data.buffer);
-    const frameCount = dataInt16.length;
-    const buffer = ctx.createBuffer(1, frameCount, 24000);
-    const channelData = buffer.getChannelData(0);
-    for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i] / 32768.0;
-    return buffer;
+    try {
+        const dataInt16 = new Int16Array(data.buffer);
+        const frameCount = dataInt16.length;
+        const buffer = ctx.createBuffer(1, frameCount, 24000);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i] / 32768.0;
+        return buffer;
+    } catch (e) {
+        console.warn("Audio decode failed", e);
+        throw e;
+    }
   }
 
   // --- Main Logic ---
@@ -133,6 +143,10 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
       inputAudioContextRef.current = new AudioCtx({ sampleRate: 16000 });
 
       // 2. Setup Media Stream (Video + Audio)
+      if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Media devices API not available");
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { deviceId: activeCameraId ? { exact: activeCameraId } : undefined, width: { ideal: 640 }, height: { ideal: 480 } },
         audio: { echoCancellation: true, noiseSuppression: true }
@@ -152,7 +166,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
       updateVisualizer();
 
       // 5. Connect to Gemini Live
-      sessionRef.current = await geminiService.connectMultimodal({
+      const sessionPromise = geminiService.connectMultimodal({
         onopen: () => {
           setIsConnecting(false);
           setIsActive(true);
@@ -165,16 +179,18 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
           proc.connect(inputAudioContextRef.current!.destination);
           
           proc.onaudioprocess = (e) => {
-            if (!sessionRef.current || isMuted) return;
+            if (isMuted) return;
             const data = e.inputBuffer.getChannelData(0);
             const int16 = new Int16Array(data.length);
             for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
-            sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+            sessionPromise.then(session => {
+              session.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+            }).catch(err => console.warn("Session not ready for audio input:", err));
           };
 
           // --- Input Video Pipeline (1 FPS) ---
           videoIntervalRef.current = window.setInterval(() => {
-             if (!videoRef.current || !canvasRef.current || !sessionRef.current) return;
+             if (!videoRef.current || !canvasRef.current) return;
              
              const ctx = canvasRef.current.getContext('2d');
              if (!ctx) return;
@@ -186,7 +202,9 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
              
              // Compress to JPEG and send
              const base64 = canvasRef.current.toDataURL('image/jpeg', 0.6).split(',')[1];
-             sessionRef.current.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } });
+             sessionPromise.then(session => {
+              session.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } });
+            }).catch(err => console.warn("Session not ready for video input:", err));
 
           }, 1000); // 1 Frame per second
         },
@@ -196,33 +214,33 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
              setLatestUser(msg.serverContent.inputTranscription.text);
           }
           if (msg.serverContent?.outputTranscription) {
-             setLatestAI(prev => {
-                // If it's a new turn, clear old? Or append?
-                // Live API sends chunks. We append.
-                return prev + msg.serverContent!.outputTranscription!.text;
-             });
+             setLatestAI(prev => prev + msg.serverContent!.outputTranscription!.text);
           }
           
           // Audio Output
           const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
           if (audio && audioContextRef.current) {
             setAiSpeaking(true);
-            const buf = await decodeAudioData(decodeBase64(audio), audioContextRef.current);
-            const s = audioContextRef.current.createBufferSource();
-            s.buffer = buf;
-            s.connect(analyserRef.current!);
-            
-            const now = audioContextRef.current.currentTime;
-            if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05; // Small buffer
-            
-            s.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += buf.duration;
-            
-            sourcesRef.current.add(s);
-            s.onended = () => {
-               sourcesRef.current.delete(s);
-               if (sourcesRef.current.size === 0) setAiSpeaking(false);
-            };
+            try {
+                const buf = await decodeAudioData(decodeBase64(audio), audioContextRef.current);
+                const s = audioContextRef.current.createBufferSource();
+                s.buffer = buf;
+                s.connect(analyserRef.current!);
+                
+                const now = audioContextRef.current.currentTime;
+                if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05; // Small buffer
+                
+                s.start(nextStartTimeRef.current);
+                nextStartTimeRef.current += buf.duration;
+                
+                sourcesRef.current.add(s);
+                s.onended = () => {
+                   sourcesRef.current.delete(s);
+                   if (sourcesRef.current.size === 0) setAiSpeaking(false);
+                };
+            } catch(e) {
+                console.warn("Audio buffer error", e);
+            }
           }
           
           if (msg.serverContent?.interrupted) {
@@ -235,6 +253,14 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
         onclose: () => stopSession(),
         onerror: (e: any) => { console.error(e); stopSession(); }
       }, { voiceName: selectedVoice, tone: selectedTone });
+      
+      sessionPromise.then(session => {
+        sessionRef.current = session;
+      }).catch(e => {
+        console.error("Failed to connect live session", e);
+        alert("Connection failed. Please try again.");
+        stopSession();
+      });
 
     } catch (e) {
       console.error("Camera Init Failed", e);
@@ -259,8 +285,8 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
     sourcesRef.current.clear();
 
     if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-    if (audioContextRef.current) audioContextRef.current.close();
-    if (inputAudioContextRef.current) inputAudioContextRef.current.close();
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
+    if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') inputAudioContextRef.current.close();
   };
 
   const toggleMute = () => {

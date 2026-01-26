@@ -144,16 +144,13 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   const handleAction = async (command: string) => {
     const rawLatex = mfRef.current?.value;
     
-    // Strict Format Rules for Math Tools
-    const styleInstruction = "Format the answer strictly like a student notebook: use fractions instead of decimals (e.g. 1/2 not 0.5), simplify completely (e.g. 2x+3x -> 5x), use √ for roots, and show steps.";
-
     let prompt = "";
     if (command === 'ai_explain') {
-        prompt = `Please solve this math problem step-by-step and provide a clear final answer: ${rawLatex || "the problem in the attached image"}. ${styleInstruction}`;
+        prompt = `Please solve this math problem step-by-step and provide a clear final answer: ${rawLatex || "the problem in the attached image"}`;
     } else if (command === 'generate_truth_table') {
-        prompt = `Generate a truth table for this logical expression: ${rawLatex || "the expression in the attached image"}. ${styleInstruction}`;
+        prompt = `Generate a truth table for this logical expression: ${rawLatex || "the expression in the attached image"}`;
     } else {
-        prompt = `Execute ${command} on this mathematical expression: ${rawLatex || "the expression in the attached image"}. Briefly summarize the result and provide any necessary steps. ${styleInstruction}`;
+        prompt = `Execute ${command} on this mathematical expression: ${rawLatex || "the expression in the attached image"}. Briefly summarize the result and provide any necessary steps.`;
     }
     
     onSend(prompt, selectedFile || undefined);

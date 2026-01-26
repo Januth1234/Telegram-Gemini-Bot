@@ -1,9 +1,9 @@
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { geminiService } from '../services/geminiService';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import { geminiService, AppError } from '../services/geminiService';
+import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount } from '../types';
-import { markovService } from '../services/markovService';
 
 interface LandingPageProps {
   prompt: string;
@@ -12,422 +12,277 @@ interface LandingPageProps {
   onVoiceOpen: () => void;
   lang: Language;
   user: UserAccount | null;
-  onLogin: () => Promise<void>;
+  onLogin: () => void;
 }
+
+// Client-side text generator for "Loading" states and non-critical content
+const MarkovLoader = () => {
+   const [text, setText] = useState("");
+   useEffect(() => {
+     const words = ["Initializing Neural Core...", "Syncing Knowledge Graph...", "Calibrating Response Vector...", "Optimizing Local Cache..."];
+     let i = 0;
+     const t = setInterval(() => {
+        setText(words[i % words.length]);
+        i++;
+     }, 2000);
+     return () => clearInterval(t);
+   }, []);
+   return <span className="animate-pulse">{text}</span>;
+};
 
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  
-  // Markov Dynamic States
-  const [placeholder, setPlaceholder] = useState(t.howHelp);
-  const [dynamicSlogan, setDynamicSlogan] = useState(t.slogan);
-  const [loadingText, setLoadingText] = useState("Processing...");
-
-  // Initialize Markov Generators
-  useEffect(() => {
-    // Initial generation
-    setPlaceholder(markovService.generatePlaceholder());
-    setDynamicSlogan(markovService.generateSlogan());
-
-    // Cycle placeholder every 4 seconds to keep interface lively
-    const interval = setInterval(() => {
-        if (!prompt) { // Only change if user hasn't typed
-            setPlaceholder(markovService.generatePlaceholder());
-        }
-    }, 4000);
-
-    return () => clearInterval(interval);
-  }, [prompt]);
-
-  // Promo Banner State
-  const [showBanner, setShowBanner] = useState(() => {
-    try {
-      return sessionStorage.getItem('promo_jan_30_dismissed') !== 'true';
-    } catch {
-      return true;
-    }
-  });
-
-  const dismissBanner = () => {
-    setShowBanner(false);
-    try {
-      sessionStorage.setItem('promo_jan_30_dismissed', 'true');
-    } catch {}
-  };
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showPromo, setShowPromo] = useState(() => !sessionStorage.getItem('orin_promo_dismissed'));
 
   const context = useMemo(() => {
     const hour = new Date().getHours();
-    const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-    const weathers = ['sunny', 'cloudy', 'rainy', 'breezy'];
-    const weather = weathers[Math.floor(Math.random() * weathers.length)];
-    return { timeOfDay, weather };
+    return { timeOfDay: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening' };
   }, []);
 
-  const getLocalGreeting = () => {
-    if (lang === 'si') {
-      const timeStr = context.timeOfDay === 'morning' ? 'සුබ උදෑසනක්' : context.timeOfDay === 'afternoon' ? 'සුබ දහවලක්' : 'සුබ සැන්දෑවක්';
-      return `${timeStr} වේවා`;
-    } else if (lang === 'ta') {
-      const timeStr = context.timeOfDay === 'morning' ? 'காலை வணக்கம்' : context.timeOfDay === 'afternoon' ? 'மதிய வணக்கம்' : 'மாலை வணக்கம்';
-      return `ஓரின் AI உடன் ${timeStr}`;
-    } else {
-      return `Good ${context.timeOfDay}`;
+  const handleSignIn = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    try {
+      await firebaseService.loginWithGoogle();
+      // App.tsx auth listener will handle state update and redirection
+    } catch (e) {
+      console.error("Login failed", e);
+      setIsLoggingIn(false);
     }
   };
 
-  const [greeting, setGreeting] = useState(getLocalGreeting);
-
-  const fetchAiGreeting = useCallback(async () => {
-    try {
-      const aiGreeting = await geminiService.generateWelcomeMessage({
-        timeOfDay: context.timeOfDay,
-        weather: context.weather,
-        lang
-      });
-      if (aiGreeting) setGreeting(aiGreeting);
-    } catch (e) {}
-  }, [lang, context]);
-
-  useEffect(() => {
-    setGreeting(getLocalGreeting()); 
-    fetchAiGreeting();
-  }, [lang, fetchAiGreeting]);
-
-  // Handle Search Action
-  const handleSearch = async () => {
-    if (!prompt.trim()) return;
-
-    if (user) {
-        // Authenticated users go to main chat
+  const handleGuestSubmit = async () => {
+     if (!prompt.trim()) return;
+     
+     // If user is logged in, use standard flow
+     if (user) {
         onStartChat(prompt, 'chat');
-    } else {
-        // Guest users get inline response
-        setIsProcessing(true);
-        setGuestResult(null);
-        
-        // Generate dynamic loading text using Markov chain
-        const loaderInterval = setInterval(() => {
-            setLoadingText(markovService.generateLoadingMessage());
-        }, 1500);
+        return;
+     }
 
-        try {
-            const res = await geminiService.chat(prompt);
-            setGuestResult(res.text);
-        } catch (e: any) {
-            if (e.message.includes('limit')) {
-                setGuestResult("Guest Limit Reached (5/5). Please sign in to continue accessing specialized neural features.");
-            } else {
-                setGuestResult("Connection error. Please try again.");
-            }
-        } finally {
-            clearInterval(loaderInterval);
-            setIsProcessing(false);
+     // Guest Mode Logic
+     setIsGuestLoading(true);
+     setGuestResult(null);
+     try {
+        const res = await geminiService.chat(prompt, { useThinking: false }); // Fast model for guests
+        setGuestResult(res.text);
+     } catch (e: any) {
+        if (e.message && e.message.includes("limit")) {
+           setGuestResult("Guest demo limit reached. Please sign in to continue for free.");
+        } else {
+           setGuestResult("Connection interrupted. Please try again.");
         }
-    }
+     } finally {
+        setIsGuestLoading(false);
+     }
   };
 
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
       
-      {/* Promo Banner */}
-      {showBanner && (
-        <div className="w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white px-4 py-3 shrink-0 relative z-50 shadow-lg animate-in slide-in-from-top duration-500">
-            <div className="max-w-6xl mx-auto flex items-center justify-center md:justify-between gap-4">
-                <div className="flex items-center gap-3">
-                    <span className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0 animate-pulse">
-                        <i className="fa-solid fa-gift text-xs"></i>
-                    </span>
-                    <p className="text-[10px] md:text-xs font-black uppercase tracking-widest text-center md:text-left">
-                        {lang === 'si' 
-                            ? "විශේෂ දැනුම්දීමයි: ජනවාරි 30 දක්වා සියලුම Orin සේවාවන් නොමිලේ!" 
-                            : lang === 'ta' 
-                            ? "ஜனவரி 30 வரை அனைத்து சேவைகளும் இலவசம்!" 
-                            : "Limited Offer: All services are FREE for everyone throughout January (until Jan 30)!"}
-                    </p>
-                </div>
-                <button 
-                    onClick={dismissBanner} 
-                    className="w-6 h-6 flex items-center justify-center rounded-full bg-white/10 hover:bg-white/30 transition-all shrink-0 absolute right-4 md:static"
-                    aria-label="Dismiss Promo Banner"
-                >
-                    <i className="fa-solid fa-xmark text-[10px]"></i>
-                </button>
-            </div>
+      {/* Promotional Banner */}
+      {showPromo && (
+        <div className="w-full bg-indigo-600 text-white px-4 py-2 flex items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest relative z-[200]">
+           <span className="text-center truncate">🚀 Orin AI v5.0 is Live! Free Elite Plan for Early Adopters.</span>
+           <button onClick={() => { setShowPromo(false); sessionStorage.setItem('orin_promo_dismissed', 'true'); }} className="opacity-50 hover:opacity-100"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
 
-      <article className="w-full max-w-6xl px-6 py-12 md:py-24 flex flex-col items-center gap-16 md:gap-24 text-center">
+      <article className="w-full max-w-6xl px-4 md:px-6 py-8 md:py-24 flex flex-col items-center gap-10 md:gap-24 text-center">
         
         {/* Hero Section */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade">
-          <div className="flex flex-col items-center gap-8">
-            <div className="w-24 h-24 md:w-32 md:h-32 bg-cyan-600 rounded-[32px] flex items-center justify-center text-white shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
+          <div className="flex flex-col items-center gap-6 md:gap-8">
+            <div className="w-20 h-20 md:w-32 md:h-32 bg-cyan-600 rounded-[28px] md:rounded-[32px] flex items-center justify-center text-white shadow-2xl hover:scale-100 transition-transform duration-500 relative group">
               <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <i className="fa-solid fa-bolt text-5xl md:text-7xl relative z-10"></i>
+              <i className="fa-solid fa-bolt text-4xl md:text-7xl relative z-10"></i>
             </div>
             
-            <div className="space-y-6">
-              {/* Corrected H1 Strategy for SEO */}
-              <h1 className="text-6xl md:text-9xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.85]">
-                Orin AI
+            <div className="space-y-4 md:space-y-6">
+              <h1 className="text-4xl md:text-8xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.9]">
+                {t.welcome}
               </h1>
-              <div className="min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
-                  <h2 className="text-xl md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal max-w-2xl leading-snug">
-                    {greeting}
+              <div className="min-h-[3rem] md:min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
+                  <h2 className="text-lg md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal max-w-2xl leading-snug">
+                    {`Good ${context.timeOfDay}. Orin AI is ready.`}
                   </h2>
-                  <p className="text-[10px] md:text-xs font-black tracking-[0.4em] uppercase text-slate-400 dark:text-slate-500">
-                    {lang === 'en' ? dynamicSlogan : t.slogan} <span className="sr-only">Built by Januth Nimnal for Sri Lanka</span>
-                  </p>
               </div>
             </div>
           </div>
 
-          <div className="w-full max-w-2xl px-2 space-y-6">
+          <div className="w-full max-w-2xl px-2 relative z-10">
+            {/* Guest Chat / Input Area */}
             <div className="relative group w-full">
               <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[24px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
-              <div className="relative glass-panel p-2 rounded-[24px] flex items-center shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10">
-                <input 
-                  type="text" 
-                  value={prompt} 
-                  onChange={(e) => onPromptChange(e.target.value)} 
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                  placeholder={placeholder} 
-                  aria-label="Ask Orin AI anything"
-                  className="flex-1 bg-transparent border-none focus:ring-0 text-base md:text-2xl px-4 md:px-6 py-4 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0 transition-all"
-                />
-                <button 
-                  onClick={handleSearch} 
-                  disabled={isProcessing}
-                  aria-label="Start Generation"
-                  className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-12 md:h-16 px-6 md:px-10 rounded-[20px] font-black text-xs md:text-sm uppercase tracking-widest shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
-                >
-                  {isProcessing ? (
-                      <i className="fa-solid fa-circle-notch animate-spin"></i>
-                  ) : (
-                      <span>{prompt.trim() ? t.go : (lang === 'si' ? "Orin අරඹන්න" : lang === 'ta' ? "ஓரினைத் தொடங்க" : "Start Orin")}</span>
-                  )}
-                  {!prompt.trim() && !isProcessing && <i className="fa-solid fa-arrow-right"></i>}
-                </button>
+              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 overflow-hidden">
+                
+                {/* Result Area (Guest Only) */}
+                {(guestResult || isGuestLoading) && (
+                   <div className="p-4 md:p-6 border-b border-black/5 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 text-left animate-reveal max-h-60 overflow-y-auto custom-scrollbar">
+                      <div className="flex items-center gap-2 mb-2">
+                         <i className="fa-solid fa-robot text-cyan-600"></i>
+                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Orin Guest Mode</span>
+                      </div>
+                      <div className="text-xs md:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                         {isGuestLoading ? <MarkovLoader /> : guestResult}
+                      </div>
+                      {guestResult && guestResult.includes("limit") && (
+                         <button onClick={handleSignIn} disabled={isLoggingIn} className="mt-4 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50">
+                            {isLoggingIn ? "Signing In..." : "Sign In Free"}
+                         </button>
+                      )}
+                   </div>
+                )}
+
+                <div className="flex items-center pl-2">
+                    <input 
+                    type="text" 
+                    value={prompt} 
+                    onChange={(e) => onPromptChange(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
+                    placeholder={user ? t.howHelp : "Try a demo (e.g. 'Explain Quantum Physics')"} 
+                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
+                    />
+                    <button 
+                    onClick={handleGuestSubmit} 
+                    disabled={isGuestLoading || !prompt.trim()}
+                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-xl hover:scale-100 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 m-1"
+                    >
+                    <span>{user ? t.go : (isGuestLoading ? "..." : "Demo")}</span>
+                    {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
+                    </button>
+                </div>
               </div>
             </div>
-
-            {/* Guest Result Display */}
-            {guestResult && (
-                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-[32px] p-8 text-left shadow-xl animate-reveal">
-                    <div className="flex items-center justify-between mb-4">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-cyan-600">Guest Mode (5 Prompts Max)</span>
-                        <button onClick={() => setGuestResult(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-400 hover:text-red-500"><i className="fa-solid fa-xmark"></i></button>
-                    </div>
-                    <div className={`text-base text-slate-800 dark:text-slate-200 leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(guestResult) ? 'sinhala-text' : ''}`}>
-                        {guestResult}
-                    </div>
-                    {guestResult.includes("Limit Reached") && (
-                        <button onClick={onLogin} className="mt-6 w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-xs uppercase tracking-widest">
-                            Sign In to Continue
-                        </button>
-                    )}
-                </div>
-            )}
             
-            {/* Loading Overlay for Guest Mode */}
-            {isProcessing && !guestResult && (
-                <div className="mt-4 animate-pulse text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    {loadingText}
-                </div>
-            )}
-
-            {!user && !guestResult && !isProcessing && (
-               <button onClick={onLogin} className="mt-8 flex items-center gap-3 px-8 py-4 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95 mx-auto">
-                 <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-                 <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">{lang === 'si' ? 'Google සමඟ එක්වන්න' : lang === 'ta' ? 'கூகுள் மூலம் இணையுங்கள்' : 'Join with Google'}</span>
-               </button>
+            {!user && !guestResult && (
+               <div className="mt-6 flex flex-col items-center gap-3 animate-slide-in-up">
+                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Guest Limit: 5 Prompts</p>
+                 <button onClick={handleSignIn} disabled={isLoggingIn} className="flex items-center gap-3 px-6 py-3 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-70">
+                    {isLoggingIn ? <i className="fa-solid fa-circle-notch animate-spin text-slate-500"></i> : <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />}
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{isLoggingIn ? "Authenticating..." : "Sign In to Unlock Full Orin AI"}</span>
+                 </button>
+               </div>
             )}
           </div>
         </section>
-
-        {/* Feature Grid */}
-        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up" aria-label="Orin AI Features">
-          <header className="flex items-center gap-6 opacity-40">
-             <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
-             <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Neural Tools</h3>
-             <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
-          </header>
-          
-          <div className="flex flex-wrap justify-center gap-4 md:gap-8">
-            <FeatureCard icon="fa-message" title={t.reasoning} desc={t.featureDesc.chat} onClick={() => onStartChat(prompt, 'chat')} color="cyan" lang={lang} />
-            <FeatureCard icon="fa-calculator" title={t.maths} desc={t.featureDesc.solve} onClick={() => onStartChat(prompt, 'maths')} color="indigo" isBeta lang={lang} />
-            <FeatureCard icon="fa-palette" title={t.creative} desc={t.featureDesc.create} onClick={() => onStartChat(prompt, 'studio')} color="purple" lang={lang} />
-            <FeatureCard icon="fa-camera" title={t.vision} desc={t.featureDesc.visuals} onClick={() => onStartChat(prompt, 'vision')} color="emerald" lang={lang} />
-            <FeatureCard icon="fa-microphone-lines" title={t.voice} desc={t.featureDesc.voice} onClick={onVoiceOpen} color="blue" isBeta lang={lang} />
-            <FeatureCard icon="fa-wand-sparkles" title={t.getHelp} desc={t.featureDesc.agents} onClick={() => onStartChat(prompt, 'gethelp')} color="emerald" isBeta lang={lang} />
-          </div>
-        </section>
-
-        {/* EXPANDED SEO CONTENT SECTION */}
-        <article className="w-full max-w-5xl py-12 text-left space-y-16 text-slate-600 dark:text-slate-400">
-           {/* Section 1: Introduction */}
-           <section className="space-y-6">
-              <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter">Your Intelligent Assistant for Sri Lanka</h2>
-              <p className="leading-relaxed text-sm md:text-base font-medium">
-                 Orin AI is designed to bridge the gap between global artificial intelligence capabilities and local usability. 
-                 Supporting <strong>Sinhala, Tamil, and English</strong> natively, Orin empowers students, professionals, and creatives 
-                 to access state-of-the-art neural reasoning without language barriers. Whether you need to draft emails, 
-                 solve complex mathematics, or generate photorealistic images, Orin acts as your personal digital companion.
-              </p>
-           </section>
-
-           {/* Section 2: Detailed Features */}
-           <section className="space-y-8">
-              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">Core Capabilities</h3>
-              <div className="grid md:grid-cols-2 gap-8">
-                 <div className="space-y-4">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-language text-cyan-500"></i> Bilingual Reasoning</h4>
-                    <p className="text-sm">Switch seamlessly between languages to get answers in the format you understand best. Orin understands local context, idioms, and cultural nuances in both Sinhala and Tamil.</p>
-                 </div>
-                 <div className="space-y-4">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-eye text-cyan-500"></i> Visual Intelligence (Vision)</h4>
-                    <p className="text-sm">Upload photos to extract text (OCR) or get detailed descriptions of scenes. Solve math problems simply by taking a picture of your notebook.</p>
-                 </div>
-                 <div className="space-y-4">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-palette text-cyan-500"></i> Studio Create</h4>
-                    <p className="text-sm">Generate high-quality images and short videos using simple text prompts. Perfect for content creators, marketers, and digital artists.</p>
-                 </div>
-                 <div className="space-y-4">
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2"><i className="fa-solid fa-microphone text-cyan-500"></i> Voice Assistant</h4>
-                    <p className="text-sm">Talk to Orin naturally. The voice mode supports real-time conversation, making it accessible for users who prefer speaking over typing.</p>
-                 </div>
-              </div>
-           </section>
-
-           {/* Section 3: Use Cases */}
-           <section className="space-y-8">
-              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">Who is Orin For?</h3>
-              <ul className="grid md:grid-cols-3 gap-6">
-                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
-                    <div className="flex items-center gap-3 mb-3">
-                        <i className="fa-solid fa-user-graduate text-indigo-500 text-xl"></i>
-                        <strong className="text-slate-900 dark:text-white">Students</strong>
-                    </div>
-                    <p className="text-xs">Get help with math problems, summaries, and research in your mother tongue. Clarify complex concepts instantly.</p>
-                 </li>
-                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
-                    <div className="flex items-center gap-3 mb-3">
-                        <i className="fa-solid fa-briefcase text-indigo-500 text-xl"></i>
-                        <strong className="text-slate-900 dark:text-white">Professionals</strong>
-                    </div>
-                    <p className="text-xs">Draft emails, translate documents, and organize data instantly. Boost your workflow efficiency.</p>
-                 </li>
-                 <li className="glass-panel p-6 rounded-2xl border border-black/5 dark:border-white/5">
-                    <div className="flex items-center gap-3 mb-3">
-                        <i className="fa-solid fa-pen-nib text-indigo-500 text-xl"></i>
-                        <strong className="text-slate-900 dark:text-white">Creators</strong>
-                    </div>
-                    <p className="text-xs">Brainstorm ideas, write scripts, and visualize concepts with the Studio tool. Overcome writer's block.</p>
-                 </li>
-              </ul>
-           </section>
-
-           {/* Section 4: Instructions */}
-           <section className="space-y-6">
-              <h3 className="text-xl font-black text-slate-800 dark:text-slate-200 border-b border-black/5 dark:border-white/5 pb-4">How to Get Started</h3>
-              <ol className="list-decimal list-inside space-y-4 text-sm font-medium pl-2">
-                 <li><strong>Type a Prompt:</strong> Use the main input box above to ask a question or give a command in English, Sinhala, or Tamil.</li>
-                 <li><strong>Select a Mode:</strong> Click on specific tools like "Studio" for images or "Math" for calculations if you need specialized help.</li>
-                 <li><strong>Sign In (Optional):</strong> Create a free account to save your chat history and access higher usage limits.</li>
-                 <li><strong>Explore:</strong> Try the "Voice" mode for hands-free interaction or "Vision" to analyze images.</li>
-              </ol>
-           </section>
-        </article>
 
         {/* Navigation Grid */}
-        <section className="w-full max-w-6xl space-y-12 animate-slide-in-up" aria-label="Site Navigation">
-          <header className="flex items-center gap-6 opacity-40">
-             <div className="h-px flex-1 bg-gradient-to-r from-transparent to-slate-400 dark:to-slate-600"></div>
-             <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Archive</span>
-             <div className="h-px flex-1 bg-gradient-to-l from-transparent to-slate-400 dark:to-slate-600"></div>
-          </header>
-          
-          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+        <section className="w-full max-w-6xl space-y-8 md:space-y-12 animate-slide-in-up">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-6 px-2 md:px-0 place-items-center">
               <NavCard href="#downloads" icon="fa-download" color="cyan" title={t.downloads} lang={lang} />
               <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} lang={lang} />
               <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} lang={lang} />
               <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} lang={lang} />
               <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} lang={lang} />
               <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} lang={lang} />
-              <NavCard href="#terms" icon="fa-file-contract" color="indigo" title={t.terms} lang={lang} />
           </div>
         </section>
-        
-        <footer className="w-full py-16 border-t border-black/5 dark:border-white/5 mt-12 flex flex-col items-center gap-8">
-          {/* Social Media Links */}
-          <div className="flex gap-6">
-             <a href="https://www.instagram.com/januth10.1/" target="_blank" aria-label="Instagram" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-900/20 transition-all"><i className="fa-brands fa-instagram text-lg"></i></a>
-             <a href="https://web.facebook.com/januth10.1/" target="_blank" aria-label="Facebook" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-facebook-f text-lg"></i></a>
-             <a href="https://www.tiktok.com/@januth10.1" target="_blank" aria-label="TikTok" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-black dark:hover:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all"><i className="fa-brands fa-tiktok text-lg"></i></a>
-             <a href="#" aria-label="YouTube" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"><i className="fa-brands fa-youtube text-lg"></i></a>
-             <a href="#" aria-label="LinkedIn" className="w-10 h-10 rounded-full bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"><i className="fa-brands fa-linkedin-in text-lg"></i></a>
+
+        {/* Detailed Information Section */}
+        <section className="w-full max-w-5xl px-4 py-16 space-y-16 text-slate-600 dark:text-slate-400 text-left md:text-center animate-reveal">
+          
+          <div className="space-y-6">
+             <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Your Intelligent Assistant for Sri Lanka</h3>
+             <p className="text-sm md:text-base font-medium leading-relaxed max-w-3xl mx-auto">
+               Orin AI is designed to bridge the gap between global artificial intelligence capabilities and local usability. Supporting Sinhala, Tamil, and English natively, Orin empowers students, professionals, and creatives to access state-of-the-art neural reasoning without language barriers. Whether you need to draft emails, solve complex mathematics, or generate photorealistic images, Orin acts as your personal digital companion.
+             </p>
           </div>
-          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-slate-500">© 2026 JN Productions Global • All Rights Reserved</p>
+
+          <div className="space-y-8">
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">Core Capabilities</h4>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                <InfoCard icon="fa-language" title="Bilingual Reasoning" desc="Switch seamlessly between languages to get answers in the format you understand best. Orin understands local context, idioms, and cultural nuances in both Sinhala and Tamil." />
+                <InfoCard icon="fa-eye" title="Visual Intelligence (Vision)" desc="Upload photos to extract text (OCR) or get detailed descriptions of scenes. Solve math problems simply by taking a picture of your notebook." />
+                <InfoCard icon="fa-palette" title="Studio Create" desc="Generate high-quality images and short videos using simple text prompts. Perfect for content creators, marketers, and digital artists." />
+                <InfoCard icon="fa-microphone" title="Voice Assistant" desc="Talk to Orin naturally. The voice mode supports real-time conversation, making it accessible for users who prefer speaking over typing." />
+             </div>
+          </div>
+
+          <div className="space-y-8">
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">Who is Orin For?</h4>
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                <AudienceCard title="Students" desc="Get help with math problems, summaries, and research in your mother tongue. Clarify complex concepts instantly." />
+                <AudienceCard title="Professionals" desc="Draft emails, translate documents, and organize data instantly. Boost your workflow efficiency." />
+                <AudienceCard title="Creators" desc="Brainstorm ideas, write scripts, and visualize concepts with the Studio tool. Overcome writer's block." />
+             </div>
+          </div>
+
+          <div className="space-y-8">
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">How to Get Started</h4>
+             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                <StepRow num="01" title="Type a Prompt" desc="Use the main input box above to ask a question or give a command in English, Sinhala, or Tamil." />
+                <StepRow num="02" title="Select a Mode" desc="Click on specific tools like 'Studio' for images or 'Math' for calculations if you need specialized help." />
+                <StepRow num="03" title="Sign In (Optional)" desc="Create a free account to save your chat history and access higher usage limits." />
+                <StepRow num="04" title="Explore" desc="Try the 'Voice' mode for hands-free interaction or 'Vision' to analyze images." />
+             </div>
+          </div>
+
+        </section>
+
+        {/* Footer with Socials */}
+        <footer className="w-full py-16 border-t border-black/5 dark:border-white/5 mt-12 w-screen">
+            <div className="max-w-6xl mx-auto flex flex-col items-center gap-8 px-6">
+               <div className="flex flex-wrap justify-center gap-6">
+                  <SocialIcon icon="fa-instagram" href="https://www.instagram.com/januth10.1/" />
+                  <SocialIcon icon="fa-facebook-f" href="https://web.facebook.com/januth10.1/" />
+                  <SocialIcon icon="fa-tiktok" href="https://www.tiktok.com/@januth10.1" />
+                  <SocialIcon icon="fa-youtube" href="#" />
+                  <SocialIcon icon="fa-linkedin-in" href="#" />
+               </div>
+               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 text-center">© 2026 JN Productions Global • All Rights Reserved</p>
+            </div>
         </footer>
       </article>
     </main>
   );
 };
 
-// ... (Helper Components kept as is) ...
-const FeatureCard = ({ icon, title, desc, onClick, color, isBeta, lang }: any) => {
-  const colors: Record<string, string> = {
-    cyan: "group-hover:text-cyan-500",
-    indigo: "group-hover:text-indigo-500",
-    purple: "group-hover:text-purple-500",
-    emerald: "group-hover:text-emerald-500",
-    blue: "group-hover:text-blue-500"
-  };
-
-  return (
-    <button onClick={onClick} className="glass-panel w-40 h-40 md:w-48 md:h-48 rounded-[32px] flex flex-col items-center justify-center gap-4 hover:-translate-y-3 hover:shadow-2xl transition-all duration-500 group border border-slate-200 dark:border-white/5 relative bg-white/50 dark:bg-slate-900/50">
-      {isBeta && (
-        <div className="absolute top-4 right-4 flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-        </div>
-      )}
-      <div className={`w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:scale-125 transition-all duration-500 shadow-sm border border-slate-100 dark:border-white/5 ${colors[color]}`}>
-        <i className={`fa-solid ${icon} text-2xl md:text-3xl`}></i>
-      </div>
-      <div className="space-y-0.5 px-4 text-center">
-        <h4 className={`text-[11px] font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h4>
-        <p className={`text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter opacity-60 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
-      </div>
-    </button>
-  );
-};
-
 const NavCard = ({ href, icon, title, color, lang }: any) => {
-  const colors: Record<string, string> = {
-    cyan: "group-hover:text-cyan-500",
-    indigo: "group-hover:text-indigo-500",
-    purple: "group-hover:text-purple-500",
-    emerald: "group-hover:text-emerald-500",
-    orange: "group-hover:text-orange-500",
-    pink: "group-hover:text-pink-500",
-    violet: "group-hover:text-violet-500",
-    blue: "group-hover:text-blue-500"
-  };
-
+  const colors: Record<string, string> = { cyan: "group-hover:text-cyan-500", indigo: "group-hover:text-indigo-500", purple: "group-hover:text-purple-500", emerald: "group-hover:text-emerald-500", orange: "group-hover:text-orange-500", pink: "group-hover:text-pink-500", violet: "group-hover:text-violet-500", blue: "group-hover:text-blue-500" };
   return (
-    <a 
-      href={href} 
-      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group"
-    >
-      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner ${colors[color]}`}>
-        <i className={`fa-solid ${icon} text-lg`}></i>
-      </div>
+    <a href={href} className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
+      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner group-hover:text-pink-500 ${colors[color]}`}><i className={`fa-solid ${icon} text-lg`}></i></div>
       <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );
 };
+
+// Helper Components for Info Section
+const InfoCard = ({ icon, title, desc }: any) => (
+  <div className="flex gap-4 p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-cyan-500/20 transition-colors">
+     <div className="w-12 h-12 shrink-0 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${icon} text-xl`}></i></div>
+     <div>
+        <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-2">{title}</h5>
+        <p className="text-xs leading-relaxed opacity-80">{desc}</p>
+     </div>
+  </div>
+);
+
+const AudienceCard = ({ title, desc }: any) => (
+  <div className="p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:-translate-y-1 transition-transform">
+     <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-3 border-b border-black/5 dark:border-white/5 pb-2 inline-block">{title}</h5>
+     <p className="text-xs leading-relaxed opacity-80">{desc}</p>
+  </div>
+);
+
+const StepRow = ({ num, title, desc }: any) => (
+  <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors">
+     <span className="text-xs font-black text-cyan-600 dark:text-cyan-400 opacity-60 bg-cyan-500/10 px-2 py-1 rounded">{num}</span>
+     <div>
+        <h6 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide mb-1">{title}</h6>
+        <p className="text-xs leading-relaxed opacity-70">{desc}</p>
+     </div>
+  </div>
+);
+
+const SocialIcon = ({ icon, href }: any) => (
+  <a href={href} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 transition-all shadow-sm">
+     <i className={`fa-brands ${icon} text-lg`}></i>
+  </a>
+);
 
 export default LandingPage;

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -11,431 +11,232 @@ import CreatorPage from './components/CreatorPage';
 import PricingPage from './components/PricingPage';
 import DownloadsPage from './components/DownloadsPage';
 import VoiceAssistant from './components/VoiceAssistant';
-import GetHelpMode from './components/GetHelpMode';
-import MathsMode from './components/MathsMode';
-import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, UserTier } from './types';
+import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
 import { cacheService, CacheKey } from './services/cacheService';
-import { subscriptionService } from './services/subscriptionService';
 import { translations } from './translations';
 
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
   const [theme, setTheme] = useState<'dark' | 'light'>(() => cacheService.get<string | null>(CacheKey.THEME, null) as any || 'light');
-
   const t = translations[lang];
 
-  // Robust Dynamic Viewport Height System
-  useEffect(() => {
-    const setViewportHeight = () => {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    };
-    setViewportHeight();
-    window.addEventListener('resize', setViewportHeight);
-    window.addEventListener('orientationchange', setViewportHeight);
-    window.visualViewport?.addEventListener('resize', setViewportHeight);
-    return () => {
-      window.removeEventListener('resize', setViewportHeight);
-      window.removeEventListener('orientationchange', setViewportHeight);
-      window.visualViewport?.removeEventListener('resize', setViewportHeight);
-    };
-  }, []);
+  // Global Auth State
+  const [user, setUser] = useState<UserAccount | null>(null);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
-  const getInitialView = (): AppView => {
-    const hash = window.location.hash.replace('#', '').split('?')[0];
-    if (hash === 'returnterms') return 'privacy';
-    const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
-    return validViews.includes(hash as any) ? hash as AppView : 'landing';
-  };
-
-  const [view, setView] = useState<AppView>(getInitialView());
-  const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
-  const [isAuthReady, setIsAuthReady] = useState(false); // Track if Firebase auth check is complete
-  const [globalPrompt, setGlobalPrompt] = useState(() => cacheService.get<string>(CacheKey.DRAFT_PROMPT, ''));
+  // App State
+  const [view, setView] = useState<AppView>('landing');
+  const [globalPrompt, setGlobalPrompt] = useState('');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
-  
-  // Sync States
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [isCloudHydrated, setIsCloudHydrated] = useState(false); 
-  
-  // Memory Core Logic
-  const msgCounterRef = useRef(0);
-  const saveTimeoutRef = useRef<number | null>(null);
 
-  const [conversations, setConversations] = useState<Conversation[]>(() => {
-    const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
-    try {
-      return saved.map((c: any) => ({
-        ...c,
-        timestamp: new Date(c.timestamp),
-        messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-      }));
-    } catch { return []; }
-  });
-
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
-
-  // Handle URL Query Params
+  // Viewport Height Fix
   useEffect(() => {
-    const handleUrlParams = () => {
-        const hash = window.location.hash;
-        const qIndex = hash.indexOf('?');
-        if (qIndex !== -1) {
-            const params = new URLSearchParams(hash.substring(qIndex + 1));
-            const p = params.get('prompt');
-            if (p) setGlobalPrompt(decodeURIComponent(p));
-        }
-    };
-    handleUrlParams(); 
-    window.addEventListener('hashchange', handleUrlParams);
-    return () => window.removeEventListener('hashchange', handleUrlParams);
+    const setVh = () => document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+    setVh();
+    window.addEventListener('resize', setVh);
+    return () => window.removeEventListener('resize', setVh);
   }, []);
 
-  const navigate = (newView: AppView) => {
-    if (newView === 'landing') {
-        // Explicitly use /# for landing/home to distinguish from root /
-        // This prevents the auth redirect loop for logged-in users who want to see the home page
-        window.history.pushState(null, '', '/#');
-    } else {
-        window.location.hash = newView;
-    }
-    setView(newView); 
-  };
-
+  // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
-    const handleHash = () => setView(getInitialView());
+    // Safety timeout to prevent infinite loading if Firebase hangs
+    const safetyTimeout = setTimeout(() => {
+      if (!authInitialized) {
+        console.warn("Auth initialization timed out, falling back to guest mode.");
+        setAuthInitialized(true);
+      }
+    }, 3000);
+
+    const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
+      clearTimeout(safetyTimeout);
+      if (authUser) {
+         try {
+           const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || "user@orin.ai");
+           geminiService.setSessionUser(syncedUser);
+           setUser(syncedUser);
+           
+           // Sync History
+           setSyncStatus('syncing');
+           const cloudHistory = await firebaseService.getHistory(authUser.uid);
+           if (cloudHistory) mergeHistory(cloudHistory);
+           setSyncStatus('success');
+         } catch (e) {
+           console.error("User Sync Failed", e);
+           setSyncStatus('error');
+         }
+      } else {
+        setUser(null);
+        geminiService.logout();
+      }
+      setAuthInitialized(true);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(safetyTimeout);
+    };
+  }, []);
+
+  // --- 2. ROUTING LOGIC ---
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '').split('?')[0];
+      
+      // Protection Rule: 'chat' requires Auth
+      if ((hash === 'chat' || hash === 'art' || hash === 'camera') && !user && authInitialized) {
+         window.location.hash = ''; // Redirect to landing
+         return;
+      }
+
+      // Root Rule: If Auth & Root, go to Chat
+      if (!hash && user && authInitialized) {
+         window.location.hash = 'chat';
+         return;
+      }
+
+      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
+      setView(validViews.includes(hash as any) ? hash as AppView : 'landing');
+    };
+
+    if (authInitialized) handleHash();
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
-  }, []);
+  }, [user, authInitialized]);
 
-  // --- ROUTING GUARD ---
+  // --- 3. CONVERSATION STATE ---
+  const [conversations, setConversations] = useState<Conversation[]>(() => {
+    try {
+      const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
+      return Array.isArray(saved) ? saved.map((c: any) => ({
+        ...c, timestamp: new Date(c.timestamp), messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
+      })) : [];
+    } catch { return []; }
+  });
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
+
+  // Sync to LocalStorage & Cloud
+  const saveTimeoutRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!isAuthReady) return;
-
-    const hash = window.location.hash;
-    // Check if URL ends with # (explicit home) or matches #landing
-    const isExplicitHome = window.location.href.endsWith('#') || hash === '#landing';
-    // Root is empty hash AND NOT explicit home
-    const isRoot = (hash === '' || hash === '#') && !isExplicitHome && !window.location.href.endsWith('#');
+    cacheService.set(CacheKey.HISTORY, conversations);
+    if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     
-    // Protected routes: Chat interface and tools
-    const isProtected = hash.startsWith('#chat') || 
-                        hash.startsWith('#art') || 
-                        hash.startsWith('#camera') || 
-                        hash.startsWith('#voice') || 
-                        hash.startsWith('#math') || 
-                        hash.startsWith('#help') || 
-                        hash.startsWith('#account');
-
-    if (user) {
-      // LOGGED IN
-      // 1. Visit Root (orinai.org) -> Redirect to #chat
-      // 2. Visit Explicit Home (orinai.org/#) -> Stay
-      // 3. Visit Protected -> Stay
-      if (hash === '' && !isExplicitHome) {
-         navigate('chat');
-      }
-    } else {
-      // LOGGED OUT
-      // 1. Visit Root -> Stay
-      // 2. Visit Explicit Home -> Stay
-      // 3. Visit Protected -> Redirect to Landing
-      if (isProtected) {
-         navigate('landing');
-      }
+    if (user?.id) {
+       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+       saveTimeoutRef.current = window.setTimeout(() => {
+          setSyncStatus('syncing');
+          firebaseService.saveHistory(user.id, conversations).then(() => {
+             setSyncStatus('success');
+             setTimeout(() => setSyncStatus('idle'), 2000);
+          }).catch(() => setSyncStatus('error'));
+       }, 3000);
     }
-  }, [isAuthReady, user, view]); // Re-run on auth state or view change
+  }, [conversations, activeConversationId, user?.id]);
 
-  // --- LOCAL PERSISTENCE ---
-  useEffect(() => {
-    // Only save public conversations to local storage
-    const publicConversations = conversations.filter(c => !c.isPrivate);
-    cacheService.set(CacheKey.HISTORY, publicConversations);
-    
-    // If active conversation is private, don't persist its ID as "last active"
-    const activeConv = conversations.find(c => c.id === activeConversationId);
-    if (activeConversationId && activeConv && !activeConv.isPrivate) {
-      cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
-    } else {
-      cacheService.remove(CacheKey.ACTIVE_CONV);
-    }
-  }, [conversations, activeConversationId]);
-
-  // --- MEMORY EVOLUTION & CLOUD SYNC (SAVE) ---
-  useEffect(() => {
-    if (user?.id && isCloudHydrated) {
-      if (saveTimeoutRef.current) window.clearTimeout(saveTimeoutRef.current);
-      
-      saveTimeoutRef.current = window.setTimeout(async () => {
-        setSyncStatus('syncing');
-        
-        // 1. Evolve Bio if needed (every 5 messages roughly)
-        let newBio = user.neuralBio || "";
-        const activeConv = conversations.find(c => c.id === activeConversationId);
-        
-        // Skip bio evolution for private chats
-        if (activeConv && !activeConv.isPrivate) {
-            const activeMsgs = activeConv.messages || [];
-            
-            if (activeMsgs.length > 0 && activeMsgs.length % 5 === 0) {
-                 console.log("Memory Core: Evolving user bio...");
-                 newBio = await geminiService.evolveUserBio(newBio, activeMsgs);
-                 
-                 // Update local user state with new bio
-                 if (newBio !== user.neuralBio) {
-                     const updatedUser = { ...user, neuralBio: newBio };
-                     setUser(updatedUser);
-                     geminiService.setSessionUser(updatedUser);
-                 }
-            }
-        }
-
-        // 2. Save ONLY PUBLIC conversations to Firestore
-        const publicConversations = conversations.filter(c => !c.isPrivate);
-        
-        firebaseService.saveUserData(user.id, publicConversations, newBio)
-          .then(() => {
-            setSyncStatus('success');
-            setTimeout(() => setSyncStatus('idle'), 2000);
-          })
-          .catch((e) => {
-            console.error("Auto-save failed", e);
-            setSyncStatus('error');
-          });
-      }, 2000); // 2 second debounce to allow typing to finish
-    }
-  }, [conversations, user?.id, isCloudHydrated]);
-
-  // --- AUTH & CLOUD HYDRATION (LOAD) ---
-  useEffect(() => {
-    const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
-      if (authUser) {
-         const newUser: UserAccount = { 
-            id: authUser.uid, 
-            name: authUser.displayName || "User", 
-            email: authUser.email || "user@orin.ai", 
-            avatar: authUser.photoURL || undefined, 
-            tier: 'Verified Member',
-            plan: 'free',
-            usage: { prompts: 0, images: 0, videos: 0, lastReset: new Date() }
-         };
-         
-         await subscriptionService.syncUser(newUser);
-
-         try {
-             const sub = await subscriptionService.getUserSubscription(authUser.uid);
-             if (sub) {
-                 newUser.subscription = sub;
-                 if (sub.plan?.name) newUser.tier = sub.plan.name as UserTier;
-             }
-         } catch (e) {
-             console.warn("Failed to load subscription:", e);
-         }
-
-         setUser(newUser);
-         geminiService.setSessionUser(newUser); 
-         
-         if (!isCloudHydrated) {
-            setSyncStatus('syncing');
-            try {
-               const { history: cloudHistory, bio: cloudBio } = await firebaseService.getUserData(authUser.uid);
-               
-               if (cloudBio) {
-                   newUser.neuralBio = cloudBio;
-                   setUser(newUser);
-                   geminiService.setSessionUser(newUser);
-               }
-
-               if (cloudHistory && cloudHistory.length > 0) {
-                 setConversations(prevLocal => {
-                   const combinedMap = new Map<string, Conversation>();
-                   // Add all local conversations (even private ones if they existed in session, though reload wipes private)
-                   prevLocal.forEach(c => combinedMap.set(c.id, c));
-                   // Merge cloud conversations
-                   cloudHistory.forEach(cloudConv => {
-                     const existing = combinedMap.get(cloudConv.id);
-                     if (!existing || new Date(cloudConv.timestamp) > new Date(existing.timestamp)) {
-                       combinedMap.set(cloudConv.id, cloudConv);
-                     }
-                   });
-                   return Array.from(combinedMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                 });
-               }
-               setSyncStatus('success');
-            } catch (e) {
-               console.error("History hydration failed", e);
-               setSyncStatus('error');
-            } finally {
-               setIsCloudHydrated(true); 
-               setTimeout(() => setSyncStatus('idle'), 2000);
-            }
-         }
-
-      } else {
-        if (user) { 
-            setUser(null); 
-            geminiService.logout(); 
-            setIsCloudHydrated(false); 
-        }
-      }
-      setIsAuthReady(true); // Allow routing logic to proceed
-    });
-    return () => unsubscribe();
-  }, [user?.id, isCloudHydrated]);
-
-  const cycleLanguage = () => {
-    let next: Language = 'en';
-    if (lang === 'en') next = 'si';
-    else if (lang === 'si') next = 'ta';
-    else next = 'en';
-    setLang(next);
-    cacheService.set(CacheKey.LANG, next);
+  const mergeHistory = (cloudHistory: Conversation[]) => {
+      setConversations(prev => {
+         const combined = new Map();
+         [...prev, ...cloudHistory].forEach(c => combined.set(c.id, c));
+         return Array.from(combined.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      });
   };
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
+    if (!user) {
+        // Guest Mode on Landing
+        setGlobalPrompt(prompt);
+        return; 
+    }
+    
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     
-    // Create new conversation ALWAYS if we are triggered with a specific intent to "Start"
-    // But if active conversation is empty, reuse it.
-    
+    // Logic to create new chat or reuse
     const activeConv = conversations.find(c => c.id === activeConversationId);
-    
-    // Logic: If active conv has messages, or we want to force a specific mode that might differ
-    if (!activeConv || activeConv.messages.length > 0) {
-      const newId = Date.now().toString();
-      const newTitle = lang === 'si' ? "නව පිළිසඳර" : lang === 'ta' ? "புதிய அரட்டை" : "New Chat";
-      
-      const newConv: Conversation = { 
-        id: newId, 
-        title: newTitle, 
-        messages: [], 
-        timestamp: new Date(), 
-        mode, 
-        modesUsed: [mode],
-        isPrivate: false // Default to public
-      };
-
-      setConversations(prev => [newConv, ...prev]);
-      setActiveConversationId(newId);
-    } else {
-      // Reuse empty conversation but switch mode
-      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode, modesUsed: [...(c.modesUsed || []), mode] } : c));
+    if (!activeConv || activeConv.messages.length > 0 || activeConv.mode !== mode) {
+       const newId = Date.now().toString();
+       setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+       setActiveConversationId(newId);
     }
-
+    
     const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', gethelp: 'help', chat: 'chat', translator: 'chat' };
-    navigate(modeMap[mode] || 'chat');
+    window.location.hash = modeMap[mode];
   };
 
   const handleDeleteConversation = (id: string) => {
-    setConversations(prev => {
-        const filtered = prev.filter(c => c.id !== id);
-        // If we just deleted the active conversation, switch to the first available one, or null
-        if (activeConversationId === id) {
-            const nextConv = filtered.length > 0 ? filtered[0].id : null;
-            setActiveConversationId(nextConv);
-        }
-        return filtered;
-    });
+     setConversations(prev => {
+        const next = prev.filter(c => c.id !== id);
+        if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
+        if (user?.id) firebaseService.saveHistory(user.id, next);
+        return next;
+     });
   };
 
-  const refreshSubscription = async () => {
-    if (!user?.id) return;
-    try {
-        const sub = await subscriptionService.getUserSubscription(user.id);
-        if (sub) {
-            const updatedUser = { ...user, subscription: sub, tier: (sub.plan?.name as UserTier) || user.tier };
-            setUser(updatedUser);
-            geminiService.setSessionUser(updatedUser);
-        }
-    } catch (e) {
-        console.error("Failed to refresh subscription", e);
-    }
-  };
-
-  const activeMessages = conversations.find(c => c.id === activeConversationId)?.messages || [];
-  const activeConv = conversations.find(c => c.id === activeConversationId);
-
+  // --- RENDER ---
   const renderContent = () => {
+    if (!authInitialized) return <div className="flex h-full w-full items-center justify-center"><i className="fa-solid fa-circle-notch animate-spin text-cyan-600 text-3xl"></i></div>;
+
     switch (view) {
-      case 'chat':
-      case 'art':
-      case 'camera':
-      case 'help':
-      case 'math':
-        const modeMapping: Record<AppView, WorkspaceMode> = {
-          'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat',
-          'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat'
-        };
+      case 'chat': case 'art': case 'camera': case 'help': case 'math':
+        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat' };
         return (
           <ChatWorkspace 
-            onClose={() => navigate('landing')} 
+            onClose={() => window.location.hash = ''} 
             hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
-            initialMode={modeMapping[view]}
+            initialMode={modeMap[view]}
             autoSubmit={shouldAutoSubmit}
             onInputChange={setGlobalPrompt}
-            messages={activeMessages}
+            messages={conversations.find(c => c.id === activeConversationId)?.messages || []}
             setMessages={(updater) => {
-              if (!activeConversationId) return;
-              setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: typeof updater === 'function' ? updater(c.messages) : updater, timestamp: new Date() } : c));
+               if(!activeConversationId) return;
+               setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, messages: typeof updater === 'function' ? updater(c.messages) : updater, timestamp: new Date() } : c));
             }}
             lang={lang}
             conversations={conversations}
             onSwitchConv={setActiveConversationId}
-            onNewConv={(m) => handleStartWorkspace('', m || 'chat')}
+            onNewConv={() => handleStartWorkspace('', 'chat')}
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
             onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
-            onTogglePrivate={() => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, isPrivate: !c.isPrivate } : c))}
-            isPrivate={activeConv?.isPrivate || false}
             isSyncing={syncStatus === 'syncing'}
           />
         );
-      case 'voice': return <VoiceAssistant onClose={() => navigate('landing')} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => navigate('landing')} lang={lang} onUserUpdate={() => setUser(geminiService.getCurrentUser())} />;
-      case 'privacy': return <PrivacyPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'terms': return <TermsPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'releases': return <ReleasesPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'logic': return <LogicFlowPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'creator': return <CreatorPage onClose={() => navigate('landing')} lang={lang} />;
-      case 'pricing': return <PricingPage onClose={() => navigate('landing')} lang={lang} onPlanActivated={refreshSubscription} />;
-      case 'downloads': return <DownloadsPage onClose={() => navigate('landing')} lang={lang} />;
+      case 'voice': return <VoiceAssistant onClose={() => window.location.hash = ''} lang={lang} inline={false} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = ''} lang={lang} onUserUpdate={() => {}} />;
+      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = ''} />;
+      case 'terms': return <TermsPage onClose={() => window.location.hash = ''} />;
+      case 'releases': return <ReleasesPage onClose={() => window.location.hash = ''} lang={lang} />;
+      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = ''} lang={lang} />;
+      case 'creator': return <CreatorPage onClose={() => window.location.hash = ''} lang={lang} />;
+      case 'pricing': return <PricingPage onClose={() => window.location.hash = ''} lang={lang} />;
+      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = ''} lang={lang} />;
       default: 
-        return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={async () => navigate('account')} />;
+        return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} />;
     }
   };
 
   return (
-    <div 
-      className={`w-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden relative`}
-      style={{ height: 'calc(var(--vh, 1vh) * 100)' }}
-    >
-      <header className="h-16 shrink-0 glass-panel sticky top-0 z-[100] px-4 md:px-12 flex items-center justify-between border-b border-black/5 dark:border-white/5 safe-pt">
-        <div className="flex items-center gap-2 md:gap-3 cursor-pointer" onClick={() => navigate('landing')}>
-          <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-sm"></i></div>
-          <h1 className="text-xs md:text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
+    <div className={`w-screen h-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}>
+      <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = ''}>
+          <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
+          <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
-        <div className="flex items-center gap-1.5 md:gap-3">
-          {syncStatus !== 'idle' && (
-             <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5 dark:border-white/5">
+        <div className="flex items-center gap-2">
+           {syncStatus !== 'idle' && view !== 'landing' && (
+             <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5">
                 <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
-                <span className="text-[7px] md:text-[8px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Sync' : syncStatus === 'success' ? 'Saved' : 'Err'}</span>
+                <span className="text-[7px] font-black uppercase tracking-widest">{syncStatus === 'syncing' ? 'Sync' : syncStatus === 'success' ? 'Saved' : 'Err'}</span>
              </div>
-          )}
-          <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
-          <button onClick={cycleLanguage} className="text-[9px] md:text-[10px] font-black uppercase tracking-widest text-slate-500 px-1 md:px-2 min-w-[60px] text-center border border-slate-200 dark:border-white/5 rounded-full py-1.5">
-            {lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}
-          </button>
-          
-          <div className="flex items-center gap-2 pl-1">
-            <button onClick={() => navigate('account')} className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 active:scale-95 transition-all shadow-sm">
+           )}
+           <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
+           <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
+           <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
               {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px] text-slate-400"></i>}
-            </button>
-          </div>
+           </button>
         </div>
       </header>
       <main className="flex-1 overflow-hidden relative flex flex-col">{renderContent()}</main>

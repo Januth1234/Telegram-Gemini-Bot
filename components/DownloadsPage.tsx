@@ -10,79 +10,8 @@ interface DownloadsPageProps {
 
 const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
-  const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py' | 'vue'>('js');
+  const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py'>('js');
   const [downloading, setDownloading] = useState<string | null>(null);
-
-  const content = {
-    en: {
-        subtitle: "v4.5.3 Stable Distribution",
-        winTitle: "Windows Desktop",
-        winDesc: "Orin's most powerful workspace. Full access to GPU-accelerated reasoning, Studio Create, and local memory synchronization.",
-        stable: "Stable Build",
-        verified: "Digital Signature: Verified",
-        win64: "Windows 64-bit",
-        win32: "32-bit (x86)",
-        winArm: "Windows ARM",
-        androidTitle: "Android Assistant",
-        androidDesc: "Direct APK with Voice Mode v5.0-BETA.",
-        downloadApk: "Download APK",
-        iosTitle: "iPhone (iOS)",
-        iosDesc: "TestFlight Preview with iCloud Sync.",
-        getPackage: "Get Package",
-        macTitle: "macOS Universal",
-        macDesc: "Optimized for M1, M2 & M3 Silicon.",
-        downloadDmg: "Download DMG",
-        apiTitle: "Public Search API Integration",
-        preparing: "Preparing Artifact",
-        footer: "JN Productions Global • 2026 Distribution Protocol"
-    },
-    si: {
-        subtitle: "v4.5.3 ස්ථාවර නිකුතුව",
-        winTitle: "Windows පරිගණක",
-        winDesc: "ඔරින්ගේ වඩාත්ම බලගතු වැඩබිම. GPU ත්වරණය, නිර්මාණ ස්ටුඩියෝව සහ දේශීය මතක සමමුහුර්තකරණය සඳහා පූර්ණ ප්‍රවේශය.",
-        stable: "ස්ථාවර පිටපත",
-        verified: "ඩිජිටල් අත්සන: තහවුරු කර ඇත",
-        win64: "Windows 64-bit",
-        win32: "32-bit (x86)",
-        winArm: "Windows ARM",
-        androidTitle: "Android සහායක",
-        androidDesc: "Voice Mode v5.0-BETA සමඟ ඍජු APK එක.",
-        downloadApk: "APK බාගන්න",
-        iosTitle: "iPhone (iOS)",
-        iosDesc: "TestFlight හරහා iCloud Sync සමඟ.",
-        getPackage: "පැකේජය ලබාගන්න",
-        macTitle: "macOS Universal",
-        macDesc: "M1, M2 සහ M3 චිප් සඳහා සකසා ඇත.",
-        downloadDmg: "DMG බාගන්න",
-        apiTitle: "පොදු සෙවුම් API ඒකාබද්ධ කිරීම",
-        preparing: "සකස් කරමින් පවතී",
-        footer: "JN Productions Global • 2026 බෙදාහැරීමේ නීති"
-    },
-    ta: {
-        subtitle: "v4.5.3 நிலையான வெளியீடு",
-        winTitle: "Windows டெஸ்க்டாப்",
-        winDesc: "ஓரின் மிகச் சிறந்த பணியிடம். GPU வேகம், உருவாக்க ஸ்டுடியோ மற்றும் உள்ளூர் நினைவக ஒத்திசைவுக்கான முழு அணுகல்.",
-        stable: "நிலையான பதிப்பு",
-        verified: "டிஜிட்டல் கையொப்பம்: சரிபார்க்கப்பட்டது",
-        win64: "Windows 64-bit",
-        win32: "32-bit (x86)",
-        winArm: "Windows ARM",
-        androidTitle: "Android உதவியாளர்",
-        androidDesc: "Voice Mode v5.0-BETA உடன் நேரடி APK.",
-        downloadApk: "APK பதிவிறக்கவும்",
-        iosTitle: "iPhone (iOS)",
-        iosDesc: "iCloud Sync உடன் TestFlight முன்னோட்டம்.",
-        getPackage: "தொகுப்பைப் பெறுங்கள்",
-        macTitle: "macOS Universal",
-        macDesc: "M1, M2 & M3 சிலிக்கானுக்காக மேம்படுத்தப்பட்டது.",
-        downloadDmg: "DMG பதிவிறக்கவும்",
-        apiTitle: "பொது தேடல் API ஒருங்கிணைப்பு",
-        preparing: "தயாராகிறது",
-        footer: "JN Productions Global • 2026 விநியோக நெறிமுறை"
-    }
-  };
-
-  const text = content[lang];
 
   const handleDownload = (platform: string, arch?: string) => {
     const label = `${platform} ${arch || ''}`;
@@ -102,11 +31,13 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
       if (url) {
           const link = document.createElement('a');
           link.href = url;
+          // Note: Browser might ignore download attribute for cross-origin URLs, but it's good practice.
           link.setAttribute('download', '');
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
       } else {
+          // Fallback simulation for platforms without links (iOS/macOS)
           const filename = `orin-setup-${platform.toLowerCase()}${arch ? '-' + arch.toLowerCase().replace(' ', '-') : ''}.exe`;
           const dummyContent = `Orin AI Platform v4.5.3 Installer\nTarget: ${label}\nVerified Artifact: JN-PROD-${Date.now()}\n\nThis is a secure system download from JN Productions Global.`;
           
@@ -131,103 +62,58 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   };
 
   const codeSnippets = {
-    js: `<!-- Orin AI Embed Snippet (HTML/JS) -->
-<div id="orin-widget-container"></div>
-<script src="https://cdn.orinai.org/sdk/v4/widget.min.js"></script>
-<script>
-  OrinAI.init({
-    container: '#orin-widget-container',
-    apiKey: 'YOUR_PUBLIC_KEY',
-    theme: 'system', // 'light' | 'dark' | 'system'
-    language: 'si-LK', // Optional: Force Sinhala
-    config: {
-      enableVoice: true,
-      mode: 'reasoning'
-    }
-  });
-</script>`,
-    ts: `// React / Next.js Implementation
-import { OrinClient } from '@orinai/sdk';
-
-const orin = new OrinClient({
-  apiKey: process.env.NEXT_PUBLIC_ORIN_KEY,
-  region: 'asia-south1'
-});
-
-export async function generateResponse(prompt: string) {
-  try {
-    const result = await orin.reasoning.create({
-      prompt: prompt,
-      depth: 'high', // 'normal' | 'high' | 'research'
-      grounding: true,
-      maxTokens: 2048
-    });
-    return result.text;
-  } catch (error) {
-    console.error("Orin Neural Error:", error);
-    return null;
-  }
-}`,
-    py: `# Python Integration (Flask/FastAPI/Streamlit)
-import requests
-import os
-
-def query_orin_neural_engine(prompt, lang="en"):
-    endpoint = "https://api.orinai.org/v4/generate"
-    headers = {
-        "Authorization": f"Bearer {os.getenv('ORIN_API_KEY')}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "prompt": prompt,
-        "mode": "deep_reasoning",
-        "target_lang": lang,
-        "safety_settings": "balanced"
-    }
-    
-    response = requests.post(endpoint, json=payload, headers=headers)
-    if response.status_code == 200:
-        return response.json()['output']
-    return None
-
-# Usage
-print(query_orin_neural_engine("Explain Quantum Physics in simple terms", "si"))`,
-    vue: `<!-- Vue 3 Composition API -->
-<script setup>
-import { ref } from 'vue'
-
-const answer = ref('')
-const loading = ref(false)
-
-const askOrin = async (question) => {
-  loading.value = true
-  try {
-    const req = await fetch('https://api.orinai.org/v4/ask', {
-      method: 'POST',
-      headers: { 
-        'Authorization': 'Bearer YOUR_KEY',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ prompt: question })
-    })
-    const res = await req.json()
-    answer.value = res.data.content
-  } catch (e) {
-    answer.value = "Connection failed"
-  } finally {
-    loading.value = false
-  }
-}
-</script>
-
-<template>
-  <div class="orin-chat">
-    <button @click="askOrin('Hello')" :disabled="loading">
-      {{ loading ? 'Thinking...' : 'Ask AI' }}
-    </button>
-    <div v-if="answer" class="response">{{ answer }}</div>
+    js: `<!-- Orin AI Search Widget -->
+<div style="max-width: 600px; margin: 20px auto; font-family: 'Plus Jakarta Sans', sans-serif;">
+  <form onsubmit="searchOrin(event)" style="display: flex; gap: 8px; background: rgba(255,255,255,0.9); border: 1px solid #e2e8f0; border-radius: 20px; padding: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+    <input type="text" id="orin-query" placeholder="Ask Orin AI..." required style="flex: 1; border: none; padding: 12px 18px; outline: none; background: transparent;" />
+    <button type="submit" style="background: #0891b2; color: white; border: none; padding: 10px 24px; border-radius: 14px; font-weight: 800; cursor: pointer;">GO</button>
+  </form>
+  <div style="text-align: center; margin-top: 10px; font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">
+    Orin AI | JN Productions | Januth Nimnal
   </div>
-</template>`
+</div>
+
+<script>
+  function searchOrin(e) {
+    e.preventDefault();
+    const q = document.getElementById('orin-query').value;
+    window.location.href = "https://www.orinai.org/#chat?prompt=" + encodeURIComponent(q);
+  }
+</script>`,
+    ts: `// Orin AI React Component
+import React, { useState } from 'react';
+
+export const OrinSearch = () => {
+  const [q, setQ] = useState('');
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    window.location.href = \`https://www.orinai.org/#chat?prompt=\${encodeURIComponent(q)}\`;
+  };
+
+  return (
+    <div className="max-w-md mx-auto p-4">
+      <form onSubmit={handleSearch} className="flex bg-white rounded-3xl p-1 shadow-lg border border-slate-100">
+        <input value={q} onChange={e => setQ(e.target.value)} className="flex-1 px-5 py-3 outline-none" placeholder="Ask Orin..." />
+        <button className="bg-cyan-600 text-white px-6 rounded-2xl font-black text-xs uppercase">GO</button>
+      </form>
+      <div className="text-center mt-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        Orin AI | JN Productions | Januth Nimnal
+      </div>
+    </div>
+  );
+};`,
+    py: `# Python Streamlit / Flask Integration
+import streamlit as st
+import urllib.parse
+
+def orin_search_widget():
+    query = st.text_input("Ask Orin AI anything:", placeholder="Help with math...")
+    if st.button("GO"):
+        safe_q = urllib.parse.quote(query)
+        st.markdown(f'<meta http-equiv="refresh" content="0;URL=\\'https://www.orinai.org/#chat?prompt={safe_q}\\'">', unsafe_allow_html=True)
+    
+    st.caption("ORIN AI | JN PRODUCTIONS | JANUTH NIMNAL")
+`
   };
 
   return (
@@ -241,7 +127,7 @@ const askOrin = async (question) => {
             </div>
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.downloads}</h2>
-              <p className={`text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.subtitle}</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">v4.5.3 Stable Distribution</p>
             </div>
           </div>
           <button onClick={onClose} className="w-12 h-12 rounded-2xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 transition-all hover:rotate-90">
@@ -258,14 +144,14 @@ const askOrin = async (question) => {
                 <div className="flex-1 space-y-6 text-center md:text-left">
                    <div className="flex items-center justify-center md:justify-start gap-4">
                       <i className="fa-brands fa-windows text-5xl text-cyan-600"></i>
-                      <h3 className={`text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.winTitle}</h3>
+                      <h3 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Windows Desktop</h3>
                    </div>
-                   <p className={`text-sm font-medium text-slate-600 dark:text-slate-400 max-w-md leading-relaxed ${lang !== 'en' ? 'sinhala-text' : ''}`}>
-                     {text.winDesc}
+                   <p className="text-sm font-medium text-slate-600 dark:text-slate-400 max-w-md leading-relaxed">
+                     Orin's most powerful workspace. Full access to GPU-accelerated reasoning, Studio Create, and local memory synchronization.
                    </p>
                    <div className="flex flex-wrap justify-center md:justify-start gap-2">
-                      <span className={`px-3 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-cyan-500/20 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.stable}</span>
-                      <span className={`px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.verified}</span>
+                      <span className="px-3 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">Stable Build</span>
+                      <span className="px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Digital Signature: Verified</span>
                    </div>
                 </div>
 
@@ -274,12 +160,12 @@ const askOrin = async (question) => {
                      onClick={() => handleDownload('Windows', 'x64')}
                      className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-between px-8"
                    >
-                     <span className={lang !== 'en' ? 'sinhala-text' : ''}>{text.win64}</span>
+                     <span>Windows 64-bit</span>
                      <i className="fa-solid fa-download"></i>
                    </button>
                    <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => handleDownload('Windows', 'x32')} className={`py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.win32}</button>
-                      <button onClick={() => handleDownload('Windows', 'ARM')} className={`py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.winArm}</button>
+                      <button onClick={() => handleDownload('Windows', 'x32')} className="py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">32-bit (x86)</button>
+                      <button onClick={() => handleDownload('Windows', 'ARM')} className="py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">Windows ARM</button>
                    </div>
                 </div>
              </div>
@@ -293,9 +179,9 @@ const askOrin = async (question) => {
               <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-8 group-hover:scale-110 transition-transform">
                  <i className="fa-brands fa-android text-3xl"></i>
               </div>
-              <h4 className={`text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.androidTitle}</h4>
-              <p className={`text-xs text-slate-400 font-bold mb-8 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.androidDesc}</p>
-              <button onClick={() => handleDownload('Android', 'APK')} className={`w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-emerald-500 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.downloadApk}</button>
+              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">Android Assistant</h4>
+              <p className="text-xs text-slate-400 font-bold mb-8">Direct APK with Voice Mode v5.0-BETA.</p>
+              <button onClick={() => handleDownload('Android', 'APK')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-emerald-500 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Download APK</button>
            </div>
 
            {/* iOS */}
@@ -303,9 +189,9 @@ const askOrin = async (question) => {
               <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-slate-300 mb-8 group-hover:scale-110 transition-transform">
                  <i className="fa-brands fa-apple text-3xl"></i>
               </div>
-              <h4 className={`text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.iosTitle}</h4>
-              <p className={`text-xs text-slate-400 font-bold mb-8 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.iosDesc}</p>
-              <button onClick={() => handleDownload('iOS', 'Package')} className={`w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-slate-900 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.getPackage}</button>
+              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">iPhone (iOS)</h4>
+              <p className="text-xs text-slate-400 font-bold mb-8">TestFlight Preview with iCloud Sync.</p>
+              <button onClick={() => handleDownload('iOS', 'Package')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-slate-900 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Get Package</button>
            </div>
 
            {/* macOS */}
@@ -313,9 +199,9 @@ const askOrin = async (question) => {
               <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 mb-8 group-hover:scale-110 transition-transform">
                  <i className="fa-solid fa-laptop text-3xl"></i>
               </div>
-              <h4 className={`text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.macTitle}</h4>
-              <p className={`text-xs text-slate-400 font-bold mb-8 ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.macDesc}</p>
-              <button onClick={() => handleDownload('macOS', 'DMG')} className={`w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-indigo-600 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.downloadDmg}</button>
+              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">macOS Universal</h4>
+              <p className="text-xs text-slate-400 font-bold mb-8">Optimized for M1, M2 & M3 Silicon.</p>
+              <button onClick={() => handleDownload('macOS', 'DMG')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-indigo-600 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Download DMG</button>
            </div>
         </section>
 
@@ -325,17 +211,16 @@ const askOrin = async (question) => {
               <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400"><i className="fa-solid fa-code"></i></div>
               <div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.forDevs}</h3>
-                <p className={`text-[10px] font-black text-slate-400 uppercase tracking-widest ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.apiTitle}</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Public Search API Integration</p>
               </div>
            </div>
 
            <div className="glass-panel rounded-[40px] border border-black/5 dark:border-white/5 overflow-hidden shadow-sm">
               <div className="bg-slate-100/50 dark:bg-white/5 p-4 flex flex-col md:flex-row items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 px-8">
-                 <div className="flex flex-wrap gap-1 bg-white dark:bg-black/20 rounded-xl p-1 shadow-inner">
+                 <div className="flex bg-white dark:bg-black/20 rounded-xl p-1 shadow-inner">
                     <button onClick={() => setActiveCodeTab('js')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'js' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>JavaScript</button>
                     <button onClick={() => setActiveCodeTab('ts')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'ts' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>TypeScript</button>
                     <button onClick={() => setActiveCodeTab('py')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'py' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Python</button>
-                    <button onClick={() => setActiveCodeTab('vue')} className={`px-5 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeCodeTab === 'vue' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950' : 'text-slate-400'}`}>Vue.js</button>
                  </div>
                  <button onClick={() => copyToClipboard(codeSnippets[activeCodeTab])} className="flex items-center gap-2 px-6 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-cyan-500 transition-all shadow-lg active:scale-95">
                     <i className="fa-solid fa-copy"></i>
@@ -354,7 +239,7 @@ const askOrin = async (question) => {
            <div className="fixed bottom-10 right-10 z-[200] glass-panel px-6 py-4 rounded-2xl border border-cyan-500 shadow-2xl flex items-center gap-4 animate-reveal bg-white dark:bg-slate-900">
               <div className="w-10 h-10 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
               <div>
-                 <p className={`text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest ${lang !== 'en' ? 'sinhala-text' : ''}`}>{text.preparing}</p>
+                 <p className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-widest">Preparing Artifact</p>
                  <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">{downloading} Package</p>
               </div>
            </div>
@@ -362,8 +247,8 @@ const askOrin = async (question) => {
 
         <footer className="pt-32 text-center opacity-30">
            <div className="w-12 h-1 bg-slate-300 dark:bg-slate-800 mx-auto rounded-full mb-8"></div>
-           <p className={`text-[9px] font-black uppercase tracking-[0.6em] text-slate-500 dark:text-slate-400 ${lang !== 'en' ? 'sinhala-text' : ''}`}>
-             {text.footer}
+           <p className="text-[9px] font-black uppercase tracking-[0.6em] text-slate-500 dark:text-slate-400">
+             JN Productions Global • 2026 Distribution Protocol
            </p>
         </footer>
       </div>

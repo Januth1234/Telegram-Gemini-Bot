@@ -7,7 +7,6 @@ import MathsMode from './MathsMode';
 import GetHelpMode from './GetHelpMode';
 import VoiceAssistant from './VoiceAssistant';
 import LiveVisionMode from './LiveVisionMode';
-import { markovService } from '../services/markovService';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -21,52 +20,31 @@ interface ChatWorkspaceProps {
   lang: Language;
   conversations: Conversation[];
   onSwitchConv: (id: string) => void;
-  onNewConv: (mode?: WorkspaceMode) => void; 
+  onNewConv: () => void;
   onDeleteConv: (id: string) => void;
   activeConvId: string;
   onUpdateTitle: (title: string, modes?: WorkspaceMode[]) => void;
   onModeSwitch?: (mode: WorkspaceMode) => void;
-  onTogglePrivate?: () => void;
-  isPrivate?: boolean;
   isSyncing?: boolean;
 }
 
-const AUTO_SUGGESTIONS: Record<string, string[]> = {
-  chat: [
-    "Explain", "Summarize", "Write a story about", "Debug this code", "Translate to Sinhala", 
-    "Create a marketing plan", "What is the history of", "How does AI work", 
-    "Compare", "List the benefits of", "Generate a python script"
-  ],
-  studio: [
-    "Cyberpunk city", "Minimalist logo", "Oil painting of", "3D render of", "Portrait of", 
-    "Landscape with", "Anime style", "Watercolor sketch", "Futuristic vehicle"
-  ],
-  gethelp: [
-    "Write a Python script", "Build a landing page", "Fix this bug", "Explain this concept", 
-    "Create a SQL query", "Design a database schema", "Refactor this code"
-  ]
-};
-
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
-  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, onTogglePrivate, isPrivate = false, isSyncing = false
+  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, isSyncing = false
 }) => {
   const t = translations[lang];
   const [activeTab, setActiveTab] = useState<WorkspaceMode>(initialMode);
   const [isTyping, setIsTyping] = useState(false);
+  
+  // Private Mode State
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [privateMessages, setPrivateMessages] = useState<ChatMessage[]>([]);
+
   const [progress, setProgress] = useState(0);
   const [stepLabel, setStepLabel] = useState("");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  
-  // Markov Placeholders
-  const [dynamicPlaceholder, setDynamicPlaceholder] = useState("");
-
-  // Pagination for History
-  const [historyPage, setHistoryPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,8 +52,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const progressIntervalRef = useRef<number | null>(null);
 
+  // Active messages based on mode
+  const currentMessages = isPrivate ? privateMessages : messages;
+
   useEffect(() => {
     setActiveTab(initialMode);
+    // Reset private mode if switching from landing to chat via deep link might be handled elsewhere, 
+    // but here we ensure consistency.
   }, [initialMode]);
 
   useEffect(() => {
@@ -83,87 +66,29 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   }, [initialPrompt]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (activeTab !== 'voice' && activeTab !== 'maths' && activeTab !== 'vision') {
-        inputRef.current?.focus();
-      }
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [activeTab, activeConvId]);
-
-  useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isTyping]);
+  }, [currentMessages, isTyping]);
 
-  // Dynamic Placeholder Logic using Markov Chain
-  useEffect(() => {
-    setDynamicPlaceholder(markovService.generatePlaceholder());
-    const interval = setInterval(() => {
-        if (!localInput) {
-            setDynamicPlaceholder(markovService.generatePlaceholder());
-        }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [localInput]);
-
-  // Auto-Suggest Logic
-  useEffect(() => {
-    if (!localInput.trim()) {
-        setSuggestions([]);
-        return;
-    }
-    const mode = activeTab === 'studio' ? 'studio' : activeTab === 'gethelp' ? 'gethelp' : 'chat';
-    const pool = AUTO_SUGGESTIONS[mode] || AUTO_SUGGESTIONS['chat'];
-    const inputLower = localInput.toLowerCase();
-    
-    // Find matches that start with input, exclude exact match
-    const matches = pool.filter(s => 
-        s.toLowerCase().startsWith(inputLower) && s.toLowerCase() !== inputLower
-    ).slice(0, 3);
-    
-    setSuggestions(matches);
-  }, [localInput, activeTab]);
-
-  const applySuggestion = (s: string) => {
-    setLocalInput(s + " "); // Add space for continuity
-    onInputChange(s + " ");
-    setSuggestions([]);
-    inputRef.current?.focus();
+  // When switching tools, start fresh if needed or just handle context
+  const handleModeSwitch = (mode: WorkspaceMode) => {
+      setActiveTab(mode);
+      if (onModeSwitch) onModeSwitch(mode);
+      if (isPrivate) {
+          // In private mode, switching tools effectively clears context to keep it secure/fresh per tool use
+          setPrivateMessages([]);
+      }
   };
-
-  const handleModeNav = (mode: WorkspaceMode) => {
-    // Requirements: Maths, Get Help, and Voice should start a NEW conversation
-    if (mode === 'maths' || mode === 'gethelp' || mode === 'voice') {
-       onNewConv(mode);
-    } else {
-       setActiveTab(mode);
-       if (onModeSwitch) onModeSwitch(mode);
-    }
-  };
-
-  const handleClose = useCallback(() => {
-    if ((localInput.trim() || selectedFile) && !window.confirm(lang === 'si' ? "ඔබ ලියූ දේ මකා දැමීමට අවශ්‍යද?" : "Discard your draft?")) {
-      return;
-    }
-    onInputChange('');
-    onClose();
-  }, [onClose, onInputChange, localInput, selectedFile, lang]);
 
   const startProgress = (mode: WorkspaceMode) => {
     setProgress(0);
-    // Use Markov generated loading message for generic state
-    setStepLabel(markovService.generateLoadingMessage());
-    
+    const steps = [{ threshold: 30, label: "Reading..." }, { threshold: 60, label: "Thinking..." }, { threshold: 90, label: "Writing..." }];
+    setStepLabel(steps[0].label);
     let currentProgress = 0;
     progressIntervalRef.current = window.setInterval(() => {
       currentProgress += Math.random() * 5;
       if (currentProgress > 95) currentProgress = 95;
-      
-      // Periodically update the Markov text to show activity
-      if (currentProgress % 20 < 5) {
-         setStepLabel(markovService.generateLoadingMessage());
-      }
-      
+      const activeStep = [...steps].reverse().find(s => currentProgress >= s.threshold);
+      if (activeStep) setStepLabel(activeStep.label);
       setProgress(currentProgress);
     }, 400);
   };
@@ -177,185 +102,107 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setTimeout(() => { setProgress(0); setStepLabel(""); }, 500);
   };
 
-  const handleSend = useCallback(async (overrideInput?: string, overrideFile?: { data: string; mimeType: string; name: string }) => {
+  const handleSend = useCallback(async (overrideInput?: string) => {
     const text = overrideInput !== undefined ? overrideInput : localInput;
-    const fileToUse = overrideFile !== undefined ? overrideFile : selectedFile;
+    if (!text.trim() && !selectedFile && activeTab !== 'studio') return;
     
-    if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
-    if (await geminiService.hasReachedLimit()) return;
-
     abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
-
     setIsTyping(true);
-    setSuggestions([]); // Clear suggestions on send
     startProgress(activeTab);
     setLocalInput('');
     onInputChange('');
-    setSelectedFile(null); // Clear immediately for UI
 
-    if (activeTab === 'studio') {
-      try {
-        const url = await geminiService.generateImagePro(text, "1:1", "1K", signal);
-        const studioMsg: ChatMessage = { 
-          id: Date.now().toString(), 
-          role: 'assistant', 
-          content: lang === 'si' ? "ඔබේ පින්තූරය සූදානම්." : "Your picture is ready.", 
-          imageUrl: url, 
-          timestamp: new Date(), 
-          type: 'image' 
-        };
-        setMessages(prev => [...prev, studioMsg]);
-        const title = await geminiService.generateTitle([studioMsg], [activeTab], lang);
-        onUpdateTitle(title, [activeTab]);
-      } catch (e: any) {
-        if (e.name === 'AbortError') return;
-        setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
-      } finally { setIsTyping(false); stopProgress(); }
-      return;
-    }
-
-    // CREATE USER MESSAGE WITH IMAGE DATA IF PRESENT
     const userMsg: ChatMessage = { 
         id: Date.now().toString(), 
         role: 'user', 
         content: text || "", 
         timestamp: new Date(), 
-        type: fileToUse ? 'image' : 'text', 
-        imageUrl: fileToUse ? `data:${fileToUse.mimeType};base64,${fileToUse.data}` : undefined,
-        fileName: fileToUse?.name 
+        type: selectedFile ? 'image' : 'text',
+        imageUrl: selectedFile ? `data:${selectedFile.mimeType};base64,${selectedFile.data}` : undefined 
     };
 
-    const currentHistory = [...messages, userMsg];
-    setMessages(prev => [...prev, userMsg]);
+    if (isPrivate) {
+        setPrivateMessages(prev => [...prev, userMsg]);
+    } else {
+        setMessages(prev => [...prev, userMsg]);
+    }
 
     try {
       const res = await geminiService.chat(text || "Continue.", { 
-        fileData: fileToUse || undefined, 
-        grounding: 'search', 
-        messageCount: currentHistory.filter(m => m.role === 'user').length,
+        fileData: selectedFile || undefined, 
         useThinking: true, 
-        history: messages, 
-        signal 
+        history: isPrivate ? privateMessages : messages, 
+        signal: abortControllerRef.current.signal,
+        isPrivate: isPrivate 
       });
-      const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: res.text, timestamp: new Date(), type: 'text', links: res.links };
-      setMessages(prev => [...prev, assistantMsg]);
-      
-      // Update title if it's the start or occasionally
-      if (messages.length < 2 || messages.length % 6 === 0) {
-        const title = await geminiService.generateTitle([...messages, userMsg, assistantMsg], [activeTab], lang);
-        onUpdateTitle(title, [activeTab]);
+
+      const botMsg: ChatMessage = { 
+         id: (Date.now() + 1).toString(), 
+         role: 'assistant', 
+         content: res.text, 
+         timestamp: new Date(), 
+         type: 'text', 
+         links: res.links 
+      };
+
+      if (isPrivate) {
+         setPrivateMessages(prev => [...prev, botMsg]);
+      } else {
+         setMessages(prev => [...prev, botMsg]);
+         if (messages.length < 2) {
+            const title = await geminiService.generateTitle([...messages, userMsg, botMsg], [activeTab], lang);
+            onUpdateTitle(title, [activeTab]);
+         }
       }
+      
     } catch (e: any) {
-      if (e.name === 'AbortError') return;
-      setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: `Error: ${e.message}`, timestamp: new Date(), type: 'text' }]);
-    } finally { setIsTyping(false); stopProgress(); }
-  }, [localInput, selectedFile, activeTab, onInputChange, setMessages, lang, messages, onUpdateTitle]);
-
-  const getTabIcon = (tab: WorkspaceMode) => {
-    switch(tab) {
-      case 'studio': return 'fa-palette';
-      case 'vision': return 'fa-camera';
-      case 'maths': return 'fa-calculator';
-      case 'gethelp': return 'fa-wand-sparkles';
-      case 'voice': return 'fa-microphone-lines';
-      default: return 'fa-message';
+      if (e.name !== 'AbortError') alert(e.message);
+    } finally { 
+       setIsTyping(false); 
+       stopProgress(); 
+       setSelectedFile(null);
     }
-  };
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages]);
 
-  const getHistoryIcon = (modes: WorkspaceMode[] | undefined, defaultMode: WorkspaceMode) => {
-      const m = (modes && modes.length > 0) ? modes[modes.length - 1] : defaultMode;
-      return getTabIcon(m);
-  };
-
-  const isBETA = (m: WorkspaceMode) => m === 'maths' || m === 'gethelp' || m === 'voice' || m === 'vision';
-
-  // Pagination Logic - Ensure we show items based on current page
-  const visibleConversations = conversations.slice(0, historyPage * ITEMS_PER_PAGE);
-  const hasMoreHistory = visibleConversations.length < conversations.length;
-
-  const handleHistoryClick = (id: string) => {
-    onSwitchConv(id);
-    setIsHistoryOpen(false);
-  };
-
-  const handleDeleteClick = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // Critical: Prevent opening the conversation while deleting
-    if (window.confirm(lang === 'si' ? "මෙම සංවාදය මකා දැමීමට අවශ්‍යද?" : "Delete this conversation history?")) {
-        onDeleteConv(id);
-    }
+  const togglePrivate = () => {
+      const newState = !isPrivate;
+      setIsPrivate(newState);
+      if (newState) {
+          setPrivateMessages([]); // Start clean private session
+      } else {
+          setPrivateMessages([]); // Clear private buffer on exit
+      }
   };
 
   const renderBody = () => {
-    if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={handleClose} lang={lang} inline /></div>;
-    if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
-    if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={handleClose} lang={lang} embedded messages={messages} onSend={handleSend} isTyping={isTyping} /></div>;
-    if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={handleClose} lang={lang} /></div>;
+    if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={onClose} lang={lang} inline /></div>;
+    if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
+    if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
+    if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={onClose} lang={lang} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-36 md:pb-40">
-        <div className="max-w-3xl mx-auto space-y-10">
-          {messages.length === 0 ? (
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40 md:pb-48">
+        <div className="max-w-3xl mx-auto space-y-6 md:space-y-10">
+          {currentMessages.length === 0 ? (
             <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
-               <div className="w-20 h-20 md:w-24 md:h-24 rounded-[32px] bg-white dark:bg-slate-900 mx-auto flex items-center justify-center text-slate-200 dark:text-slate-800 border border-slate-100 dark:border-white/5 shadow-xl">
-                  <i className={`fa-solid ${getTabIcon(activeTab)} text-5xl`}></i>
+               <div className={`w-20 h-20 md:w-24 md:h-24 rounded-[32px] mx-auto flex items-center justify-center border shadow-xl ${isPrivate ? 'bg-slate-900 text-white border-slate-700' : 'bg-white dark:bg-slate-900 text-slate-200 dark:text-slate-800 border-slate-100 dark:border-white/5'}`}>
+                  <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-message'} text-5xl`}></i>
                </div>
                <div className="space-y-4">
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                    {t.readyTo} {activeTab === 'studio' ? t.featureDesc.create : t.featureDesc.chat}
-                  </h2>
-                  <div className="flex flex-wrap justify-center gap-2 px-4">
-                     {(activeTab === 'studio' ? t.prompts.studio : t.prompts.chat).map(s => (
-                        <button key={s} onClick={() => handleSend(s)} className="px-5 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95">{s}</button>
-                     ))}
-                  </div>
+                  <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{isPrivate ? 'Private Mode' : 'Orin Workspace'}</h2>
+                  <p className="text-sm text-slate-500">{isPrivate ? 'Messages are not saved or synced.' : 'Secure, Authenticated, Production-Ready.'}</p>
                </div>
             </div>
           ) : (
-            messages.map(msg => (
-              <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                 <div className={`max-w-[92%] md:max-w-[85%] p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                    
-                    {/* Render Image if exists */}
-                    {msg.imageUrl && (
-                      <div className="mb-4">
-                         <div className="rounded-[20px] overflow-hidden border-2 border-white/10 shadow-lg bg-black/10 group max-w-sm">
-                            <img src={msg.imageUrl} className="w-full h-auto object-cover" alt="Content" />
-                         </div>
-                         {msg.role === 'assistant' && (
-                            <button onClick={() => geminiService.downloadImage(msg.imageUrl!)} className="mt-3 w-full py-3 bg-cyan-600/10 hover:bg-cyan-600 text-cyan-600 hover:text-white rounded-xl text-[9px] font-black uppercase tracking-widest transition-all">Save Image</button>
-                         )}
-                      </div>
-                    )}
-
-                    <div className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                    
-                    {msg.links && msg.links.length > 0 && (
-                      <div className="mt-8 pt-6 border-t border-black/5 dark:border-white/5 grid grid-cols-1 md:grid-cols-2 gap-2">
-                         {msg.links.map((link, idx) => (
-                           <a key={idx} href={link.uri} target="_blank" rel="noreferrer" className="p-3 bg-slate-50 dark:bg-white/5 rounded-xl text-[10px] font-bold text-cyan-600 truncate border border-black/5 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 transition-all">
-                              <i className="fa-solid fa-link mr-2 opacity-50"></i> {link.title}
-                           </a>
-                         ))}
-                      </div>
-                    )}
-                 </div>
-                 <div className="mt-2 px-4 flex items-center gap-2 opacity-30 text-[8px] font-black uppercase tracking-widest">
-                    <span>{msg.role === 'user' ? 'Sent' : 'Done'}</span>
-                    <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                    <span>{msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            currentMessages.map((msg, i) => (
+              <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+                 <div className={`max-w-[92%] p-5 md:p-8 rounded-[24px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                    <div className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</div>
                  </div>
               </div>
             ))
           )}
-          {isTyping && (
-            <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
-              <div className="flex gap-1">
-                {[0, 150, 300].map(delay => <div key={delay} className="w-1 h-1 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
-              </div>
-              <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">{stepLabel || "Thinking..."}</span>
-            </div>
-          )}
+          {isTyping && <div className="text-[10px] font-black uppercase tracking-widest text-cyan-600 animate-pulse text-center">{stepLabel}</div>}
           <div ref={scrollRef} className="h-4" />
         </div>
       </div>
@@ -363,186 +210,68 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
-    <div className={`flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans transition-colors duration-500 ${isPrivate ? 'dark:bg-slate-950' : ''}`}>
+    <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
       
-      {/* History Sidebar Backdrop - Fix: Covers entire screen, handles close logic */}
-      {isHistoryOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-950/50 backdrop-blur-sm z-[140] animate-fade cursor-pointer" 
-          onClick={() => setIsHistoryOpen(false)} 
-        />
-      )}
-
-      {/* History Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-[150] w-[85%] sm:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-500 transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col shadow-2xl`}>
-        <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-white dark:bg-slate-900 z-10">
-          <h3 className={`text-[10px] font-black uppercase tracking-widest text-slate-500 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.memoryHistory}</h3>
-          <button onClick={() => setIsHistoryOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark"></i></button>
+      {/* Sidebar Overlay */}
+      {isHistoryOpen && <div className="fixed inset-0 bg-black/50 z-[140]" onClick={() => setIsHistoryOpen(false)} />}
+      
+      <div className={`fixed inset-y-0 left-0 z-[150] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-6 border-b border-white/5 flex justify-between items-center">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</span>
+            <button onClick={() => setIsHistoryOpen(false)}><i className="fa-solid fa-xmark"></i></button>
         </div>
-        <div className="p-4 bg-white dark:bg-slate-900 z-10">
-          <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className={`w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-2xl font-black text-[9px] uppercase tracking-widest shadow-lg active:scale-95 transition-all ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
-            + {t.newNeuralChat}
-          </button>
+        <div className="p-4">
+            <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-widest">+ New Chat</button>
         </div>
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative">
-          {visibleConversations.map(conv => (
-            <div 
-              key={conv.id}
-              onClick={() => handleHistoryClick(conv.id)}
-              className={`w-full text-left p-4 rounded-2xl transition-all border group relative cursor-pointer select-none ${activeConvId === conv.id ? 'bg-cyan-50 dark:bg-cyan-950/20 border-cyan-100 dark:border-cyan-500/20 shadow-sm' : 'border-transparent hover:bg-slate-50 dark:hover:bg-white/5'} ${conv.isPrivate ? 'opacity-75' : ''}`}
-            >
-              <div className="flex items-start gap-3">
-                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs shrink-0 ${activeConvId === conv.id ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-white/10 text-slate-400'}`}>
-                    <i className={`fa-solid ${conv.isPrivate ? 'fa-user-secret' : getHistoryIcon(conv.modesUsed, conv.mode)}`}></i>
-                 </div>
-                 <div className="flex-1 min-w-0 pr-8">
-                    <span className={`text-xs font-black uppercase truncate block ${activeConvId === conv.id ? 'text-cyan-700 dark:text-cyan-400' : 'text-slate-700 dark:text-slate-300'} ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'Private Session' : conv.title}</span>
-                    <p className={`text-[10px] text-slate-400 truncate mt-1 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{conv.isPrivate ? 'History not saved' : (conv.messages[conv.messages.length - 1]?.content || "Empty")}</p>
-                 </div>
-              </div>
-              
-              {/* Delete Button - Better positioning and hit area */}
-              <button 
-                onClick={(e) => handleDeleteClick(e, conv.id)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-slate-300 hover:text-white hover:bg-red-500 rounded-lg transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100 z-20"
-                title="Delete Conversation"
-              >
-                <i className="fa-solid fa-trash-can text-xs"></i>
-              </button>
-            </div>
-          ))}
-          
-          {hasMoreHistory && (
-             <button 
-               onClick={() => setHistoryPage(prev => prev + 1)}
-               className={`w-full py-4 mt-2 text-[9px] font-bold text-slate-400 hover:text-cyan-600 border border-dashed border-slate-200 dark:border-white/10 rounded-xl hover:bg-slate-50 dark:hover:bg-white/5 transition-all uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}
-             >
-               {t.olderMemories}
-             </button>
-          )}
-          
-          {conversations.length === 0 && (
-             <div className="text-center py-20 opacity-40">
-                {isSyncing ? (
-                   <>
-                     <div className="w-8 h-8 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-                     <p className={`text-[9px] font-black uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.loadingHistory}</p>
-                   </>
-                ) : (
-                   <>
-                    <i className="fa-solid fa-box-open text-3xl mb-4 text-slate-300"></i>
-                    <p className={`text-[9px] font-black uppercase tracking-widest ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.noHistory}</p>
-                   </>
-                )}
-             </div>
-          )}
+        <div className="overflow-y-auto h-full p-2">
+            {conversations.map(c => (
+                <button key={c.id} onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} className={`w-full text-left p-4 rounded-xl text-xs font-bold mb-2 ${activeConvId === c.id ? 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    {c.title}
+                </button>
+            ))}
         </div>
-        {/* Sync Status in Sidebar Footer - Shows if syncing but we already have content */}
-        {isSyncing && conversations.length > 0 && (
-           <div className="p-4 border-t border-slate-100 dark:border-white/5 text-center bg-white dark:bg-slate-900 z-10">
-              <span className={`text-[8px] font-black text-slate-400 uppercase tracking-widest animate-pulse ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{t.syncingCloud}</span>
-           </div>
-        )}
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className={`h-16 md:h-20 shrink-0 border-b flex items-center justify-between px-4 md:px-10 z-[60] backdrop-blur-2xl transition-all duration-300 ${isPrivate ? 'bg-indigo-950/90 border-white/5 shadow-2xl shadow-indigo-900/20' : 'bg-white/95 dark:bg-slate-950/95 border-slate-200 dark:border-white/5'}`}>
-          <div className="flex items-center gap-2 md:gap-4 flex-1 overflow-hidden">
-            <button onClick={() => setIsHistoryOpen(true)} className={`w-10 h-10 md:w-12 md:h-12 shrink-0 rounded-xl border flex items-center justify-center transition-all ${isPrivate ? 'text-indigo-200 border-white/10 hover:text-white' : 'border-slate-200 dark:border-white/10 text-slate-500 hover:text-cyan-600'}`}><i className="fa-solid fa-bars-staggered"></i></button>
-            <nav className={`flex items-center rounded-[20px] p-1.5 gap-2 overflow-x-auto no-scrollbar scroll-smooth ${isPrivate ? 'bg-black/20' : 'bg-slate-100 dark:bg-white/5'}`}>
-              {(['chat', 'maths', 'studio', 'vision', 'gethelp', 'voice'] as WorkspaceMode[]).map(m => (
-                <button 
-                  key={m} 
-                  onClick={() => handleModeNav(m)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 rounded-xl transition-all whitespace-nowrap relative shrink-0 ${
-                    activeTab === m 
-                      ? (isPrivate ? 'bg-indigo-600 text-white shadow-lg' : 'bg-white dark:bg-slate-800 shadow-sm text-cyan-600 dark:text-white') 
-                      : (isPrivate ? 'text-indigo-300 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300')
-                  }`}
-                >
-                  <i className={`fa-solid ${getTabIcon(m)} text-xs md:text-sm`}></i>
-                  <span className={`text-[9px] font-black uppercase tracking-widest hidden sm:inline ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
-                    {m === 'chat' ? t.reasoning : m === 'maths' ? t.maths : m === 'studio' ? t.creative : m === 'vision' ? t.vision : m === 'gethelp' ? t.getHelp : t.voice}
-                  </span>
-                  {isBETA(m) && !isPrivate && (
-                    <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                       <span className="animate-beta-pulse absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                       <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                    </span>
-                  )}
-                </button>
-              ))}
-            </nav>
+        <header className="h-14 md:h-16 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-md">
+          <div className="flex items-center gap-3 md:gap-4">
+            <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center"><i className="fa-solid fa-bars"></i></button>
+            <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+               <button onClick={togglePrivate} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isPrivate ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>
+                  {isPrivate ? 'Private On' : 'Private Off'}
+               </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 ml-2">
-             {/* Private Mode Toggle */}
-             {onTogglePrivate && (
-                <button 
-                  onClick={onTogglePrivate}
-                  className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all duration-300 relative group overflow-hidden ${isPrivate ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white shadow-lg shadow-indigo-500/50' : 'bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-indigo-500'}`}
-                  title={isPrivate ? "Disable Private Mode" : "Enable Private Mode"}
-                >
-                   <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                   <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-mask'} text-sm md:text-lg transition-transform ${isPrivate ? 'scale-110' : ''}`}></i>
-                </button>
-             )}
-             
-             {isTyping && <button onClick={() => { abortControllerRef.current?.abort(); setIsTyping(false); stopProgress(); }} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-stop"></i></button>}
-             <button onClick={handleClose} className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all border shadow-sm ${isPrivate ? 'bg-white/10 text-white border-transparent hover:bg-red-500' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:text-red-500 border-slate-200 dark:border-white/10'}`}><i className="fa-solid fa-right-from-bracket rotate-180"></i></button>
-          </div>
-          {progress > 0 && <div className="absolute bottom-0 left-0 w-full h-[2px] bg-slate-100 dark:bg-slate-900"><div className="h-full bg-cyan-500 transition-all duration-300" style={{ width: `${progress}%` }}></div></div>}
+          <button onClick={onClose} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-power-off"></i></button>
         </header>
 
         {renderBody()}
 
-        {/* Optimized input bar layout for Mobile Safe Area */}
-        {(activeTab === 'chat' || activeTab === 'studio' || activeTab === 'translator' || activeTab === 'gethelp') && (
-          <div className="fixed bottom-0 left-0 right-0 w-full z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 via-slate-50/90 dark:via-slate-950/90 to-transparent safe-pb pointer-events-none">
-             <div className="w-full max-w-3xl mx-auto px-4 pb-4 md:pb-6 pt-10 pointer-events-auto relative">
-                {/* Auto Suggestions UI */}
-                {suggestions.length > 0 && (
-                  <div className="absolute bottom-full left-4 right-4 mb-2 flex flex-col items-start gap-1 z-50">
-                    {suggestions.map((s, i) => (
-                      <button
-                        key={i}
-                        onClick={() => applySuggestion(s)}
-                        className="glass-panel px-4 py-2 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200 shadow-lg hover:bg-white dark:hover:bg-slate-700 hover:scale-105 transition-all animate-slide-in-up bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10"
-                        style={{ animationDelay: `${i * 0.05}s` }}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
+        {/* Input Bar */}
+        <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
+             <div className="max-w-3xl mx-auto pointer-events-auto relative">
+                {/* Auto Suggest */}
+                {!localInput && currentMessages.length === 0 && !isPrivate && (
+                   <div className="absolute -top-12 left-0 right-0 flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
+                      {["Summarize this", "Write code", "Explain quantum physics"].map(s => (
+                         <button key={s} onClick={() => setLocalInput(s)} className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 shadow-sm whitespace-nowrap">{s}</button>
+                      ))}
+                   </div>
                 )}
 
-                {/* File Preview in Input Bar */}
-                {selectedFile && (
-                  <div className="mb-2 mx-2 p-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-black/5 dark:border-white/10 shadow-lg flex items-center gap-4 animate-slide-in-up">
-                     <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="w-12 h-12 rounded-xl object-cover border border-black/5" alt="Preview" />
-                     <div className="flex-1 min-w-0">
-                        <p className="text-[10px] font-black text-slate-900 dark:text-white truncate">{selectedFile.name}</p>
-                        <p className="text-[9px] font-bold text-slate-400 uppercase">Ready to send</p>
-                     </div>
-                     <button onClick={() => { setSelectedFile(null); if(fileInputRef.current) fileInputRef.current.value = ''; }} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500 hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-xmark"></i></button>
-                  </div>
-                )}
-
-                <div className={`glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border flex items-center gap-1 backdrop-blur-3xl relative transition-all duration-500 ${isPrivate ? 'bg-indigo-950/80 border-indigo-500/30' : 'bg-white/95 dark:bg-slate-900/95 border-slate-300 dark:border-white/10'}`}>
-                   {isPrivate && (
-                      <div className="absolute -top-3 left-6 px-3 py-0.5 bg-indigo-600 rounded-full shadow-lg animate-fade">
-                         <span className="text-[8px] font-black text-white uppercase tracking-widest">Incognito</span>
-                      </div>
-                   )}
-                   <button onClick={() => fileInputRef.current?.click()} className={`w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center transition-all ${isPrivate ? 'text-indigo-300 hover:text-white hover:bg-white/10' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}><i className="fa-solid fa-paperclip text-base"></i></button>
+                <div className={`glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border flex items-center gap-1 backdrop-blur-3xl transition-colors ${isPrivate ? 'bg-slate-900/90 border-slate-700' : 'bg-white/95 dark:bg-slate-900/95 border-slate-300 dark:border-white/10'}`}>
+                   <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"><i className="fa-solid fa-paperclip"></i></button>
                    <input 
                     ref={inputRef} 
                     value={localInput} 
                     onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                     onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={isPrivate ? "Private chat active..." : (activeTab === 'studio' ? t.placeholderStudio : activeTab === 'gethelp' ? "How can I help you today?" : dynamicPlaceholder)} 
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-indigo-300' : 'dark:text-white placeholder:text-slate-400'} ${lang === 'si' ? 'sinhala-text' : ''}`} 
+                    placeholder={isPrivate ? "Private Mode (Not Saved)..." : "Ask Orin AI..."}
+                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                    />
-                   <button onClick={() => handleSend()} disabled={isTyping || (!localInput.trim() && !selectedFile && activeTab !== 'studio')} className={`w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 transition-all disabled:opacity-20 ${isPrivate ? 'bg-indigo-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}><i className="fa-solid fa-arrow-up text-base"></i></button>
+                   <button onClick={() => handleSend()} disabled={isTyping} className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 disabled:opacity-50 ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}>
+                      <i className="fa-solid fa-arrow-up"></i>
+                   </button>
                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -550,12 +279,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                         r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
                         r.readAsDataURL(file);
                       }
-                      e.target.value = ''; // Reset input to allow re-selection
                    }} />
                 </div>
              </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

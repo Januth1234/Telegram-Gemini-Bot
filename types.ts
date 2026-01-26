@@ -1,50 +1,19 @@
 
 export type Language = 'en' | 'si' | 'ta';
-export type UserTier = 'Basic' | 'Pro' | 'Elite' | 'Verified Member';
-
-// Database Interfaces
-export interface DbPlan {
-  id: string;
-  name: string;
-  price_lkr: number;
-  daily_limit_text: number;
-  daily_limit_images: number;
-  features: string[];
-}
-
-export interface DbSubscription {
-  id: string;
-  user_id: string;
-  plan_id: string;
-  status: 'active' | 'cancelled' | 'expired';
-  start_date: string;
-  end_date: string | null;
-  plan?: DbPlan; // Joined data
-}
-
-export interface UserUsage {
-  prompts: number;
-  images: number;
-  videos: number;
-  lastReset: any; // Firestore Timestamp or Date
-  lastImageGenerated?: any;
-  lastVideoGenerated?: any;
-  lastImageReset?: any; // Specific for Free tier 3-day window
-}
+export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
 
 export interface UserAccount {
   id: string;
   name: string;
   email: string;
   avatar?: string;
-  tier: UserTier; // Display label
-  plan: string; // Internal plan ID: 'free', 'basic', 'pro', 'elite'
+  tier: UserTier;
   token?: string;
-  neuralBio?: string;
-  usage?: UserUsage;
-  subscriptionStatus?: string;
-  planStartedAt?: any;
-  subscription?: DbSubscription; // Legacy support if needed
+  dailyUsage: {
+    text: number;
+    images: number;
+    videos: number;
+  };
 }
 
 export interface GroundingLink {
@@ -62,7 +31,7 @@ export interface ChatMessage {
   imageUrl?: string;
   videoUrl?: string;
   fileName?: string;
-  reasoning_details?: any;
+  reasoning_details?: any; // To support OpenRouter reasoning models
 }
 
 export interface Conversation {
@@ -72,7 +41,6 @@ export interface Conversation {
   timestamp: Date;
   mode: WorkspaceMode;
   modesUsed?: WorkspaceMode[];
-  isPrivate?: boolean;
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";

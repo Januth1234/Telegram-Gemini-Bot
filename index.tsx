@@ -3,6 +3,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// --- GLOBAL ERROR SHIELD ---
+// Traps synchronous errors (like "undefined is not a function") to prevent white-screen crashes
+window.addEventListener('error', (event) => {
+  console.warn('[Orin Runtime Guard] Caught:', event.message);
+  // event.preventDefault(); // Uncomment to suppress the red error in console
+});
+
+// Traps unhandled promise rejections (like "Network Error" or "Permission Denied")
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason?.name === 'AbortError') return;
+  console.warn('[Orin Async Guard] Unhandled Rejection:', event.reason);
+  event.preventDefault(); // Prevents "Uncaught (in promise)" error
+});
+
 const startApp = () => {
   const rootElement = document.getElementById('root');
   if (!rootElement) {
@@ -10,23 +24,15 @@ const startApp = () => {
     return;
   }
 
-  // Register Asset Caching Service Worker
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker
-        .register('/sw.js')
-        .then((reg) => console.log('Asset Cache Worker active:', reg.scope))
-        .catch((err) => console.warn('Cache Worker registration failed:', err));
-    });
-
-    // Register Firebase Messaging separately if needed
+  // Register Main Service Worker (Caching + Messaging)
+  if ('serviceWorker' in navigator && !window.location.hostname.includes('localhost')) {
     navigator.serviceWorker
-      .register('/firebase-messaging-sw.js')
+      .register('/sw.js')
       .then((registration) => {
-        console.log('FCM Worker active:', registration.scope);
+        console.log('Orin SW registered with scope:', registration.scope);
       })
       .catch((err) => {
-        console.warn('FCM Worker registration failed:', err);
+        console.debug('Orin SW registration skipped:', err);
       });
   }
 
@@ -37,7 +43,7 @@ const startApp = () => {
         <App />
       </React.StrictMode>
     );
-    console.log("Orin Neural Workspace: Successfully Mounted.");
+    console.log("Aura Neural Workspace: Successfully Mounted.");
   } catch (err) {
     console.error("Mounting Error:", err);
   }
