@@ -244,7 +244,7 @@ const App: React.FC = () => {
   );
 
   const renderContent = () => {
-    // Magic Loading Screen - Neural Core
+    // Magic Loading Screen - Orin AI
     if (!authInitialized) return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-8 bg-slate-50 dark:bg-slate-950">
          <div className="relative">
@@ -258,8 +258,8 @@ const App: React.FC = () => {
             <div className="absolute top-0 right-0 w-2 h-2 bg-indigo-500 rounded-full animate-ping"></div>
          </div>
          <div className="text-center space-y-2">
-            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-[0.2em]">Neural Sync</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Loading Workspace...</p>
+            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-[0.2em]">Orin AI</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Initializing...</p>
          </div>
       </div>
     );
@@ -313,14 +313,14 @@ const App: React.FC = () => {
       case 'voice': 
         // Closing voice mode goes back to chat
         return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} user={user} onClearHistory={handleClearHistory} />;
-      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = user ? 'home' : ''} />;
-      case 'terms': return <TermsPage onClose={() => window.location.hash = user ? 'home' : ''} />;
-      case 'releases': return <ReleasesPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
-      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
-      case 'creator': return <CreatorPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
-      case 'pricing': return <PricingPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
-      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} />;
+      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} />;
+      case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} />;
+      case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'pricing': return <PricingPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       default: 
         return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} />;
     }

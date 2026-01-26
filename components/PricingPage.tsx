@@ -32,6 +32,15 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
     { name: t.elitePlan, price: "3000", color: "indigo", key: "elite" }
   ];
 
+  const features = [
+    { name: "Reasoning Model", basic: "Gemini Flash", pro: "Gemini Flash", elite: "Gemini Pro" },
+    { name: "Daily Messages", basic: "200", pro: "500", elite: "Unlimited" },
+    { name: "Image Gen (Studio)", basic: "10", pro: "50", elite: "Unlimited" },
+    { name: "Video Gen (Veo)", basic: "-", pro: "5", elite: "Unlimited" },
+    { name: "Memory Sync", basic: "Basic", pro: "Extended", elite: "Full Context" },
+    { name: "Support", basic: "Community", pro: "Priority", elite: "Dedicated" },
+  ];
+
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
       <div className="max-w-6xl mx-auto px-6 py-12 pb-32">
@@ -40,7 +49,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
            <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-red-500"><i className="fa-solid fa-xmark text-lg"></i></button>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20">
             {plans.map((plan, i) => (
               <div key={i} className={`glass-panel p-8 rounded-[40px] border flex flex-col gap-8 transition-all ${plan.popular ? 'border-cyan-500 shadow-2xl scale-105 z-10' : 'border-black/5 dark:border-white/5'}`}>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase">{plan.name}</h3>
@@ -54,6 +63,34 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
               </div>
             ))}
         </div>
+
+        {/* Feature Comparison Table */}
+        <div className="glass-panel p-8 rounded-[48px] border border-black/5 dark:border-white/5 overflow-hidden">
+          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest mb-8 text-center border-b border-black/5 dark:border-white/5 pb-4">Feature Breakdown</h3>
+          <div className="overflow-x-auto custom-scrollbar">
+             <table className="w-full text-left border-collapse">
+                <thead>
+                   <tr className="border-b border-black/5 dark:border-white/5">
+                      <th className="p-4 text-[10px] font-black uppercase text-slate-400">Feature</th>
+                      <th className="p-4 text-[10px] font-black uppercase text-slate-600 dark:text-slate-300">Basic</th>
+                      <th className="p-4 text-[10px] font-black uppercase text-cyan-600">Pro</th>
+                      <th className="p-4 text-[10px] font-black uppercase text-indigo-600">Elite</th>
+                   </tr>
+                </thead>
+                <tbody className="divide-y divide-black/5 dark:divide-white/5">
+                   {features.map((f, i) => (
+                      <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                         <td className="p-4 text-xs font-bold text-slate-500">{f.name}</td>
+                         <td className="p-4 text-xs font-bold text-slate-800 dark:text-white">{f.basic}</td>
+                         <td className="p-4 text-xs font-bold text-slate-800 dark:text-white">{f.pro}</td>
+                         <td className="p-4 text-xs font-bold text-slate-800 dark:text-white">{f.elite}</td>
+                      </tr>
+                   ))}
+                </tbody>
+             </table>
+          </div>
+        </div>
+
       </div>
     </div>
   );

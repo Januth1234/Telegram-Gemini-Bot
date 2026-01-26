@@ -19,7 +19,7 @@ interface LandingPageProps {
 const MarkovLoader = () => {
    const [text, setText] = useState("");
    useEffect(() => {
-     const words = ["Initializing Neural Core...", "Syncing Knowledge Graph...", "Calibrating Response Vector...", "Optimizing Local Cache..."];
+     const words = ["Initializing Orin Core...", "Syncing Knowledge Graph...", "Calibrating Response Vector...", "Optimizing Local Cache..."];
      let i = 0;
      const t = setInterval(() => {
         setText(words[i % words.length]);
@@ -172,13 +172,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-8 md:space-y-12 animate-slide-in-up">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-6 px-2 md:px-0 place-items-center">
+          <div className="flex flex-wrap justify-center gap-3 md:gap-6 px-2 md:px-0">
               <NavCard href="#downloads" icon="fa-download" color="cyan" title={t.downloads} lang={lang} />
               <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} lang={lang} />
               <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} lang={lang} />
               <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} lang={lang} />
               <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} lang={lang} />
               <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} lang={lang} />
+              <NavCard href="#terms" icon="fa-file-contract" color="purple" title={t.terms} lang={lang} />
           </div>
         </section>
 
@@ -242,10 +243,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 };
 
 const NavCard = ({ href, icon, title, color, lang }: any) => {
-  const colors: Record<string, string> = { cyan: "group-hover:text-cyan-500", indigo: "group-hover:text-indigo-500", purple: "group-hover:text-purple-500", emerald: "group-hover:text-emerald-500", orange: "group-hover:text-orange-500", pink: "group-hover:text-pink-500", violet: "group-hover:text-violet-500", blue: "group-hover:text-blue-500" };
+  const colors: Record<string, string> = {
+    cyan: "group-hover:text-cyan-500 group-hover:bg-cyan-500/10",
+    indigo: "group-hover:text-indigo-500 group-hover:bg-indigo-500/10",
+    purple: "group-hover:text-purple-500 group-hover:bg-purple-500/10",
+    emerald: "group-hover:text-emerald-500 group-hover:bg-emerald-500/10",
+    orange: "group-hover:text-orange-500 group-hover:bg-orange-500/10",
+    pink: "group-hover:text-pink-500 group-hover:bg-pink-500/10",
+    violet: "group-hover:text-violet-500 group-hover:bg-violet-500/10",
+    blue: "group-hover:text-blue-500 group-hover:bg-blue-500/10"
+  };
+
   return (
     <a href={href} className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
-      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner group-hover:text-pink-500 ${colors[color]}`}><i className={`fa-solid ${icon} text-sm`}></i></div>
+      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-110 shadow-inner ${colors[color] || colors.cyan}`}>
+        <i className={`fa-solid ${icon} text-lg`}></i>
+      </div>
       <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );

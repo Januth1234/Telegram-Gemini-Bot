@@ -250,8 +250,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {renderBody()}
 
-        {/* Input Bar - Hide when in studio/video mode */}
-        {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && (
+        {/* Input Bar - Hide when in studio/video/maths mode */}
+        {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && activeTab !== 'maths' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
                <div className="max-w-3xl mx-auto pointer-events-auto relative">
                   {/* Auto Suggest */}
