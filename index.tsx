@@ -25,11 +25,10 @@ const startApp = () => {
   }
 
   // Register Main Service Worker (Caching + Messaging)
-  // Logic updated: Attempt registration in all environments to support production deployment on orinai.org
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker
-        .register('/sw.js')
+        .register('/sw.js', { scope: '/' })
         .then((registration) => {
           console.log('Orin SW registered with scope:', registration.scope);
         })

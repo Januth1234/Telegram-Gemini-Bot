@@ -114,7 +114,7 @@ class FirebaseService {
   }
 
   // --- FIRESTORE USER SYNC ---
-  async syncUserSession(uid: string, email: string): Promise<UserAccount> {
+  async syncUserSession(uid: string, email: string, photoURL?: string | null): Promise<UserAccount> {
     if (!this.db) throw new Error("DB not init");
     
     const userRef = doc(this.db, "users", uid);
@@ -126,6 +126,8 @@ class FirebaseService {
       // Create new user profile
       userData = {
         email,
+        name: email.split('@')[0], // Default name
+        avatar: photoURL || null,
         plan: 'starter',
         subscriptionStatus: 'active',
         createdAt: serverTimestamp(),
@@ -137,12 +139,24 @@ class FirebaseService {
       await setDoc(userRef, userData);
     } else {
       userData = snap.data();
-      // Check for daily reset logic (client-side calculation for now, robust solution would be cloud function)
+      
+      // Update avatar if changed
+      const updates: any = {};
+      if (photoURL && userData.avatar !== photoURL) {
+          updates.avatar = photoURL;
+          userData.avatar = photoURL;
+      }
+
+      // Check for daily reset logic (client-side calculation for now)
       const lastReset = userData.lastReset || 0;
       if (Date.now() - lastReset > 86400000) {
-        userData.usage = { text: 0, images: 0, videos: 0 };
-        userData.lastReset = Date.now();
-        await updateDoc(userRef, { usage: userData.usage, lastReset: userData.lastReset });
+        updates.usage = { text: 0, images: 0, videos: 0 };
+        updates.lastReset = Date.now();
+        userData.usage = updates.usage;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+          await updateDoc(userRef, updates);
       }
     }
 
@@ -151,9 +165,9 @@ class FirebaseService {
       id: uid,
       name: userData.name || email.split('@')[0],
       email: email,
+      avatar: userData.avatar,
       tier: userData.plan === 'elite' ? 'Verified Member' : userData.plan === 'pro' ? 'Pro (BYO-Google)' : 'Basic',
       dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },
-      // Memory is handled separately or can be added to UserAccount type if needed globally
     };
   }
 

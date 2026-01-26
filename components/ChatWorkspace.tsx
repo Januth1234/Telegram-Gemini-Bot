@@ -222,8 +222,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</span>
             <button onClick={() => setIsHistoryOpen(false)}><i className="fa-solid fa-xmark"></i></button>
         </div>
-        <div className="p-4">
+        <div className="p-4 space-y-2">
             <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-widest">+ New Chat</button>
+            <button onClick={() => { togglePrivate(); setIsHistoryOpen(false); }} className={`w-full py-3 rounded-xl font-black text-[10px] uppercase tracking-widest border transition-all ${isPrivate ? 'bg-red-500 text-white border-red-500' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
+               {isPrivate ? 'Turn Off Private Mode' : 'Switch to Private Mode'}
+            </button>
         </div>
         <div className="overflow-y-auto h-full p-2">
             {conversations.map(c => (
@@ -238,13 +241,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <header className="h-14 md:h-16 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-md">
           <div className="flex items-center gap-3 md:gap-4">
             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center"><i className="fa-solid fa-bars"></i></button>
-            <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
-               <button onClick={togglePrivate} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${isPrivate ? 'bg-slate-900 text-white' : 'text-slate-500'}`}>
-                  {isPrivate ? 'Private On' : 'Private Off'}
-               </button>
-            </div>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><i className="fa-solid fa-power-off"></i></button>
+          <button onClick={togglePrivate} className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
+             <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`}></i>
+             <span className="text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
+          </button>
         </header>
 
         {renderBody()}

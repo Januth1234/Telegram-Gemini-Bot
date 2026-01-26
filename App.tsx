@@ -43,7 +43,6 @@ const App: React.FC = () => {
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
     // Safety timeout to prevent infinite loading if Firebase hangs
-    // Extended to 8000ms to ensure reliable connection on orinai.org
     const safetyTimeout = setTimeout(() => {
       if (!authInitialized) {
         console.warn("Auth initialization timed out, falling back to guest mode.");
@@ -55,7 +54,7 @@ const App: React.FC = () => {
       clearTimeout(safetyTimeout);
       if (authUser) {
          try {
-           const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || "user@orin.ai");
+           const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || "user@orin.ai", authUser.photoURL);
            geminiService.setSessionUser(syncedUser);
            setUser(syncedUser);
            
@@ -85,16 +84,34 @@ const App: React.FC = () => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').split('?')[0];
       
-      // Protection Rule: 'chat' requires Auth
-      if ((hash === 'chat' || hash === 'art' || hash === 'camera') && !user && authInitialized) {
-         window.location.hash = ''; // Redirect to landing
+      // If user is logged in and visits root (empty hash), redirect to chat
+      // Unless they explicitly navigated to #home (which we map to landing)
+      if (user && (hash === '' || hash === '/')) {
+         window.location.hash = 'chat';
          return;
       }
 
-      // Root Rule: Redirect logic removed to allow access to Landing Page via logo or empty hash
+      // Map #home to landing view for logged in users who want to see it
+      if (hash === 'home') {
+          setView('landing');
+          return;
+      }
+
+      // Protection Rule: 'chat' requires Auth (handled below in validViews check usually, but redundant safety)
+      // Note: We allow landing page to be viewed even if logged in (via #home)
       
       const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
-      setView(validViews.includes(hash as any) ? hash as AppView : 'landing');
+      
+      if (validViews.includes(hash as any)) {
+          // If trying to access secure routes without auth, redirect to landing (empty hash)
+          if (['chat', 'art', 'camera', 'voice', 'math', 'help'].includes(hash) && !user && authInitialized) {
+              window.location.hash = '';
+              return;
+          }
+          setView(hash as AppView);
+      } else {
+          setView('landing');
+      }
     };
 
     if (authInitialized) handleHash();
@@ -183,14 +200,25 @@ const App: React.FC = () => {
 
   // --- RENDER ---
   const renderContent = () => {
-    if (!authInitialized) return <div className="flex h-full w-full items-center justify-center"><i className="fa-solid fa-circle-notch animate-spin text-cyan-600 text-3xl"></i></div>;
+    // Magic Loading Screen
+    if (!authInitialized) return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-8 bg-slate-50 dark:bg-slate-950">
+         <div className="relative">
+            <div className="w-16 h-16 rounded-full border-4 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
+            <div className="absolute inset-0 flex items-center justify-center">
+               <div className="w-8 h-8 rounded-full bg-cyan-500/10 animate-pulse"></div>
+            </div>
+         </div>
+         <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 animate-pulse">Initializing Neural Core...</p>
+      </div>
+    );
 
     switch (view) {
       case 'chat': case 'art': case 'camera': case 'help': case 'math':
         const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat' };
         return (
           <ChatWorkspace 
-            onClose={() => window.location.hash = ''} 
+            onClose={() => window.location.hash = user ? 'home' : ''} 
             hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
             initialMode={modeMap[view]}
@@ -212,15 +240,15 @@ const App: React.FC = () => {
             isSyncing={syncStatus === 'syncing'}
           />
         );
-      case 'voice': return <VoiceAssistant onClose={() => window.location.hash = ''} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = ''} lang={lang} user={user} />;
-      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = ''} />;
-      case 'terms': return <TermsPage onClose={() => window.location.hash = ''} />;
-      case 'releases': return <ReleasesPage onClose={() => window.location.hash = ''} lang={lang} />;
-      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = ''} lang={lang} />;
-      case 'creator': return <CreatorPage onClose={() => window.location.hash = ''} lang={lang} />;
-      case 'pricing': return <PricingPage onClose={() => window.location.hash = ''} lang={lang} />;
-      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = ''} lang={lang} />;
+      case 'voice': return <VoiceAssistant onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} inline={false} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} user={user} />;
+      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = user ? 'home' : ''} />;
+      case 'terms': return <TermsPage onClose={() => window.location.hash = user ? 'home' : ''} />;
+      case 'releases': return <ReleasesPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
+      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
+      case 'creator': return <CreatorPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
+      case 'pricing': return <PricingPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
+      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = user ? 'home' : ''} lang={lang} />;
       default: 
         return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} />;
     }
@@ -229,23 +257,32 @@ const App: React.FC = () => {
   return (
     <div className={`w-screen h-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}>
       <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
-        <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = ''}>
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
           <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
         </div>
 
-        {/* TOP NAVIGATION BAR */}
+        {/* TOP NAVIGATION BAR - Show on all logged in pages except purely Landing (unless logic dictates otherwise, but view logic handles visibility) */}
         {user && view !== 'landing' && (
-           <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5">
-              <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => window.location.hash = 'chat'} />
-              <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => window.location.hash = 'art'} />
-              <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => window.location.hash = 'camera'} />
-              <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => window.location.hash = 'voice'} />
-              <NavTab active={view === 'math'} icon="fa-calculator" label={t.maths} onClick={() => window.location.hash = 'math'} />
+           <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50">
+              <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
+              <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
+              <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />
+              <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => handleStartWorkspace('', 'voice')} />
+              <NavTab active={view === 'math'} icon="fa-calculator" label={t.maths} onClick={() => handleStartWorkspace('', 'maths')} />
+              <NavTab active={view === 'help'} icon="fa-wand-magic-sparkles" label={t.getHelp} onClick={() => handleStartWorkspace('', 'gethelp')} />
            </div>
         )}
 
         <div className="flex items-center gap-2">
+           {/* Landing Page Action Button for Logged In Users */}
+           {user && view === 'landing' && (
+              <button onClick={() => window.location.hash = 'chat'} className="hidden md:flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md mr-2">
+                 <span>Open Workspace</span>
+                 <i className="fa-solid fa-arrow-right"></i>
+              </button>
+           )}
+
            {syncStatus !== 'idle' && view !== 'landing' && (
              <div className="hidden tiny:flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-black/5">
                 <div className={`w-1 h-1 rounded-full ${syncStatus === 'syncing' ? 'bg-cyan-500 animate-pulse' : syncStatus === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
