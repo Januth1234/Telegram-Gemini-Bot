@@ -242,11 +242,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 };
 
 const NavCard = ({ href, icon, title, color, lang }: any) => {
-  const colors: Record<string, string> = { cyan: "group-hover:text-cyan-500", indigo: "group-hover:text-indigo-500", purple: "group-hover:text-purple-500", emerald: "group-hover:text-emerald-500", orange: "group-hover:text-orange-500", pink: "group-hover:text-pink-500", violet: "group-hover:text-violet-500", blue: "group-hover:text-blue-500" };
+  const colors: Record<string, string> = { 
+    cyan: "group-hover:text-cyan-500 group-hover:bg-cyan-500/10 group-hover:border-cyan-500/20", 
+    indigo: "group-hover:text-indigo-500 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/20", 
+    purple: "group-hover:text-purple-500 group-hover:bg-purple-500/10 group-hover:border-purple-500/20", 
+    emerald: "group-hover:text-emerald-500 group-hover:bg-emerald-500/10 group-hover:border-emerald-500/20", 
+    orange: "group-hover:text-orange-500 group-hover:bg-orange-500/10 group-hover:border-orange-500/20", 
+    pink: "group-hover:text-pink-500 group-hover:bg-pink-500/10 group-hover:border-pink-500/20", 
+    violet: "group-hover:text-violet-500 group-hover:bg-violet-500/10 group-hover:border-violet-500/20", 
+    blue: "group-hover:text-blue-500 group-hover:bg-blue-500/10 group-hover:border-blue-500/20" 
+  };
   return (
-    <a href={href} className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
-      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-125 shadow-inner group-hover:text-pink-500 ${colors[color]}`}><i className={`fa-solid ${icon} text-lg`}></i></div>
-      <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
+    <a href={href} className="glass-panel w-32 h-32 md:w-40 md:h-40 rounded-[32px] flex flex-col items-center justify-center gap-4 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
+      <div className={`w-14 h-14 md:w-16 md:h-16 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-110 shadow-inner border border-transparent ${colors[color]}`}>
+        <i className={`fa-solid ${icon} text-2xl md:text-3xl`}></i>
+      </div>
+      <h3 className={`text-[10px] md:text-xs font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );
 };

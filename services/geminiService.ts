@@ -216,8 +216,9 @@ export class GeminiService {
         }
       });
 
+      // Veo operations can take time, poll every 10 seconds
       while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 10000));
         operation = await ai.operations.getVideosOperation({operation: operation});
       }
 
@@ -225,6 +226,7 @@ export class GeminiService {
 
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!videoUri) throw new Error("No video generated.");
+      
       const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
       if (!response.ok) throw new Error("Failed to download video.");
       

@@ -7,6 +7,7 @@ import MathsMode from './MathsMode';
 import GetHelpMode from './GetHelpMode';
 import VoiceAssistant from './VoiceAssistant';
 import LiveVisionMode from './LiveVisionMode';
+import FeatureCreate from './FeatureCreate';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -179,6 +180,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={onClose} lang={lang} /></div>;
+    if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 
     return (
       <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40 md:pb-48">
@@ -247,42 +249,44 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {renderBody()}
 
-        {/* Input Bar */}
-        <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
-             <div className="max-w-3xl mx-auto pointer-events-auto relative">
-                {/* Auto Suggest */}
-                {!localInput && currentMessages.length === 0 && !isPrivate && (
-                   <div className="absolute -top-12 left-0 right-0 flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
-                      {["Summarize this", "Write code", "Explain quantum physics"].map(s => (
-                         <button key={s} onClick={() => setLocalInput(s)} className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 shadow-sm whitespace-nowrap">{s}</button>
-                      ))}
-                   </div>
-                )}
+        {/* Input Bar - Hide when in studio/video mode */}
+        {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && (
+          <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
+               <div className="max-w-3xl mx-auto pointer-events-auto relative">
+                  {/* Auto Suggest */}
+                  {!localInput && currentMessages.length === 0 && !isPrivate && (
+                     <div className="absolute -top-12 left-0 right-0 flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4">
+                        {["Summarize this", "Write code", "Explain quantum physics"].map(s => (
+                           <button key={s} onClick={() => setLocalInput(s)} className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 shadow-sm whitespace-nowrap">{s}</button>
+                        ))}
+                     </div>
+                  )}
 
-                <div className={`glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border flex items-center gap-1 backdrop-blur-3xl transition-colors ${isPrivate ? 'bg-slate-900/90 border-slate-700' : 'bg-white/95 dark:bg-slate-900/95 border-slate-300 dark:border-white/10'}`}>
-                   <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"><i className="fa-solid fa-paperclip"></i></button>
-                   <input 
-                    ref={inputRef} 
-                    value={localInput} 
-                    onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
-                    onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
-                    placeholder={isPrivate ? "Private Mode (Not Saved)..." : "Ask Orin AI..."}
-                    className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
-                   />
-                   <button onClick={() => handleSend()} disabled={isTyping} className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 disabled:opacity-50 ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}>
-                      <i className="fa-solid fa-arrow-up"></i>
-                   </button>
-                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const r = new FileReader();
-                        r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
-                        r.readAsDataURL(file);
-                      }
-                   }} />
-                </div>
-             </div>
-        </div>
+                  <div className={`glass-panel p-2 rounded-[28px] md:rounded-[32px] shadow-2xl border flex items-center gap-1 backdrop-blur-3xl transition-colors ${isPrivate ? 'bg-slate-900/90 border-slate-700' : 'bg-white/95 dark:bg-slate-900/95 border-slate-300 dark:border-white/10'}`}>
+                     <button onClick={() => fileInputRef.current?.click()} className="w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5"><i className="fa-solid fa-paperclip"></i></button>
+                     <input 
+                      ref={inputRef} 
+                      value={localInput} 
+                      onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
+                      onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
+                      placeholder={isPrivate ? "Private Mode (Not Saved)..." : "Ask Orin AI..."}
+                      className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
+                     />
+                     <button onClick={() => handleSend()} disabled={isTyping} className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 disabled:opacity-50 ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}>
+                        <i className="fa-solid fa-arrow-up"></i>
+                     </button>
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const r = new FileReader();
+                          r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
+                          r.readAsDataURL(file);
+                        }
+                     }} />
+                  </div>
+               </div>
+          </div>
+        )}
       </div>
     </div>
   );
