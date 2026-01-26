@@ -1,5 +1,4 @@
 
-import { initializeApp } from "firebase/app";
 import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 import firebase from "firebase/compat/app";
@@ -34,16 +33,34 @@ class FirebaseService {
 
   constructor() {
     try {
-      this.app = initializeApp(firebaseConfig);
+      // Use compat initialization to ensure compatibility with firebase.auth()
+      if (!firebase.apps.length) {
+        this.app = firebase.initializeApp(firebaseConfig);
+      } else {
+        this.app = firebase.app();
+      }
       
       if (typeof window !== 'undefined') {
-        this.analytics = getAnalytics(this.app);
-        this.auth = firebase.auth(this.app);
+        // Critical: Initialize Auth first to prevent timeouts
+        this.auth = firebase.auth();
+        
+        // Initialize Firestore
         this.db = getFirestore(this.app);
         
-        this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-          .catch((error) => console.error("Auth Persistence Error:", error));
+        // Setup Persistence
+        if (this.auth) {
+           this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+            .catch((error) => console.error("Auth Persistence Error:", error));
+        }
 
+        // Initialize Analytics (Can fail due to adblockers, so we wrap it)
+        try {
+          this.analytics = getAnalytics(this.app);
+        } catch (e) {
+          console.debug("Analytics initialization skipped (Adblocker detected or privacy setting)");
+        }
+
+        // Native Bridge Handler
         window.handleNativeGoogleToken = async (token: string) => {
           if (!this.auth) return;
           try {
@@ -57,7 +74,11 @@ class FirebaseService {
       }
 
       if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-        this.messaging = getMessaging(this.app);
+        try {
+           this.messaging = getMessaging(this.app);
+        } catch (e) {
+           console.debug("Messaging initialization skipped");
+        }
       }
     } catch (e) {
       console.warn("Firebase initialization warning:", e);
@@ -87,6 +108,8 @@ class FirebaseService {
 
   onAuthStateChanged(callback: (user: firebase.User | null) => void) {
     if (this.auth) return this.auth.onAuthStateChanged(callback);
+    // If auth failed to init, callback with null immediately to unblock app loading
+    callback(null);
     return () => {};
   }
 

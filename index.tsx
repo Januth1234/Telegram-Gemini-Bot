@@ -25,15 +25,18 @@ const startApp = () => {
   }
 
   // Register Main Service Worker (Caching + Messaging)
-  if ('serviceWorker' in navigator && !window.location.hostname.includes('localhost')) {
-    navigator.serviceWorker
-      .register('/sw.js')
-      .then((registration) => {
-        console.log('Orin SW registered with scope:', registration.scope);
-      })
-      .catch((err) => {
-        console.debug('Orin SW registration skipped:', err);
-      });
+  // Logic updated: Attempt registration in all environments to support production deployment on orinai.org
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .then((registration) => {
+          console.log('Orin SW registered with scope:', registration.scope);
+        })
+        .catch((err) => {
+          console.debug('Orin SW registration skipped:', err);
+        });
+    });
   }
 
   try {

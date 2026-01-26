@@ -43,12 +43,13 @@ const App: React.FC = () => {
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
     // Safety timeout to prevent infinite loading if Firebase hangs
+    // Extended to 8000ms to ensure reliable connection on orinai.org
     const safetyTimeout = setTimeout(() => {
       if (!authInitialized) {
         console.warn("Auth initialization timed out, falling back to guest mode.");
         setAuthInitialized(true);
       }
-    }, 3000);
+    }, 8000);
 
     const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
       clearTimeout(safetyTimeout);
