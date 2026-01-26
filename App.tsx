@@ -205,7 +205,7 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = ''} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = ''} lang={lang} onUserUpdate={() => {}} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = ''} lang={lang} user={user} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = ''} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = ''} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = ''} lang={lang} />;
@@ -234,9 +234,16 @@ const App: React.FC = () => {
            )}
            <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
            <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
-           <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10">
-              {user?.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <i className="fa-solid fa-user text-[10px] text-slate-400"></i>}
-           </button>
+           
+           {user ? (
+             <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 shadow-sm active:scale-95 transition-all">
+                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <span className="font-bold text-xs text-slate-500">{user.name[0]}</span>}
+             </button>
+           ) : (
+             <button onClick={() => window.location.hash = 'account'} className="px-5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md">
+                Sign In
+             </button>
+           )}
         </div>
       </header>
       <main className="flex-1 overflow-hidden relative flex flex-col">{renderContent()}</main>

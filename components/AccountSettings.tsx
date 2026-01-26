@@ -8,12 +8,11 @@ import { translations } from '../translations';
 interface AccountSettingsProps {
   onClose: () => void;
   lang: Language;
-  onUserUpdate: () => void;
+  user: UserAccount | null;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUserUpdate }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user }) => {
   const t = translations[lang];
-  const [user, setUser] = useState<UserAccount | null>(geminiService.getCurrentUser());
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,16 +33,18 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      const googleUser = await firebaseService.loginWithGoogle();
-      const syncedUser = await firebaseService.syncUserSession(googleUser.uid, googleUser.email || "");
-      geminiService.setSessionUser(syncedUser);
-      setUser(syncedUser);
-      onUserUpdate();
+      await firebaseService.loginWithGoogle();
+      // Auth listener in App.tsx will handle user state update automatically
     } catch (err: any) {
       alert(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLogout = async () => {
+      await geminiService.logout();
+      // Auth listener will reset state
   };
 
   return (
@@ -144,7 +145,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, onUser
                  </div>
               </div>
 
-              <button onClick={() => { geminiService.logout(); setUser(null); onUserUpdate(); }} className="w-full py-5 rounded-2xl bg-red-500/10 text-red-500 font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2">
+              <button onClick={handleLogout} className="w-full py-5 rounded-2xl bg-red-500/10 text-red-500 font-black text-[10px] uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all flex items-center justify-center gap-2">
                 <i className="fa-solid fa-power-off"></i>
                 <span>Sign Out</span>
               </button>
