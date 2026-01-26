@@ -139,8 +139,10 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
     try {
       // 1. Setup Audio Contexts
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioCtx({ sampleRate: 24000 });
-      inputAudioContextRef.current = new AudioCtx({ sampleRate: 16000 });
+      // FIX: Use default sample rates for compatibility
+      audioContextRef.current = new AudioCtx({ sampleRate: 24000 }); 
+      inputAudioContextRef.current = new AudioCtx(); 
+      const inputSampleRate = inputAudioContextRef.current.sampleRate;
 
       // 2. Setup Media Stream (Video + Audio)
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -184,7 +186,12 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
             const int16 = new Int16Array(data.length);
             for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
             sessionPromise.then(session => {
-              session.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+              session.sendRealtimeInput({ 
+                  media: { 
+                      data: encodeBase64(new Uint8Array(int16.buffer)), 
+                      mimeType: `audio/pcm;rate=${inputSampleRate}`
+                  } 
+               });
             }).catch(err => console.warn("Session not ready for audio input:", err));
           };
 

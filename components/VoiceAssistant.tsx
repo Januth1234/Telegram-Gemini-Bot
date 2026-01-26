@@ -106,7 +106,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   async function decodeAudioData(data: Uint8Array, ctx: AudioContext): Promise<AudioBuffer> {
     const dataInt16 = new Int16Array(data.buffer);
     const frameCount = dataInt16.length;
-    const buffer = ctx.createBuffer(1, frameCount, 24000);
+    const buffer = ctx.createBuffer(1, frameCount, 24000); // Output remains 24k as per model default
     const channelData = buffer.getChannelData(0);
     for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i] / 32768.0;
     return buffer;
@@ -149,8 +149,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioCtx({ sampleRate: 24000 });
-      inputAudioContextRef.current = new AudioCtx({ sampleRate: 16000 });
+      // FIX: Do not hardcode sampleRate. Let browser pick native (e.g., 44100 or 48000).
+      audioContextRef.current = new AudioCtx({ sampleRate: 24000 }); // Output context still optimal at 24k
+      inputAudioContextRef.current = new AudioCtx(); // Input context uses system default
+      const inputSampleRate = inputAudioContextRef.current.sampleRate;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true } 
@@ -175,7 +177,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const data = e.inputBuffer.getChannelData(0);
             const int16 = new Int16Array(data.length);
             for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
-            sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(int16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+            
+            // FIX: Dynamic sample rate transmission
+            sessionRef.current.sendRealtimeInput({ 
+                media: { 
+                    data: encodeBase64(new Uint8Array(int16.buffer)), 
+                    mimeType: `audio/pcm;rate=${inputSampleRate}`
+                } 
+            });
           };
           src.connect(proc);
           proc.connect(inputAudioContextRef.current!.destination);
@@ -192,21 +201,27 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
           if (audio && audioContextRef.current) {
             setIsSpeaking(true);
-            const buf = await decodeAudioData(decodeBase64(audio), audioContextRef.current);
-            const s = audioContextRef.current.createBufferSource();
-            s.buffer = buf;
-            s.connect(analyserRef.current!);
-            const now = audioContextRef.current.currentTime;
-            if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
-            s.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += buf.duration;
-            sourcesRef.current.add(s);
-            s.onended = () => { sourcesRef.current.delete(s); if (sourcesRef.current.size === 0) setIsSpeaking(false); };
+            try {
+                const buf = await decodeAudioData(decodeBase64(audio), audioContextRef.current);
+                const s = audioContextRef.current.createBufferSource();
+                s.buffer = buf;
+                s.connect(analyserRef.current!);
+                const now = audioContextRef.current.currentTime;
+                if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
+                s.start(nextStartTimeRef.current);
+                nextStartTimeRef.current += buf.duration;
+                sourcesRef.current.add(s);
+                s.onended = () => { sourcesRef.current.delete(s); if (sourcesRef.current.size === 0) setIsSpeaking(false); };
+            } catch (err) { console.warn("Audio buffer error", err); }
           }
           if (msg.serverContent?.interrupted) stopAiSpeaking();
         },
         onclose: () => { setIsActive(false); setIsConnecting(false); },
-        onerror: (e: any) => { setErrorMessage(e.message || "Connection Error"); stopSession(); }
+        onerror: (e: any) => { 
+            console.error(e); 
+            setErrorMessage(e.message || "Connection Error"); 
+            stopSession(); 
+        }
       };
 
       const p = mode === 'translator' 
@@ -215,7 +230,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       sessionRef.current = await p;
     } catch (e: any) {
-      setErrorMessage(e.message || "Device Audio Error");
+      console.error(e);
+      setErrorMessage(e.message || "Microphone Error");
       setIsConnecting(false);
     }
   };
