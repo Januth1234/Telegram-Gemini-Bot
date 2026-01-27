@@ -1,5 +1,5 @@
 
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Language, ChatMessage } from '../types';
 import { translations } from '../translations';
 
@@ -12,24 +12,33 @@ interface GetHelpModeProps {
   isTyping: boolean;
 }
 
+interface ParsedSegment {
+  type: 'text' | 'code';
+  content: string;
+  lang?: string;
+}
+
 const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
   const t = translations[lang];
 
-  // Logic to handle file downloads with correct extensions
+  // --- Logic: File Download ---
   const handleDownloadFile = (content: string, filename: string, language: string) => {
     let extension = '.txt';
     const langLower = language.toLowerCase();
     
-    if (langLower.includes('python')) extension = '.py';
-    else if (langLower.includes('javascript') || langLower.includes('js')) extension = '.js';
-    else if (langLower.includes('typescript') || langLower.includes('ts')) extension = '.ts';
-    else if (langLower.includes('html')) extension = '.html';
-    else if (langLower.includes('css')) extension = '.css';
-    else if (langLower.includes('sql')) extension = '.sql';
-    else if (langLower.includes('java')) extension = '.java';
-    else if (langLower.includes('cpp') || langLower.includes('c++')) extension = '.cpp';
-    else if (langLower.includes('json')) extension = '.json';
-    else if (langLower.includes('php')) extension = '.php';
+    // Auto-detect extension based on language label
+    const extMap: Record<string, string> = {
+      python: '.py', javascript: '.js', typescript: '.ts',
+      html: '.html', css: '.css', sql: '.sql',
+      java: '.java', cpp: '.cpp', c: '.c',
+      json: '.json', php: '.php', rust: '.rs',
+      go: '.go', swift: '.swift', kotlin: '.kt',
+      xml: '.xml', yaml: '.yaml', shell: '.sh', bash: '.sh'
+    };
+    
+    Object.keys(extMap).forEach(key => {
+        if (langLower.includes(key)) extension = extMap[key];
+    });
 
     const blob = new Blob([content], { type: 'text/plain' });
     const url = window.URL.createObjectURL(blob);
@@ -42,170 +51,180 @@ const GetHelpMode: React.FC<GetHelpModeProps> = ({ onClose, lang, embedded = fal
     window.URL.revokeObjectURL(url);
   };
 
+  // --- Logic: CSV Download ---
   const handleDownloadCSV = (rows: string[][]) => {
     const csvContent = rows.map(r => r.join(',')).join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'orin-data-export.csv';
+    a.download = `orin-data-${Date.now()}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
   };
 
-  // Robust parser for interleaved text and code blocks
-  const parseMessageContent = (content: string) => {
-    const segments = [];
-    const regex = /```(\w*)\n([\s\S]*?)```/g;
-    let lastIndex = 0;
-    let match;
+  // --- Logic: Content Parsing ---
+  const parseMessageContent = (content: string): ParsedSegment[] => {
+    if (!content) return [];
+    
+    const segments: ParsedSegment[] = [];
+    const parts = content.split(/```(\w*)\n([\s\S]*?)```/g);
 
-    while ((match = regex.exec(content)) !== null) {
-      // Push text before code
-      if (match.index > lastIndex) {
-        segments.push({ type: 'text', content: content.slice(lastIndex, match.index) });
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 3 === 0) {
+        // Even index = Regular Text
+        if (parts[i].trim()) segments.push({ type: 'text', content: parts[i] });
+      } else if (i % 3 === 1) {
+        // Index % 3 === 1 is the language tag
+        const lang = parts[i] || 'text';
+        const code = parts[i + 1] || '';
+        segments.push({ type: 'code', lang, content: code.trim() });
+        i++; // Skip the code part in the next loop iteration
       }
-      // Push code block
-      segments.push({ type: 'code', lang: match[1] || 'text', content: match[2].trim() });
-      lastIndex = regex.lastIndex;
     }
-
-    // Push remaining text
-    if (lastIndex < content.length) {
-      segments.push({ type: 'text', content: content.slice(lastIndex) });
-    }
-
     return segments;
   };
 
   const containerClass = embedded 
-    ? "flex-1 flex flex-col p-4 md:p-10 overflow-y-auto custom-scrollbar items-center bg-slate-50/50 dark:bg-slate-950/50 pb-48" 
+    ? "flex-1 flex flex-col p-4 md:p-8 overflow-y-auto custom-scrollbar items-center bg-slate-50 dark:bg-slate-950 pb-40" 
     : "fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal overflow-hidden";
 
   return (
     <div className={containerClass}>
       {!embedded && (
-        <header className="h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 shrink-0 z-50">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-cyan-600 flex items-center justify-center text-white shadow-xl"><i className="fa-solid fa-wand-sparkles text-xl"></i></div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.getHelp}</h2>
+        <header className="h-16 shrink-0 border-b border-black/5 dark:border-white/5 flex items-center justify-between px-6 bg-white dark:bg-slate-900">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white"><i className="fa-solid fa-code"></i></div>
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-800 dark:text-white">Developer Mode</h2>
           </div>
-          <button onClick={onClose} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 transition-all"><i className="fa-solid fa-xmark text-lg"></i></button>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500"><i className="fa-solid fa-xmark"></i></button>
         </header>
       )}
 
-      <div className="w-full max-w-4xl space-y-12">
+      <div className="w-full max-w-5xl space-y-12">
+        
+        {/* Empty State */}
         {messages.length === 0 ? (
-          <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
-            <div className="w-24 h-24 rounded-[48px] bg-cyan-500/10 flex items-center justify-center text-cyan-600 mx-auto border border-cyan-500/20 shadow-inner">
-               <i className="fa-solid fa-microchip text-5xl"></i>
+          <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-8 opacity-0 animate-reveal" style={{ animationFillMode: 'forwards' }}>
+            <div className="w-20 h-20 bg-slate-200 dark:bg-slate-800 rounded-[32px] flex items-center justify-center shadow-inner">
+               <i className="fa-solid fa-terminal text-4xl text-slate-400"></i>
             </div>
-            <div className="space-y-4 px-6">
-               <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">AI Agent Workspace</h2>
-               <p className="text-sm font-bold text-slate-500 dark:text-slate-400 max-w-md mx-auto leading-relaxed">
-                 Start a multi-step project. Ask me to write code, design data tables, or troubleshoot complex issues. Your progress is saved automatically.
-               </p>
-               <div className="flex flex-wrap justify-center gap-3 pt-8">
-                  {["Build a landing page", "Write a Python script", "Create a sales data table", "Design an SQL database"].map(s => (
-                    <button key={s} onClick={() => onSend(s)} className="px-6 py-3 bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl text-[10px] font-black text-slate-500 hover:text-cyan-600 hover:border-cyan-500/50 transition-all shadow-sm active:scale-95 uppercase tracking-widest">{s}</button>
-                  ))}
-               </div>
+            <div className="space-y-2">
+               <h3 className="text-2xl font-black text-slate-800 dark:text-white tracking-tighter">Code & Data Workspace</h3>
+               <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Paste errors, ask for snippets, or generate SQL.</p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg px-4">
+               {["Explain this code", "Find the bug", "Write a Python script", "Convert JSON to SQL"].map(cmd => (
+                 <button key={cmd} onClick={() => onSend(cmd)} className="p-4 rounded-xl border border-slate-200 dark:border-white/10 hover:bg-white dark:hover:bg-slate-800 hover:shadow-lg transition-all text-xs font-bold text-slate-600 dark:text-slate-300 text-left">
+                    {cmd}
+                 </button>
+               ))}
             </div>
           </div>
         ) : (
-          messages.map((msg, msgIndex) => {
-            const segments = parseMessageContent(msg.content);
-            
+          messages.map((msg, idx) => {
+            const parsed = parseMessageContent(msg.content);
             return (
               <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-                 <div className={`w-full max-w-[95%] md:max-w-[85%] p-6 md:p-8 rounded-[32px] md:rounded-[40px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                    
-                    <div className="space-y-6">
-                      {segments.map((segment, segIndex) => {
+                 
+                 {/* Message Bubble */}
+                 <div className={`w-full ${msg.role === 'user' ? 'max-w-xl bg-slate-200 dark:bg-slate-800 text-slate-900 dark:text-white rounded-[24px] rounded-tr-none' : 'max-w-full bg-transparent text-slate-800 dark:text-slate-200'} p-6`}>
+                    {parsed.map((segment, segIdx) => {
                         if (segment.type === 'text') {
-                          return (
-                            <div key={segIndex} className={`text-sm md:text-lg leading-relaxed whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(segment.content || '') ? 'sinhala-text' : ''}`}>
-                              {segment.content}
-                            </div>
-                          );
+                            return (
+                                <div key={segIdx} className="whitespace-pre-wrap leading-relaxed text-sm md:text-base font-medium">
+                                    {segment.content}
+                                </div>
+                            );
                         } else {
-                          const language = segment.lang || 'text';
-                          const code = segment.content || '';
-                          return (
-                            <div key={segIndex} className="w-full bg-slate-950 rounded-[24px] overflow-hidden border border-white/10 shadow-xl group/block my-4">
-                               <div className="h-12 bg-slate-900/80 flex items-center px-4 justify-between border-b border-white/5">
-                                  <div className="flex items-center gap-3">
-                                     <div className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.5)]"></div>
-                                     <span className="text-[10px] font-mono text-slate-400 uppercase tracking-widest">{language}</span>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button onClick={() => navigator.clipboard.writeText(code)} className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-lg text-[9px] font-black uppercase tracking-widest transition-all">Copy</button>
-                                    <button onClick={() => handleDownloadFile(code, `orin-project-${msgIndex}-${segIndex}`, language)} className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center gap-2">
-                                      <i className="fa-solid fa-download"></i>
-                                    </button>
-                                  </div>
-                               </div>
-                               <pre className="p-6 text-cyan-300 font-mono text-xs md:text-sm overflow-x-auto custom-scrollbar bg-slate-950/50 leading-loose"><code>{code}</code></pre>
-                            </div>
-                          );
+                            // CODE BLOCK RENDER
+                            return (
+                                <div key={segIdx} className="my-6 rounded-2xl overflow-hidden border border-slate-300 dark:border-white/10 bg-[#1e293b] shadow-xl w-full max-w-4xl">
+                                    <div className="flex items-center justify-between px-4 py-2 bg-[#0f172a] border-b border-white/5">
+                                        <span className="text-[10px] font-mono text-cyan-400 uppercase font-bold">{segment.lang || 'CODE'}</span>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => navigator.clipboard.writeText(segment.content)} 
+                                                className="text-[10px] font-bold text-slate-400 hover:text-white uppercase px-2 py-1 hover:bg-white/10 rounded transition-colors"
+                                            >
+                                                Copy
+                                            </button>
+                                            <button 
+                                                onClick={() => handleDownloadFile(segment.content, `snippet-${idx}-${segIdx}`, segment.lang || 'txt')} 
+                                                className="text-[10px] font-bold text-cyan-500 hover:text-cyan-300 uppercase px-2 py-1 hover:bg-cyan-500/10 rounded transition-colors flex items-center gap-1"
+                                            >
+                                                <i className="fa-solid fa-download"></i> Save
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="p-4 overflow-x-auto custom-scrollbar">
+                                        <pre className="font-mono text-xs md:text-sm text-slate-300 leading-loose">
+                                            <code>{segment.content}</code>
+                                        </pre>
+                                    </div>
+                                </div>
+                            );
                         }
-                      })}
+                    })}
 
-                      {/* Advanced Table Detection & CSV Export (Only for Assistant) */}
-                      {msg.role === 'assistant' && msg.content.includes('|') && msg.content.split('\n').some(l => l.includes('---')) && (
-                        <div className="w-full bg-slate-50 dark:bg-black/20 rounded-[24px] overflow-hidden border border-black/5 dark:border-white/5 shadow-lg mt-6">
-                           <div className="h-12 bg-white dark:bg-slate-900/50 flex items-center px-4 justify-between border-b border-black/5 dark:border-white/5">
-                              <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Data Table</span>
-                              <button 
-                                onClick={() => {
-                                  const tableLines = msg.content.split('\n').filter(l => l.includes('|') && !l.includes('---'));
-                                  const rows = tableLines.map(l => l.split('|').filter(c => c.trim().length > 0).map(c => c.trim()));
-                                  handleDownloadCSV(rows);
-                                }} 
-                                className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[9px] font-black uppercase tracking-widest shadow-lg transition-all flex items-center gap-2"
-                              >
-                                <i className="fa-solid fa-file-csv"></i>
-                                Export
-                              </button>
-                           </div>
-                           <div className="overflow-x-auto custom-scrollbar">
-                             <table className="w-full text-left text-xs md:text-sm border-collapse">
-                                <thead>
-                                   <tr className="bg-slate-100/50 dark:bg-white/5">
-                                      {msg.content.split('\n').find(l => l.includes('|'))?.split('|').filter(c => c.trim().length > 0).map((h, i) => (
-                                        <th key={i} className="p-4 font-black text-slate-700 dark:text-slate-300 border-r border-black/5 dark:border-white/5 uppercase tracking-wider whitespace-nowrap">{h.trim()}</th>
-                                      ))}
-                                   </tr>
-                                </thead>
-                                <tbody className="divide-y divide-black/5 dark:divide-white/5">
-                                   {msg.content.split('\n').filter(l => l.includes('|') && !l.includes('---') && !l.toLowerCase().includes(msg.content.split('\n').find(l => l.includes('|'))!.toLowerCase())).map((row, ri) => (
-                                     <tr key={ri} className="hover:bg-cyan-500/5 transition-colors">
-                                        {row.split('|').filter(c => c.trim().length > 0).map((cell, ci) => (
-                                          <td key={ci} className="p-4 font-medium text-slate-600 dark:text-slate-400 border-r border-black/5 dark:border-white/5 whitespace-nowrap">{cell.trim()}</td>
-                                        ))}
-                                     </tr>
-                                   ))}
-                                </tbody>
-                             </table>
-                           </div>
-                        </div>
-                      )}
-                    </div>
+                    {/* TABLE DETECTION (Assistant Only) */}
+                    {msg.role === 'assistant' && msg.content.includes('|') && (
+                        (() => {
+                            const lines = msg.content.split('\n');
+                            const tableLines = lines.filter(l => l.includes('|') && l.trim().length > 2);
+                            // Simple heuristic: at least 3 lines of pipe-separated content
+                            if (tableLines.length > 2) {
+                                const headers = tableLines[0].split('|').filter(c => c.trim()).map(c => c.trim());
+                                const rows = tableLines.slice(2).map(l => l.split('|').filter(c => c.trim()).map(c => c.trim())); // Slice 2 to skip header and separator line
+                                
+                                return (
+                                    <div className="mt-6 rounded-2xl border border-slate-200 dark:border-white/10 overflow-hidden bg-white dark:bg-slate-900 shadow-md max-w-4xl">
+                                        <div className="bg-slate-50 dark:bg-white/5 px-4 py-2 flex justify-between items-center border-b border-black/5 dark:border-white/5">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Data View</span>
+                                            <button onClick={() => handleDownloadCSV([headers, ...rows])} className="text-[10px] font-bold text-emerald-600 hover:text-emerald-500 flex items-center gap-1">
+                                                <i className="fa-solid fa-file-csv"></i> Export CSV
+                                            </button>
+                                        </div>
+                                        <div className="overflow-x-auto custom-scrollbar">
+                                            <table className="w-full text-left text-xs">
+                                                <thead>
+                                                    <tr className="bg-slate-100 dark:bg-black/20">
+                                                        {headers.map((h, hi) => (
+                                                            <th key={hi} className="p-3 font-black text-slate-700 dark:text-slate-300 border-r border-black/5 dark:border-white/5 whitespace-nowrap">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {rows.map((row, ri) => (
+                                                        <tr key={ri} className="border-b border-black/5 dark:border-white/5 last:border-0 hover:bg-blue-50/50 dark:hover:bg-blue-900/10">
+                                                            {row.map((cell, ci) => (
+                                                                <td key={ci} className="p-3 font-medium text-slate-600 dark:text-slate-400 border-r border-black/5 dark:border-white/5 whitespace-nowrap">{cell}</td>
+                                                            ))}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()
+                    )}
                  </div>
               </div>
             );
           })
         )}
-        
+
         {isTyping && (
-          <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
-            <div className="flex gap-1">
-              {[0, 150, 300].map(delay => <div key={delay} className="w-1.5 h-1.5 bg-cyan-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }}></div>)}
-            </div>
-            <span className="text-[9px] font-black text-cyan-600 dark:text-cyan-400 uppercase tracking-widest">Agent Processing...</span>
-          </div>
+           <div className="flex items-center gap-3 bg-slate-100 dark:bg-white/5 px-4 py-2 rounded-full w-fit">
+              <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce"></div>
+              <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce delay-75"></div>
+              <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce delay-150"></div>
+           </div>
         )}
       </div>
     </div>

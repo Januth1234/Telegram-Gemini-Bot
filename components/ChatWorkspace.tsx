@@ -149,9 +149,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setTimeout(() => { setProgress(0); setStepLabel(""); }, 500);
   };
 
-  const handleSend = useCallback(async (overrideInput?: string) => {
+  const handleSend = useCallback(async (overrideInput?: string, overrideFile?: { data: string; mimeType: string; name: string }) => {
     const text = overrideInput !== undefined ? overrideInput : localInput;
-    if (!text.trim() && !selectedFile && activeTab !== 'studio') return;
+    const fileToUse = overrideFile || selectedFile;
+
+    if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
     
     abortControllerRef.current = new AbortController();
     setIsTyping(true);
@@ -167,8 +169,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         role: 'user', 
         content: text || "", 
         timestamp: new Date(), 
-        type: selectedFile ? 'image' : 'text',
-        imageUrl: selectedFile ? `data:${selectedFile.mimeType};base64,${selectedFile.data}` : undefined 
+        type: fileToUse ? 'image' : 'text',
+        imageUrl: fileToUse ? `data:${fileToUse.mimeType};base64,${fileToUse.data}` : undefined 
     };
 
     if (isPrivate) {
@@ -179,7 +181,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     try {
       const res = await geminiService.chat(text || "Continue.", { 
-        fileData: selectedFile || undefined, 
+        fileData: fileToUse || undefined, 
         useThinking: false, // OPTIMIZED: Changed from true (Pro) to false (Flash) for speed
         history: isPrivate ? privateMessages : messages, 
         signal: abortControllerRef.current.signal,
