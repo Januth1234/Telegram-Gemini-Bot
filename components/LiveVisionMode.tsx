@@ -140,7 +140,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
       // 1. Setup Audio Contexts
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       // FIX: Use default sample rates for compatibility
-      audioContextRef.current = new AudioCtx({ sampleRate: 24000 }); 
+      audioContextRef.current = new AudioCtx(); 
       inputAudioContextRef.current = new AudioCtx(); 
       const inputSampleRate = inputAudioContextRef.current.sampleRate;
 

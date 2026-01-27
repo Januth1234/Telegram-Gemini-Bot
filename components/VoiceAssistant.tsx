@@ -149,9 +149,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      // FIX: Do not hardcode sampleRate. Let browser pick native (e.g., 44100 or 48000).
-      audioContextRef.current = new AudioCtx({ sampleRate: 24000 }); // Output context still optimal at 24k
-      inputAudioContextRef.current = new AudioCtx(); // Input context uses system default
+      // FIX: Use system default sample rate to prevent crashes on incompatible hardware
+      audioContextRef.current = new AudioCtx(); 
+      inputAudioContextRef.current = new AudioCtx(); 
       const inputSampleRate = inputAudioContextRef.current.sampleRate;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -178,7 +178,6 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             const int16 = new Int16Array(data.length);
             for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
             
-            // FIX: Dynamic sample rate transmission
             sessionRef.current.sendRealtimeInput({ 
                 media: { 
                     data: encodeBase64(new Uint8Array(int16.buffer)), 

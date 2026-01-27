@@ -66,32 +66,39 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       chat: ["Explain", "Summarize", "Analyze", "Debate", "Critique"],
       code: ["Write", "Debug", "Refactor", "Optimize", "Document"],
       creative: ["Write a story about", "Compose a poem for", "Brainstorm ideas for", "Script a scene about"],
-      local: ["Tell me about", "History of", "Recipe for", "Travel guide to"]
+      local: ["Tell me about", "History of", "Recipe for", "Travel guide to"],
+      math: ["Solve", "Graph", "Calculate", "Prove"],
+      vision: ["Identify", "Read text from", "Describe"]
     };
 
     const nouns = {
       tech: ["Quantum Computing", "Neural Networks", "React Hooks", "Rust Ownership", "Docker Containers"],
       science: ["Black Holes", "CRISPR", "String Theory", "Photosynthesis", "Dark Matter"],
       local: ["Sigiriya", "Kandy Perahera", "Ceylon Tea", "Colombo Street Food", "Ella Rock"],
-      abstract: ["the concept of Time", "Stoicism", "Global Economics", "Modern Art", "Consciousness"]
+      abstract: ["the concept of Time", "Stoicism", "Global Economics", "Modern Art", "Consciousness"],
+      math: ["Calculus", "Linear Algebra", "Statistics", "Geometry"],
+      obj: ["this image", "the file", "my screen"]
     };
 
     const modifiers = {
       simple: ["in simple terms", "for a 5-year-old", "like I'm a beginner"],
       pro: ["professionally", "with technical detail", "in bullet points"],
-      code: ["in Python", "using TypeScript", "in SQL", "with comments"]
+      code: ["in Python", "using TypeScript", "in SQL", "with comments"],
+      visual: ["in high detail", "briefly", "with coordinates"]
     };
 
     const generate = () => {
        const type = Math.random();
-       if (mode === 'chat') {
+       if (mode === 'chat' || mode === 'translator') {
            if (type < 0.3) return `${pick(verbs.code)} ${pick(nouns.tech)} ${pick(modifiers.code)}`;
            if (type < 0.6) return `${pick(verbs.chat)} ${pick(nouns.science)} ${pick(modifiers.simple)}`;
            if (type < 0.8) return `${pick(verbs.local)} ${pick(nouns.local)}`;
            return `${pick(verbs.chat)} ${pick(nouns.abstract)} ${pick(modifiers.pro)}`;
        }
-       // Fallbacks for other modes if input bar becomes visible
-       if (mode === 'studio') return `A ${pick(["cyberpunk", "watercolor", "photorealistic"])} image of ${pick(nouns.local)}`;
+       if (mode === 'studio') return `A ${pick(["cyberpunk", "watercolor", "photorealistic", "pencil sketch"])} image of ${pick(nouns.local)}`;
+       if (mode === 'maths') return `${pick(verbs.math)} ${pick(nouns.math)} problem`;
+       if (mode === 'vision') return `${pick(verbs.vision)} ${pick(nouns.obj)}`;
+       
        return "How can I help?";
     };
 
