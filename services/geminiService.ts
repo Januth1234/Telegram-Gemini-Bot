@@ -206,8 +206,11 @@ export class GeminiService {
       if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
+      // Select model based on resolution for optimal performance vs quality
+      const model = resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+
       let operation = await ai.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
+        model: model,
         prompt: prompt,
         config: {
           numberOfVideos: 1,

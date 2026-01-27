@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { AspectRatio, ImageSize } from '../types';
 
@@ -22,6 +22,16 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Reset aspect ratio when switching tabs to ensure valid state for the selected mode
+  useEffect(() => {
+    if (activeTab === 'video') {
+      // Veo only supports 16:9 or 9:16
+      if (aspectRatio !== '16:9' && aspectRatio !== '9:16') {
+        setAspectRatio('16:9');
+      }
+    }
+  }, [activeTab]);
 
   const handleGenerate = async (customPrompt?: string) => {
     const finalPrompt = customPrompt || prompt;
@@ -47,9 +57,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (activeTab === 'image') {
         url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
       } else {
-        // Map UI aspect ratio to Veo supported ratios (16:9 or 9:16)
-        // If user selects something else, fallback to 16:9 or 9:16
-        const veoRatio = (aspectRatio === '9:16' || aspectRatio === '3:4') ? '9:16' : '16:9';
+        // Explicit cast for video generation, utilizing the mapped or default valid ratio
+        const veoRatio = (aspectRatio === '9:16') ? '9:16' : '16:9';
         url = await geminiService.generateVideo(finalPrompt, veoRatio, videoResolution);
       }
 

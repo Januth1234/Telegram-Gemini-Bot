@@ -143,6 +143,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, [stopAiSpeaking]);
 
   const startSession = async () => {
+    if (isActive || isConnecting) return; // Prevent double taps during freezes
+    
     setErrorMessage(null);
     setIsConnecting(true);
     setTranscription([]);
