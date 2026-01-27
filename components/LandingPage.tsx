@@ -47,9 +47,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
     setIsLoggingIn(true);
     try {
       await firebaseService.loginWithGoogle();
-      // App.tsx auth listener will handle state update and redirection
+      // App.tsx auth listener will handle user state update automatically
     } catch (e) {
       console.error("Login failed", e);
+    } finally {
       setIsLoggingIn(false);
     }
   };

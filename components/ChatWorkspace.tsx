@@ -281,9 +281,26 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
         <div className="overflow-y-auto h-full p-2">
             {conversations.map(c => (
-                <button key={c.id} onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} className={`w-full text-left p-4 rounded-xl text-xs font-bold mb-2 ${activeConvId === c.id ? 'bg-cyan-50 dark:bg-cyan-900/20 text-cyan-600' : 'text-slate-500 hover:bg-slate-50'}`}>
-                    {c.title}
-                </button>
+                <div key={c.id} className={`group relative mb-2 rounded-xl transition-all ${activeConvId === c.id ? 'bg-cyan-50 dark:bg-cyan-900/20' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
+                    <button 
+                        onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 
+                        className={`w-full text-left p-4 pr-10 text-xs font-bold truncate ${activeConvId === c.id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500 dark:text-slate-400'}`}
+                    >
+                        {c.title}
+                    </button>
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if(window.confirm('Are you sure you want to delete this conversation?')) {
+                                onDeleteConv(c.id);
+                            }
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-white/50 dark:hover:bg-black/20 opacity-0 group-hover:opacity-100 transition-all"
+                        title="Delete Chat"
+                    >
+                        <i className="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
             ))}
         </div>
       </div>

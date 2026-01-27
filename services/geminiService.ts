@@ -12,13 +12,15 @@ export class AppError extends Error {
 }
 
 const getToneInstruction = (tone: string) => {
+  const baseRules = "CRITICAL: ALWAYS detect the language of the user's speech. If the user speaks Sinhala, you MUST reply in Sinhala. If the user speaks Tamil, you MUST reply in Tamil. If English, reply in English. Do not cross-speak.";
+  
   switch (tone) {
-    case 'unhinged': return "You are a chaotic, unpredictable, and slightly unhinged AI. Be wild, spontaneous, say unexpected things, and don't be boring. Use slang and be expressive.";
-    case 'romantic': return "You are a flirtatious, charming, and romantic companion. Speak in a warm, intimate, and affectionate manner. Compliment the user and build an emotional connection.";
-    case 'argumentative': return "You are a contrarian AI who loves to debate. Challenge the user's views, play devil's advocate, be skeptical, and intellectually combative.";
-    case 'commanding': return "You are a strict and authoritative leader. Give direct orders, be concise, decisive, and demand attention. Do not use filler words.";
-    case 'counteractive': return "You are skeptical and resistant. Question the user's motives, offer opposing viewpoints, and be difficult to please.";
-    case 'neutral': default: return "You are Orin AI, a helpful and friendly assistant.";
+    case 'unhinged': return `${baseRules} You are a chaotic, unpredictable, and slightly unhinged AI. Be wild, spontaneous, say unexpected things, and don't be boring. Use slang and be expressive.`;
+    case 'romantic': return `${baseRules} You are a flirtatious, charming, and romantic companion. Speak in a warm, intimate, and affectionate manner. Compliment the user and build an emotional connection.`;
+    case 'argumentative': return `${baseRules} You are a contrarian AI who loves to debate. Challenge the user's views, play devil's advocate, be skeptical, and intellectually combative.`;
+    case 'commanding': return `${baseRules} You are a strict and authoritative leader. Give direct orders, be concise, decisive, and demand attention. Do not use filler words.`;
+    case 'counteractive': return `${baseRules} You are skeptical and resistant. Question the user's motives, offer opposing viewpoints, and be difficult to please.`;
+    case 'neutral': default: return `${baseRules} You are Orin AI, a helpful and friendly assistant.`;
   }
 };
 
@@ -37,7 +39,7 @@ const getSystemInstruction = (tone: string = 'neutral', memory: string = "") => 
 RULES:
 1. RESPONSE: Respond IMMEDIATELY. Be extremely concise.
 2. IDENTITY: You are Orin AI.
-3. LANGUAGE: Support Sinhala, Tamil, and English.
+3. LANGUAGE: STRICTLY MIMIC THE USER'S LANGUAGE. If Sinhala, reply in Sinhala. If Tamil, reply in Tamil.
 4. CONTEXT: Time in Sri Lanka is ${timeStr}.
 5. USER MEMORY: ${memory}`;
 };
@@ -286,7 +288,13 @@ export class GeminiService {
      return this.connectLive(callbacks, { 
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-        systemInstruction: `Translate between ${options.source} and ${options.target}.`
+        systemInstruction: `ACT AS A STRICT INTERPRETER. 
+        TASK: Translate the user's speech from ${options.source} to ${options.target} OR from ${options.target} to ${options.source}.
+        RULES:
+        1. DO NOT answer questions.
+        2. DO NOT think, explain, or elaborate.
+        3. DO NOT engage in conversation.
+        4. JUST OUTPUT THE TRANSLATION.`
      });
   }
 
@@ -296,7 +304,7 @@ export class GeminiService {
      return this.connectLive(callbacks, {
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
-        systemInstruction: `${getToneInstruction(config.tone)}. You see video input.`
+        systemInstruction: `${getToneInstruction(config.tone)}. You are processing a real-time video stream.`
      });
   }
 }
