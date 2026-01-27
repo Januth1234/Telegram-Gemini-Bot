@@ -126,16 +126,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages, isTyping]);
 
-  // When switching tools, start fresh if needed or just handle context
-  const handleModeSwitch = (mode: WorkspaceMode) => {
-      setActiveTab(mode);
-      generateSuggestions(mode);
-      if (onModeSwitch) onModeSwitch(mode);
-      if (isPrivate) {
-          setPrivateMessages([]);
-      }
-  };
-
   const startProgress = (mode: WorkspaceMode) => {
     setProgress(0);
     const steps = [{ threshold: 30, label: "Reading..." }, { threshold: 60, label: "Thinking..." }, { threshold: 90, label: "Writing..." }];

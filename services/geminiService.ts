@@ -241,26 +241,6 @@ export class GeminiService {
   }
 
   // --- HELPERS ---
-  async generateWelcomeMessage(options: { timeOfDay: string; weather: string; lang: Language }): Promise<string> {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Generate a cheerful greeting in ${options.lang}. Time: ${options.timeOfDay}. Weather: ${options.weather}. Max 7 words.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-      return response.text?.trim() || "";
-    } catch { return ""; }
-  }
-
-  async translate(text: string, targetLang: Language): Promise<string> {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const target = targetLang === 'si' ? 'Sinhala' : targetLang === 'ta' ? 'Tamil' : 'English';
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Translate to ${target}: "${text}". Only output the translation.`,
-      });
-      return response.text || text;
-    } catch { return text; }
-  }
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
@@ -269,19 +249,6 @@ export class GeminiService {
       const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
       return response.text?.trim() || "New Chat";
     } catch { return "New Chat"; }
-  }
-  
-  async downloadImage(url: string, filename: string = "orin-image") {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const link = document.createElement('a');
-      link.href = window.URL.createObjectURL(blob);
-      link.download = `${filename}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) { console.error(err); }
   }
 
   // --- LIVE HELPERS ---
