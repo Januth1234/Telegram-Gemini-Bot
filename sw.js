@@ -2,7 +2,7 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 
-const CACHE_NAME = 'orin-ai-v9';
+const CACHE_NAME = 'orin-ai-v11';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
