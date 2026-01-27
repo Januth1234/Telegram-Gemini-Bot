@@ -4,7 +4,6 @@ import { geminiService } from '../services/geminiService';
 import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
 import MathsMode from './MathsMode';
-import GetHelpMode from './GetHelpMode';
 import VoiceAssistant from './VoiceAssistant';
 import LiveVisionMode from './LiveVisionMode';
 import FeatureCreate from './FeatureCreate';
@@ -229,7 +228,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const renderBody = () => {
     if (activeTab === 'voice') return <div className="flex-1 overflow-hidden"><VoiceAssistant onClose={onClose} lang={lang} inline /></div>;
     if (activeTab === 'maths') return <div className="flex-1 flex flex-col overflow-hidden"><MathsMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
-    if (activeTab === 'gethelp') return <div className="flex-1 flex flex-col overflow-hidden"><GetHelpMode onClose={onClose} lang={lang} embedded messages={currentMessages} onSend={handleSend} isTyping={isTyping} /></div>;
     if (activeTab === 'vision') return <div className="flex-1 overflow-hidden"><LiveVisionMode onClose={onClose} lang={lang} /></div>;
     if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 

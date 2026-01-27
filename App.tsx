@@ -128,11 +128,11 @@ const App: React.FC = () => {
           return;
       }
 
-      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'help', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
+      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads'];
       
       if (validViews.includes(hash as any)) {
           // 3. Security Check: Protect workspaces
-          if (['chat', 'art', 'camera', 'voice', 'math', 'help'].includes(hash) && !user && authInitialized) {
+          if (['chat', 'art', 'camera', 'voice', 'math'].includes(hash) && !user && authInitialized) {
               window.location.hash = ''; // Redirect guest to landing
               return;
           }
@@ -207,7 +207,7 @@ const App: React.FC = () => {
        setActiveConversationId(newId);
     }
     
-    const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', gethelp: 'help', chat: 'chat', translator: 'chat' };
+    const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat' };
     window.location.hash = modeMap[mode];
   };
 
@@ -265,8 +265,8 @@ const App: React.FC = () => {
     );
 
     switch (view) {
-      case 'chat': case 'art': case 'camera': case 'help': case 'math':
-        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'help': 'gethelp', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat' };
+      case 'chat': case 'art': case 'camera': case 'math':
+        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat' };
         return (
           <ChatWorkspace 
             // Closing a specific tool mode goes back to general chat
@@ -336,14 +336,13 @@ const App: React.FC = () => {
         </div>
 
         {/* TOP NAVIGATION BAR - Only show on workspace views, hide on informational pages (Downloads, Creator, etc.) */}
-        {user && ['chat', 'art', 'camera', 'voice', 'math', 'help'].includes(view) && (
+        {user && ['chat', 'art', 'camera', 'voice', 'math'].includes(view) && (
            <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50">
               <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
               <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />
               <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => handleStartWorkspace('', 'voice')} />
               <NavTab active={view === 'math'} icon="fa-calculator" label={t.maths} onClick={() => handleStartWorkspace('', 'maths')} />
-              <NavTab active={view === 'help'} icon="fa-wand-magic-sparkles" label={t.getHelp} onClick={() => handleStartWorkspace('', 'gethelp')} />
            </div>
         )}
 

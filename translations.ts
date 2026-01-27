@@ -20,7 +20,6 @@ export const translations = {
     voice: "Voice",
     voiceBeta: "Voice",
     translator: "Translator",
-    getHelp: "Help Me",
     maths: "Math",
     back: "Back",
     calculating: "Thinking...",
@@ -110,19 +109,6 @@ export const translations = {
       assistant: "Talk",
       interpreter: "Translate"
     },
-    help: {
-      diagnostic: "Checking...",
-      sharing: "Starting...",
-      accessibility: "Setting up...",
-      stop: "Stop",
-      startSharing: "Share Screen",
-      startAccess: "Help Me",
-      infoPC: "I will see your screen to help you.",
-      infoAndroid: "I will use Android tools to help you.",
-      notSupported: "Your phone/browser cannot do this.",
-      searchPlaceholder: "What do you need help with?",
-      searchAction: "Go"
-    },
     math: {
       title: "Math",
       subtitle: "Simple Solver",
@@ -155,7 +141,6 @@ export const translations = {
     voice: "හඬ",
     voiceBeta: "හඬ",
     translator: "පරිවර්තක",
-    getHelp: "උදව්",
     maths: "ගණිතය",
     back: "ආපසු",
     calculating: "සිතමින් සිටී...",
@@ -245,19 +230,6 @@ export const translations = {
       assistant: "කතා කරන්න",
       interpreter: "පරිවර්තනය"
     },
-    help: {
-      diagnostic: "බලනවා...",
-      sharing: "අරඹනවා...",
-      accessibility: "සූදානම් කරනවා...",
-      stop: "නවත්වන්න",
-      startSharing: "තිරය පෙන්වන්න",
-      startAccess: "උදව් ගන්න",
-      infoPC: "මම ඔබේ තිරය බලලා උදව් කරන්නම්.",
-      infoAndroid: "Android මගින් උදව් කරන්නම්.",
-      notSupported: "ඔබේ බ්‍රවුසරයේ මෙය කල නොහැක.",
-      searchPlaceholder: "මොකක්ද උදව්ව?",
-      searchAction: "යන්න"
-    },
     math: {
       title: "ගණිතය",
       subtitle: "ලේසියෙන් විසඳන්න",
@@ -290,7 +262,6 @@ export const translations = {
     voice: "குரல்",
     voiceBeta: "குரல்",
     translator: "மொழிபெயர்ப்பாளர்",
-    getHelp: "உதவி",
     maths: "கணிதம்",
     back: "பின்னால்",
     calculating: "சிந்திக்கிறது...",
@@ -379,19 +350,6 @@ export const translations = {
     voiceMode: {
       assistant: "பேசுங்கள்",
       interpreter: "மொழிபெயர்ப்பு"
-    },
-    help: {
-      diagnostic: "பார்க்கிறது...",
-      sharing: "தொடங்குகிறது...",
-      accessibility: "தயாராகிறது...",
-      stop: "நிறுத்து",
-      startSharing: "திரையைப் பகிர்",
-      startAccess: "உதவி பெறு",
-      infoPC: "உங்கள் திரையைப் பார்த்து நான் உதவுவேன்.",
-      infoAndroid: "ஆண்ட்ராய்டு மூலம் உதவுவேன்.",
-      notSupported: "உங்கள் உலாவியில் இது சாத்தியமில்லை.",
-      searchPlaceholder: "என்ன உதவி வேண்டும்?",
-      searchAction: "செல்"
     },
     math: {
       title: "கணிதம்",
