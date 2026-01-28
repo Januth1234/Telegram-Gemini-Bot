@@ -50,7 +50,6 @@ export class GeminiService {
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
-    // Guest usage is session-based RAM only as per privacy request (local tracking)
   }
 
   setSessionUser(user: UserAccount) {
@@ -68,7 +67,6 @@ export class GeminiService {
     try { await firebaseService.logout(); } catch(e) {}
   }
 
-  // --- API KEY CHECK ---
   private async checkApiKey(): Promise<boolean> {
     const key = process.env.API_KEY;
     if (key) return true;
@@ -82,7 +80,6 @@ export class GeminiService {
     return false;
   }
 
-  // --- CORE CHAT ---
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
     grounding?: 'search' | 'maps'; 
@@ -94,7 +91,6 @@ export class GeminiService {
     isPrivate?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     
-    // 1. Check Limits (Source of Truth: Firestore for Users, Local for Guests)
     if (this.currentUser) {
        const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
@@ -109,14 +105,12 @@ export class GeminiService {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       
-      // 2. Fetch Memory (Only for logged in users)
       let memory = "";
       if (this.currentUser && !options.isPrivate) {
          memory = await firebaseService.getUserMemory(this.currentUser.id);
       }
 
       let contents: any[] = [];
-      // Build history context
       if (options.history && options.history.length > 0) {
           options.history.slice(-10).forEach(msg => {
               if (msg.role === 'user' && msg.imageUrl) {
@@ -144,7 +138,6 @@ export class GeminiService {
         config
       });
 
-      // 3. Update Usage (Only on success)
       if (this.currentUser) {
          if (!options.isPrivate) await firebaseService.incrementUsage(this.currentUser.id, 'text');
       } else {
@@ -167,12 +160,10 @@ export class GeminiService {
     }
   }
 
-  // --- IMAGE GEN ---
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     if (this.currentUser) {
        if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
-       // Guests not allowed images in demo
        throw new AppError("Sign in to generate images.", "auth");
     }
 
@@ -188,4 +179,88 @@ export class GeminiService {
       if (this.currentUser) await firebaseService.incrementUsage(this.currentUser.id, 'images');
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) return `data:image/png;base64,
+        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+      }
+      throw new Error("No image generated.");
+    } catch (e: any) {
+      throw new AppError("Drawing failed.", 'generic');
+    }
+  }
+
+  async generateVideo(prompt: string, aspectRatio: '16:9' | '9:16', resolution: '720p' | '1080p' = '720p'): Promise<string> {
+    if (this.currentUser) {
+       if (await firebaseService.checkLimit(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
+    } else {
+       throw new AppError("Sign in to generate videos.", "auth");
+    }
+
+    try {
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const model = resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+
+      let operation = await ai.models.generateVideos({
+        model: model,
+        prompt: prompt,
+        config: { numberOfVideos: 1, resolution: resolution, aspectRatio: aspectRatio }
+      });
+
+      while (!operation.done) {
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        operation = await ai.operations.getVideosOperation({operation: operation});
+      }
+
+      if (this.currentUser) await firebaseService.incrementUsage(this.currentUser.id, 'videos');
+
+      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (!videoUri) throw new Error("No video generated.");
+      
+      const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+      const blob = await response.blob();
+      return URL.createObjectURL(blob);
+    } catch (e: any) {
+      throw new AppError("Video generation failed: " + e.message, 'generic');
+    }
+  }
+
+  async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const prompt = `Generate 3 word title for chat starting with: "${messages[0]?.content}". Lang: ${lang}.`;
+      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+      return response.text?.trim() || "New Chat";
+    } catch { return "New Chat"; }
+  }
+
+  async connectLive(callbacks: any, config: any) {
+      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      let finalConfig = config;
+      if (config.voiceName || config.tone) {
+         finalConfig = {
+            responseModalities: [Modality.AUDIO],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
+            systemInstruction: getToneInstruction(config.tone || 'neutral')
+         };
+      }
+      return ai.live.connect({ model: 'gemini-2.5-flash-native-audio-preview-12-2025', callbacks, config: finalConfig });
+  }
+
+  async connectTranslator(callbacks: any, options: any) {
+     return this.connectLive(callbacks, { 
+        responseModalities: [Modality.AUDIO],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+        systemInstruction: `ACT AS A STRICT INTERPRETER. TASK: Translate speech between ${options.source} and ${options.target}.`
+     });
+  }
+
+  async connectMultimodal(callbacks: any, config: any) {
+     return this.connectLive(callbacks, {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
+        systemInstruction: `${getToneInstruction(config.tone)}. Processing real-time video feed.`
+     });
+  }
+}
+
+export const geminiService = new GeminiService();
