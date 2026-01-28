@@ -331,7 +331,7 @@ const App: React.FC = () => {
       <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
         {/* Logo redirect logic: If logged in -> Home, else -> Root */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
-          <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
+          <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg" />
           <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
         </div>
 

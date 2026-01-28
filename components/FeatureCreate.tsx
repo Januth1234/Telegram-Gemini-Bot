@@ -97,6 +97,12 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
+  const handleClearHistory = () => {
+    if (confirm("Are you sure you want to clear your generation history? This will delete all temporary assets.")) {
+        setHistory([]);
+    }
+  };
+
   const inputStyle = "w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
 
   return (
@@ -260,17 +266,35 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             {history.length > 0 ? (
               <div className="w-full space-y-20 relative z-10 py-6">
+                
+                {/* Clear History Button */}
+                <div className="absolute top-0 right-0 z-30">
+                    <button onClick={handleClearHistory} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 rounded-full text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-red-500 transition-colors shadow-sm flex items-center gap-2">
+                        <i className="fa-solid fa-trash"></i>
+                        Clear
+                    </button>
+                </div>
+
                 {history.map((asset, idx) => (
                   <div key={asset.timestamp} className="w-full flex flex-col items-center gap-8 animate-scale-in max-w-4xl mx-auto group/item">
                     <div className="relative group/img w-full">
                       <div className="absolute -inset-4 bg-gradient-to-tr from-cyan-500/10 to-indigo-500/10 rounded-[48px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
                       <div className="relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700 min-h-[300px]">
+                        
+                        {/* Type Badge */}
+                        <div className="absolute top-6 left-6 z-20 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                           <i className={`fa-solid ${asset.type === 'video' ? 'fa-video' : 'fa-image'}`}></i>
+                           {asset.type}
+                        </div>
+
                         {asset.type === 'video' ? (
                             <video 
                                 src={asset.url} 
                                 controls 
+                                loop
+                                playsInline
                                 className="max-w-full max-h-[70vh] object-contain"
-                                poster={asset.url + "#t=0.5"} // Trick to show thumbnail
+                                poster={asset.url + "#t=0.5"} 
                             />
                         ) : (
                             <img 

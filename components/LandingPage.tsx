@@ -97,9 +97,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade">
           <div className="flex flex-col items-center gap-6 md:gap-8">
-            <div className="w-20 h-20 md:w-32 md:h-32 bg-cyan-600 rounded-[28px] md:rounded-[32px] flex items-center justify-center text-white shadow-2xl hover:scale-100 transition-transform duration-500 relative group">
+            <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
               <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <i className="fa-solid fa-bolt text-4xl md:text-7xl relative z-10"></i>
+              <img src="/favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px] relative z-10" alt="Orin AI" />
             </div>
             
             <div className="space-y-4 md:space-y-6">
