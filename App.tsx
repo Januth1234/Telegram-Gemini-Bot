@@ -236,10 +236,10 @@ const App: React.FC = () => {
   const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
     <button 
       onClick={onClick}
-      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
+      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
     >
       <i className={`fa-solid ${icon} text-xs`}></i>
-      <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline-block">{label}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline-block">{label}</span>
     </button>
   );
 
@@ -327,17 +327,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`w-screen h-screen flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`}>
+    <div className={`w-screen ${/* Force 100dvh for mobile browsers to avoid address bar jump */ ''} h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
         {/* Logo redirect logic: If logged in -> Home, else -> Root */}
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
           <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center text-white shadow-lg"><i className="fa-solid fa-bolt text-xs"></i></div>
-          <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white">{t.appName}</h1>
+          <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
         </div>
 
-        {/* TOP NAVIGATION BAR - Only show on workspace views, hide on informational pages (Downloads, Creator, etc.) */}
+        {/* TOP NAVIGATION BAR - Adaptive "Stuff Bar" (Floating Dock Logic) */}
         {user && ['chat', 'art', 'camera', 'voice', 'math'].includes(view) && (
-           <div className="hidden md:flex items-center bg-slate-100 dark:bg-white/5 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50">
+           <div className="flex items-center bg-slate-100/90 dark:bg-white/5 backdrop-blur-md p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
               <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
               <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />

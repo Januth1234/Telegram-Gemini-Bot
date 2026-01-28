@@ -232,7 +232,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40 md:pb-48">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40 md:pb-48">
         <div className="max-w-3xl mx-auto space-y-6 md:space-y-10">
           {currentMessages.length === 0 ? (
             <div className="py-24 text-center space-y-8 animate-reveal min-h-[500px] flex flex-col justify-center">
@@ -318,7 +318,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
         {/* Input Bar - Hide when in studio/video/maths mode */}
         {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && activeTab !== 'maths' && (
-          <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] bg-gradient-to-t from-slate-50 dark:from-slate-950 to-transparent safe-pb">
+          <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] safe-pb mb-0">
                <div className="max-w-3xl mx-auto pointer-events-auto relative">
                   {/* Markov Chain Suggestions */}
                   {!localInput && currentMessages.length === 0 && !isPrivate && (
