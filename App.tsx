@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
@@ -12,6 +11,7 @@ import PricingPage from './components/PricingPage';
 import DownloadsPage from './components/DownloadsPage';
 import VoiceAssistant from './components/VoiceAssistant';
 import AdminPortal from './components/AdminPortal';
+import TelegramBotPage from './components/TelegramBotPage';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
@@ -109,7 +109,7 @@ const App: React.FC = () => {
     const handleHash = () => {
       const hash = window.location.hash.replace('#', '').split('?')[0];
       
-      // ADMIN PORTAL DETECTION (Hidden from regular site links)
+      // ADMIN PORTAL DETECTION
       if (hash === 'admin-portal') {
           setView('admin-portal');
           return;
@@ -123,7 +123,7 @@ const App: React.FC = () => {
           setView('landing');
           return;
       }
-      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal'];
+      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
       if (validViews.includes(hash as any)) {
           if (['chat', 'art', 'camera', 'voice', 'math'].includes(hash) && !user && authInitialized) {
               window.location.hash = ''; 
@@ -236,10 +236,11 @@ const App: React.FC = () => {
     );
 
     if (view === 'admin-portal') return <AdminPortal user={user} onClose={() => window.location.hash = 'home'} />;
+    if (view === 'telegram-bot') return <TelegramBotPage onClose={() => window.location.hash = 'home'} lang={lang} />;
 
     switch (view) {
       case 'chat': case 'art': case 'camera': case 'math':
-        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat', 'admin-portal': 'chat' };
+        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat', 'admin-portal': 'chat', 'telegram-bot': 'chat' };
         return (
           <ChatWorkspace 
             onClose={() => window.location.hash = 'chat'}
@@ -292,7 +293,7 @@ const App: React.FC = () => {
       {view !== 'admin-portal' && (
         <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
-            <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg" />
+            <img src="favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg" />
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
           </div>
           {user && ['chat', 'art', 'camera', 'voice', 'math'].includes(view) && (

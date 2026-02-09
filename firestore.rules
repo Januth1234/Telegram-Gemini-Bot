@@ -1,0 +1,49 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    function hasRole(role) {
+      return request.auth != null && request.auth.token.role == role;
+    }
+    function isOwner() { return hasRole('owner'); }
+    function isDevOps() { return hasRole('devops') || isOwner(); }
+    function isTrainer() { return hasRole('training') || isDevOps(); }
+
+    // Users: Read own, Owner write
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if isOwner();
+    }
+
+    // Pending Signups: Create own, Owner manage
+    match /pending_signups/{uid} {
+      allow create: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if isOwner();
+    }
+
+    // Metrics: All auth users read
+    match /site_metrics/{doc} {
+      allow read: if request.auth != null;
+    }
+
+    // API Keys: DevOps/Owner only
+    match /api_keys/{key} {
+      allow read, write: if isDevOps();
+    }
+
+    // Training Data
+    match /papers/{paper} {
+      allow read, write: if isTrainer();
+    }
+    match /questions/{q} {
+      allow read, write: if isTrainer();
+    }
+
+    // Audit Logs: Owner read only
+    match /audit_logs/{log} {
+      allow read: if isOwner();
+      allow create: if false; // Server only
+    }
+  }
+}

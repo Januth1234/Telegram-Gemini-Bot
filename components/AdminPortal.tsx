@@ -2,6 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, UserRole, SignupRequest, SiteMetrics } from '../types';
 import { firebaseService } from '../services/firebaseService';
+import TrainingTab from './TrainingTab';
+import UserMgmtTab from './UserMgmtTab';
+import APIControls from './APIControls';
 
 interface AdminPortalProps {
   user: UserAccount | null;
@@ -173,56 +176,19 @@ const AdminPortal: React.FC<AdminPortalProps> = ({ user, onClose }) => {
          )}
 
          {activeTab === 'users' && isOwner && (
-            <div className="space-y-8 animate-reveal">
-               <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">Pending Signups</h3>
-                  <button onClick={loadAdminData} className="px-4 py-2 bg-white/5 rounded-lg text-[9px] font-black uppercase"><i className="fa-solid fa-rotate mr-2"></i> Refresh</button>
-               </div>
-               
-               <div className="space-y-4">
-                  {requests.length === 0 ? (
-                     <div className="py-20 text-center opacity-30 uppercase text-[10px] font-black tracking-widest">No pending requests found</div>
-                  ) : (
-                     requests.map(req => (
-                        <div key={req.id} className={`glass-panel p-6 rounded-3xl border ${req.codeDetected ? 'border-cyan-500/30 bg-cyan-500/5' : 'border-white/5'} flex flex-col md:flex-row items-center justify-between gap-6`}>
-                           <div className="space-y-2">
-                              <div className="flex items-center gap-3">
-                                 <span className="text-sm font-black">{req.email}</span>
-                                 {req.codeDetected && <span className="px-2 py-0.5 bg-cyan-600 text-[8px] font-black uppercase rounded">Code Verified</span>}
-                              </div>
-                              <p className="text-xs text-slate-400 italic">"{req.reason}"</p>
-                              <p className="text-[9px] font-black text-slate-600 uppercase">Requested: {new Date(req.createdAt).toLocaleString()}</p>
-                           </div>
-                           <div className="flex gap-2">
-                              <button className="px-4 py-2 bg-white text-black rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">Approve Training</button>
-                              <button className="px-4 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">Approve DevOps</button>
-                              <button className="px-4 py-2 bg-red-500/10 text-red-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Reject</button>
-                           </div>
-                        </div>
-                     ))
-                  )}
-               </div>
-            </div>
+            <UserMgmtTab requests={requests} onRefresh={loadAdminData} />
          )}
 
          {activeTab === 'api' && isDevOps && (
-            <div className="space-y-10 animate-reveal">
-               <div className="flex justify-between items-center">
-                  <h3 className="text-2xl font-black uppercase tracking-tighter">API Infrastructure</h3>
-                  <button className="px-6 py-3 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl">+ Generate Key</button>
-               </div>
-               
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ApiCard label="Public Web SDK" status="active" calls="12.4k" />
-                  <ApiCard label="Mobile Bridge v2" status="active" calls="85.1k" />
-                  <ApiCard label="Staging Environment" status="inactive" calls="0" />
-                  <ApiCard label="Internal Tools Relay" status="active" calls="4.2k" />
-               </div>
-            </div>
+            <APIControls />
+         )}
+
+         {activeTab === 'training' && isTraining && (
+            <TrainingTab />
          )}
 
          {/* Fallback for empty tabs */}
-         {['training', 'devops', 'settings'].includes(activeTab) && (
+         {['devops', 'settings'].includes(activeTab) && (
             <div className="py-40 text-center space-y-4 opacity-30 animate-reveal">
                <i className="fa-solid fa-screwdriver-wrench text-6xl"></i>
                <h4 className="text-sm font-black uppercase tracking-widest">Protocol Staging</h4>
@@ -252,21 +218,5 @@ const MetricCard = ({ label, value, icon, color }: any) => {
       </div>
    );
 };
-
-const ApiCard = ({ label, status, calls }: any) => (
-   <div className="p-8 rounded-[32px] glass-panel border border-white/5 flex items-center justify-between">
-      <div className="space-y-2">
-         <h4 className="text-sm font-black uppercase tracking-tight">{label}</h4>
-         <div className="flex items-center gap-3">
-            <span className={`w-2 h-2 rounded-full ${status === 'active' ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}></span>
-            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{status === 'active' ? 'Online' : 'Disabled'}</span>
-         </div>
-      </div>
-      <div className="text-right">
-         <div className="text-lg font-black tracking-tighter">{calls}</div>
-         <div className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Requests / 24h</div>
-      </div>
-   </div>
-);
 
 export default AdminPortal;

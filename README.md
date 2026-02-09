@@ -1,20 +1,25 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# Orin AI - Exam Assistant & Admin System
 
-This contains everything you need to run your app locally.
+## 1. Setup
+- Ensure Firebase CLI is installed: `npm install -g firebase-tools`
+- Login: `firebase login`
+- Initialize functions if missing: `firebase init functions`
 
-View your app in AI Studio: https://ai.studio/apps/drive/1LGGd0PXbbxiPMubWdNtKSQJFWeqaHpa9
+## 2. Configuration
+Set the owner UID and secret code:
+```bash
+firebase functions:config:set orina.owner_uid="<YOUR_ADMIN_UID>"
+firebase functions:config:set orina.secret_code="#710273"
+```
 
-## Run Locally
+## 3. Deploy
+Deploy Firestore Rules and Cloud Functions:
+```bash
+firebase deploy --only functions,firestore
+```
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 4. Admin Access
+1. Sign up on the frontend.
+2. Enter the secret code `#710273` in the reason field.
+3. Use the Owner account to approve the request via the Admin Portal.

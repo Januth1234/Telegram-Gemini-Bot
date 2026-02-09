@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
@@ -99,7 +98,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           <div className="flex flex-col items-center gap-6 md:gap-8">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
               <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <img src="/favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px] relative z-10" alt="Orin AI" />
+              <img src="favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px] relative z-10" alt="Orin AI" />
             </div>
             
             <div className="space-y-4 md:space-y-6">
@@ -174,13 +173,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-8 md:space-y-12 animate-slide-in-up">
           <div className="flex flex-wrap justify-center gap-3 md:gap-6 px-2 md:px-0">
+              <NavCard href="#telegram-bot" icon="fa-paper-plane" color="blue" title={t.telegramBot} lang={lang} />
               <NavCard href="#downloads" icon="fa-download" color="cyan" title={t.downloads} lang={lang} />
               <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} lang={lang} />
               <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} lang={lang} />
               <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} lang={lang} />
               <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} lang={lang} />
               <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} lang={lang} />
-              <NavCard href="#terms" icon="fa-file-contract" color="purple" title={t.terms} lang={lang} />
           </div>
         </section>
 

@@ -5,8 +5,8 @@ importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-comp
 const CACHE_NAME = 'orin-ai-v13';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
-  '/favicon.svg'
+  'index.html',
+  'favicon.svg'
 ];
 
 const firebaseConfig = {
@@ -28,7 +28,7 @@ try {
     const title = payload.notification.title;
     const options = {
       body: payload.notification.body,
-      icon: '/favicon.svg'
+      icon: 'favicon.svg'
     };
     self.registration.showNotification(title, options);
   });
@@ -75,7 +75,7 @@ self.addEventListener('fetch', (event) => {
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
-        return caches.match('/index.html');
+        return caches.match('index.html');
       })
     );
     return;

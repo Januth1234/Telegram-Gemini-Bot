@@ -34,7 +34,7 @@ export interface ChatMessage {
   imageUrl?: string;
   videoUrl?: string;
   fileName?: string;
-  reasoning_details?: any; // To support OpenRouter reasoning models
+  reasoning_details?: any;
 }
 
 export interface Conversation {
@@ -54,7 +54,7 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal';
+export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
 export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths';
 
 export interface SiteMetrics {
@@ -73,4 +73,21 @@ export interface SignupRequest {
   requestedRole: UserRole;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: Date;
+}
+
+export interface ApiKeyDef {
+  id: string;
+  hash: string;
+  note: string;
+  createdAt: any;
+  enabled: boolean;
+}
+
+export interface ExamPaper {
+  id: string;
+  title: string;
+  year: number;
+  subject: string;
+  status: 'raw' | 'processed' | 'verified';
+  uploadedBy: string;
 }

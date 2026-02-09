@@ -2,6 +2,12 @@
 export const translations = {
   en: {
     appName: "Orin AI",
+    telegramBot: "Telegram Bot",
+    tgRoadmap: "Development Roadmap",
+    tgFeatures: "Bot Capabilities",
+    tgRequest: "Feature Request",
+    tgGitHub: "Open Source Repository",
+    tgStatus: "Bot Status",
     slogan: "From a Sri Lankan to Sri Lankans.",
     welcome: "Ayubowan!",
     greetingText: "Orin AI is at your service.",
@@ -123,6 +129,12 @@ export const translations = {
   },
   si: {
     appName: "ඔරින් AI",
+    telegramBot: "ටෙලිග්‍රෑම් බොට්",
+    tgRoadmap: "සංවර්ධන පියවර",
+    tgFeatures: "බොට් සතු හැකියාවන්",
+    tgRequest: "අලුත් අදහස්",
+    tgGitHub: "GitHub කෝඩ් එක",
+    tgStatus: "තත්ත්වය",
     slogan: "ශ්‍රී ලාංකිකයෙකුගෙන් ශ්‍රී ලාංකිකයන්ට.",
     welcome: "ආයුබෝවන්!",
     greetingText: "ඔරින් AI ඔබේ සේවයට සූදානම්.",
@@ -244,6 +256,12 @@ export const translations = {
   },
   ta: {
     appName: "ஓரின் AI",
+    telegramBot: "டெலிகிராம் போட்",
+    tgRoadmap: "மேம்பாட்டு வரைபடம்",
+    tgFeatures: "போட் திறன்கள்",
+    tgRequest: "புதிய கோரிக்கை",
+    tgGitHub: "GitHub களஞ்சியம்",
+    tgStatus: "போட் நிலை",
     slogan: "இலங்கையரிடமிருந்து இலங்கையர்களுக்காக.",
     welcome: "வணக்கம்!",
     greetingText: "ஓரின் AI உங்கள் சேவையில் உள்ளது.",

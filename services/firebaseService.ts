@@ -3,8 +3,9 @@ import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging
 import { getAnalytics } from "firebase/analytics";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
+import "firebase/compat/functions"; // Import Functions Compat
 import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, limit, getDocs, where, deleteDoc } from "firebase/firestore";
-import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics } from "../types";
+import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef } from "../types";
 
 // Configuration
 const firebaseConfig = {
@@ -28,6 +29,7 @@ class FirebaseService {
   private messaging: Messaging | null = null;
   private analytics: any = null;
   private auth: firebase.auth.Auth | null = null;
+  private functions: firebase.functions.Functions | null = null;
   private db: Firestore | null = null;
 
   constructor() {
@@ -40,6 +42,7 @@ class FirebaseService {
       
       if (typeof window !== 'undefined') {
         this.auth = firebase.auth();
+        this.functions = firebase.functions();
         this.db = getFirestore(this.app);
         
         if (this.auth) {
@@ -81,22 +84,35 @@ class FirebaseService {
     return () => {};
   }
 
-  // --- ADMIN PORTAL LOGIC ---
+  // --- ADMIN PORTAL LOGIC (CLOUD FUNCTIONS) ---
+  
   async submitSignupRequest(email: string, reason: string): Promise<void> {
-    if (!this.db) return;
-    const secretCode = "#710273";
-    const codeDetected = reason.includes(secretCode);
-    
-    const requestRef = doc(collection(this.db, "pending_signups"));
-    await setDoc(requestRef, {
-      email,
-      reason,
-      codeDetected,
-      requestedRole: codeDetected ? 'devops' : 'visitor',
-      status: 'pending',
-      createdAt: serverTimestamp()
-    });
+    if (!this.functions) return;
+    const createPendingSignup = this.functions.httpsCallable('createPendingSignup');
+    await createPendingSignup({ email, reason });
   }
+
+  async approveUser(requestId: string, uid: string, role: UserRole): Promise<void> {
+    if (!this.functions) return;
+    const approveUserFunc = this.functions.httpsCallable('approveUser');
+    await approveUserFunc({ targetUid: uid, role, approved: true });
+  }
+
+  async generateApiKey(note: string): Promise<string> {
+    if (!this.functions) return "";
+    const genKeyFunc = this.functions.httpsCallable('generateApiKey');
+    const result = await genKeyFunc({ note });
+    return (result.data as any).apiKey;
+  }
+
+  async processOCR(imageUrl: string, lang: 'en' | 'si'): Promise<any> {
+    if (!this.functions) return null;
+    const ocrFunc = this.functions.httpsCallable('ocrProcess');
+    const result = await ocrFunc({ imageUrl, lang });
+    return result.data;
+  }
+
+  // --- FIRESTORE READS (Direct) ---
 
   async getPendingRequests(): Promise<SignupRequest[]> {
     if (!this.db) return [];
@@ -105,23 +121,11 @@ class FirebaseService {
     return snap.docs.map(d => ({ id: d.id, ...d.data() } as SignupRequest));
   }
 
-  async approveUser(requestId: string, uid: string, role: UserRole): Promise<void> {
-    if (!this.db) return;
-    // In a real app, this would call a Cloud Function to set custom claims
-    // Here we simulate it by updating the user doc directly
-    const userRef = doc(this.db, "users", uid);
-    await updateDoc(userRef, { role, approved: true, updatedAt: serverTimestamp() });
-    
-    const requestRef = doc(this.db, "pending_signups", requestId);
-    await updateDoc(requestRef, { status: 'approved' });
-
-    // Log action
-    await setDoc(doc(collection(this.db, "audit_logs")), {
-      action: "APPROVE_USER",
-      targetUid: uid,
-      assignedRole: role,
-      timestamp: serverTimestamp()
-    });
+  async getApiKeys(): Promise<ApiKeyDef[]> {
+    if (!this.db) return [];
+    const q = query(collection(this.db, "api_keys"), orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() } as ApiKeyDef));
   }
 
   async getSiteMetrics(): Promise<SiteMetrics> {
@@ -148,13 +152,14 @@ class FirebaseService {
     let userData: any;
 
     if (!snap.exists()) {
+      // New users start as visitors
       userData = {
         email,
         name: email.split('@')[0],
         avatar: photoURL || null,
         plan: 'starter',
-        role: 'visitor',
-        approved: false, // Default requires admin approval
+        role: 'visitor', 
+        approved: false,
         subscriptionStatus: 'active',
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),

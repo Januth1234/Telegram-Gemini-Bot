@@ -1,3 +1,4 @@
+
 // Firebase Service Worker
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
@@ -21,7 +22,7 @@ try {
     const notificationTitle = payload.notification.title;
     const notificationOptions = {
       body: payload.notification.body,
-      icon: '/favicon.svg'
+      icon: 'favicon.svg'
     };
 
     self.registration.showNotification(notificationTitle, notificationOptions);
