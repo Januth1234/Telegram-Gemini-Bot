@@ -1,6 +1,7 @@
 
 export type Language = 'en' | 'si' | 'ta';
 export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
+export type UserRole = 'visitor' | 'training' | 'devops' | 'owner';
 
 export interface UserAccount {
   id: string;
@@ -8,6 +9,8 @@ export interface UserAccount {
   email: string;
   avatar?: string;
   tier: UserTier;
+  role?: UserRole;
+  approved?: boolean;
   token?: string;
   dailyUsage: {
     text: number;
@@ -51,5 +54,23 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads';
+export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal';
 export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths';
+
+export interface SiteMetrics {
+  totalUsers: number;
+  activeToday: number;
+  aiRequests: number;
+  serverStatus: 'online' | 'maintenance' | 'degraded';
+  lastBackup: Date;
+}
+
+export interface SignupRequest {
+  id: string;
+  email: string;
+  reason: string;
+  codeDetected: boolean;
+  requestedRole: UserRole;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+}
