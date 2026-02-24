@@ -302,7 +302,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                       onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
                       placeholder={isPrivate ? "Private Mode (Not Saved)..." : "Ask Orin AI..."}
-                      className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
+                      className={`flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-base py-3 px-2 font-medium min-w-0 ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                      />
                      <button
                        onClick={() => handleSend()}

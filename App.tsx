@@ -423,8 +423,8 @@ const App: React.FC = () => {
             <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); cacheService.set(CacheKey.THEME, next); document.documentElement.classList.toggle('dark', next === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`} /></button>
             <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
             {user ? (
-              <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 shadow-sm tap-target">
-                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <span className="font-bold text-xs text-slate-500">{user.name[0]}</span>}
+              <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border-2 border-emerald-500/30 shadow-sm tap-target ring-2 ring-emerald-400/20" title="Signed in">
+                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : <span className="font-bold text-xs text-slate-500">{user.name[0]}</span>}
               </button>
             ) : (
               <button onClick={() => window.location.hash = 'account'} className="px-5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest tap-target shadow-md">Sign In</button>

@@ -121,63 +121,63 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                <p className="text-[10px] font-bold text-slate-400">By continuing, you agree to our Terms & Privacy Protocol.</p>
             </div>
           ) : (
-            <div className="w-full space-y-8 animate-reveal">
-              <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 flex flex-col items-center gap-4 text-center">
+            <div className="w-full space-y-8">
+              <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 flex flex-col items-center gap-4 text-center animate-reveal">
                  <div className="relative">
-                    <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-xl" alt="Avatar" />
-                    <div className="absolute bottom-0 right-0 w-6 h-6 bg-emerald-500 border-4 border-white dark:border-slate-800 rounded-full"></div>
+                    <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-xl object-cover" alt="Avatar" />
+                    <div className="absolute bottom-0 right-0 w-6 h-6 bg-emerald-500 border-4 border-white dark:border-slate-800 rounded-full ring-2 ring-emerald-400/50" title="Signed in" />
                  </div>
                  <div>
                     <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase">{user.name}</h3>
                     <p className="text-sm font-mono text-slate-500">{user.email}</p>
                  </div>
-                 <div className="px-4 py-1 bg-cyan-500/10 text-cyan-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">{user.tier}</div>
+                 <div className="px-4 py-1 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">{user.tier}</div>
               </div>
 
               {/* Memory Editor */}
-              <div className="space-y-4">
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.02s' }}>
                  <div className="flex justify-between items-center px-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                       <i className="fa-solid fa-memory"></i>
+                       <i className="fa-solid fa-memory text-cyan-500/80" />
                        Neural Memory
                     </label>
-                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline">{loading ? "Saving..." : "Save Changes"}</button>
+                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
                  </div>
                  <textarea 
                     value={memory} 
                     onChange={e => setMemory(e.target.value)} 
-                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none shadow-inner"
+                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
                  />
               </div>
 
-              {/* Stats: real counts from Firestore + conversation list */}
+              {/* Activity: total counts with light animations */}
               <div className="w-full space-y-4">
-                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Activity (Today)</h4>
+                 <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Activity</h4>
                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white">{conversationsCount}</span>
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.05s' }}>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{conversationsCount}</span>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Chats</span>
                     </div>
-                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white">{usage ? usage.text : user.dailyUsage.text}</span>
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.1s' }}>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.text : user.dailyUsage.text}</span>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
                     </div>
-                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 col-span-2 md:col-span-1">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 col-span-2 md:col-span-1 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.15s' }}>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations</span>
                     </div>
                  </div>
               </div>
 
               {/* Danger Zone */}
-              <div className="pt-4 border-t border-black/5 dark:border-white/5 w-full space-y-4">
+              <div className="pt-4 border-t border-black/5 dark:border-white/5 w-full space-y-4 animate-reveal" style={{ animationDelay: '0.08s' }}>
                  <h4 className="text-[10px] font-black text-red-500 uppercase tracking-widest px-1">Danger Zone</h4>
                  <div className="grid grid-cols-2 gap-4">
-                    <button onClick={onClearHistory} className="py-4 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                    <button onClick={onClearHistory} className="py-4 rounded-2xl bg-slate-100 dark:bg-white/5 hover:bg-red-500 hover:text-white transition-all duration-200 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 tap-target">
                         Delete History
                     </button>
-                    <button onClick={handleLogout} className="py-4 rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all text-[10px] font-black uppercase tracking-widest">
+                    <button onClick={handleLogout} className="py-4 rounded-2xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200 text-[10px] font-black uppercase tracking-widest tap-target">
                         Sign Out
                     </button>
                  </div>
