@@ -1,11 +1,10 @@
 
-import { getMessaging, getToken, onMessage, Messaging } from "firebase/messaging";
 import { getAnalytics } from "firebase/analytics";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
-import "firebase/compat/functions"; // Import Functions Compat
-import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, limit, getDocs, where, deleteDoc } from "firebase/firestore";
-import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef } from "../types";
+import "firebase/compat/functions";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where } from "firebase/firestore";
+import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage } from "../types";
 
 // Configuration
 const firebaseConfig = {
@@ -26,7 +25,6 @@ declare global {
 
 class FirebaseService {
   private app: any;
-  private messaging: Messaging | null = null;
   private analytics: any = null;
   private auth: firebase.auth.Auth | null = null;
   private functions: firebase.functions.Functions | null = null;
@@ -92,7 +90,7 @@ class FirebaseService {
     await createPendingSignup({ email, reason });
   }
 
-  async approveUser(requestId: string, uid: string, role: UserRole): Promise<void> {
+  async approveUser(uid: string, role: UserRole): Promise<void> {
     if (!this.functions) return;
     const approveUserFunc = this.functions.httpsCallable('approveUser');
     await approveUserFunc({ targetUid: uid, role, approved: true });
@@ -144,6 +142,10 @@ class FirebaseService {
     return { totalUsers: 1, activeToday: 1, aiRequests: 50, serverStatus: 'online', lastBackup: new Date() };
   }
 
+  private userRef(uid: string) {
+    return this.db ? doc(this.db, "users", uid) : null;
+  }
+
   // --- FIRESTORE USER SYNC ---
   async syncUserSession(uid: string, email: string, photoURL?: string | null): Promise<UserAccount> {
     if (!this.db) throw new Error("DB not init");
@@ -192,68 +194,111 @@ class FirebaseService {
     };
   }
 
+  private static readonly USAGE_LIMITS: Record<string, { text: number; images: number; videos: number }> = {
+    starter: { text: 200, images: 10, videos: 0 },
+    pro: { text: 500, images: 50, videos: 5 },
+    elite: { text: 999999, images: 9999, videos: 999 },
+  };
+
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
-    if (!this.db) return false;
-    const snap = await getDoc(doc(this.db, "users", uid));
+    const ref = this.userRef(uid);
+    if (!ref) return false;
+    const snap = await getDoc(ref);
     if (!snap.exists()) return false;
     const data = snap.data();
     const plan = data.plan || 'starter';
-    const usage = data.usage?.[type] || 0;
-    const limits: any = {
-       starter: { text: 200, images: 10, videos: 0 },
-       pro: { text: 500, images: 50, videos: 5 },
-       elite: { text: 999999, images: 9999, videos: 999 }
-    };
-    return usage >= limits[plan][type];
+    const usage = data.usage?.[type] ?? 0;
+    return usage >= FirebaseService.USAGE_LIMITS[plan]?.[type];
   }
 
   async incrementUsage(uid: string, type: 'text' | 'images' | 'videos') {
-    if (!this.db) return;
-    const snap = await getDoc(doc(this.db, "users", uid));
+    const ref = this.userRef(uid);
+    if (!ref) return;
+    const snap = await getDoc(ref);
     if (snap.exists()) {
-       const current = snap.data().usage?.[type] || 0;
-       await updateDoc(doc(this.db, "users", uid), { [`usage.${type}`]: current + 1 });
+      const current = snap.data().usage?.[type] ?? 0;
+      await updateDoc(ref, { [`usage.${type}`]: current + 1 });
     }
   }
 
   async updatePlan(uid: string, plan: string) {
-    if (!this.db) return;
-    await updateDoc(doc(this.db, "users", uid), { plan: plan.toLowerCase(), lastUpdated: serverTimestamp() });
+    const ref = this.userRef(uid);
+    if (!ref) return;
+    await updateDoc(ref, { plan: plan.toLowerCase(), lastUpdated: serverTimestamp() });
+  }
+
+  async getUsage(uid: string): Promise<{ text: number; images: number; videos: number }> {
+    const ref = this.userRef(uid);
+    if (!ref) return { text: 0, images: 0, videos: 0 };
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return { text: 0, images: 0, videos: 0 };
+    const u = snap.data().usage ?? {};
+    return { text: u.text ?? 0, images: u.images ?? 0, videos: u.videos ?? 0 };
   }
 
   async getUserMemory(uid: string): Promise<string> {
-    if (!this.db) return "";
-    const snap = await getDoc(doc(this.db, "users", uid));
-    return snap.exists() ? (snap.data().memory || "") : "";
+    const ref = this.userRef(uid);
+    if (!ref) return "";
+    const snap = await getDoc(ref);
+    return snap.exists() ? (snap.data().memory ?? "") : "";
   }
 
   async updateUserMemory(uid: string, memory: string) {
-    if (!this.db) return;
-    await updateDoc(doc(this.db, "users", uid), { memory });
+    const ref = this.userRef(uid);
+    if (!ref) return;
+    await updateDoc(ref, { memory });
   }
 
-  async saveHistory(uid: string, history: Conversation[]) {
-    if (!this.db) return;
+  /**
+   * Saves conversation history with read-merge-write for cross-device sync.
+   * - Merges local + cloud by id; for same id keeps the one with more messages or newer timestamp.
+   * - Pass deletedIds so deletes propagate (those ids are removed from merged result).
+   */
+  async saveHistory(uid: string, history: Conversation[], deletedIds: string[] = []) {
+    const ref = this.userRef(uid);
+    if (!ref) return;
     try {
-      const historyBlob = JSON.stringify(history);
-      await setDoc(doc(this.db, "users", uid), { historyBlob, lastUpdated: serverTimestamp() }, { merge: true });
-    } catch (e) { console.error("Cloud Sync Error:", e); }
+      const cloud = await this.getHistory(uid);
+      const cloudList = (cloud || []).filter(c => conversationHasUserMessage(c));
+      const localById = new Map(history.filter(c => conversationHasUserMessage(c)).map(c => [c.id, c]));
+      for (const c of cloudList) {
+        const existing = localById.get(c.id);
+        if (!existing) {
+          localById.set(c.id, c);
+          continue;
+        }
+        const cMsg = (c.messages || []).length;
+        const eMsg = existing.messages.length;
+        const cTime = new Date(c.timestamp).getTime();
+        const eTime = new Date(existing.timestamp).getTime();
+        if (cMsg > eMsg || (cMsg === eMsg && cTime > eTime)) localById.set(c.id, c);
+      }
+      const deletedSet = new Set(deletedIds);
+      const merged = [...localById.values()]
+        .filter(c => !deletedSet.has(c.id))
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      await setDoc(ref, { historyBlob: JSON.stringify(merged), lastUpdated: serverTimestamp() }, { merge: true });
+    } catch {
+      // Network or permission; sync will retry on next change
+    }
   }
 
   async getHistory(uid: string): Promise<Conversation[] | null> {
-    if (!this.db) return null;
+    const ref = this.userRef(uid);
+    if (!ref) return null;
     try {
-      const snap = await getDoc(doc(this.db, "users", uid));
-      if (snap.exists() && snap.data().historyBlob) {
-        const parsed = JSON.parse(snap.data().historyBlob);
-        return parsed.map((c: any) => ({
-            ...c,
-            timestamp: new Date(c.timestamp),
-            messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-        }));
-      }
-    } catch (e) { console.error("Cloud Fetch Error:", e); }
-    return null;
+      const snap = await getDoc(ref);
+      const blob = snap.data()?.historyBlob;
+      if (!blob) return null;
+      const parsed = JSON.parse(blob) as any[];
+      return parsed.map((c: any) => ({
+        ...c,
+        timestamp: new Date(c.timestamp),
+        messages: (c.messages || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })),
+      }));
+    } catch {
+      return null;
+    }
   }
 }
 

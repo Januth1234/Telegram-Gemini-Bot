@@ -38,8 +38,7 @@ export class CodeTrackerService {
 
       this.cache = history;
       return history;
-    } catch (e) {
-      console.warn("GitHub Protocol Sync Failure:", e);
+    } catch {
       return [];
     }
   }
@@ -63,14 +62,13 @@ export class CodeTrackerService {
     const snapshot = history.find(s => s.version === version);
     if (!snapshot) return "Deployment logs for this version are currently archived.";
 
-    const prompt = `You are a professional technical lead. Provide a concise 2-sentence executive summary of this GitHub release log for Aura Platform v${version}. Focus on institutional value and stability.
+    const prompt = `You are a professional technical lead. Provide a concise 2-sentence executive summary of this GitHub release log for Orin AI v${version}. Focus on institutional value and stability.
     Log: ${snapshot.body}`;
 
     try {
-      // Fix: Removed 'useLite' which is not supported in the chat options type
-      const response = await geminiService.chat(prompt);
-      return response.text || "Summary generation protocol failed.";
-    } catch (e) {
+      const { text } = await geminiService.chat(prompt);
+      return text || "Summary generation protocol failed.";
+    } catch {
       return `Build ${version} focuses on critical path stability and synchronized neural workspace logic.`;
     }
   }

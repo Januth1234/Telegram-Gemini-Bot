@@ -58,7 +58,7 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    alert('Code snippet copied to clipboard!');
+    alert(t.codeCopied);
   };
 
   const codeSnippets = {

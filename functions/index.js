@@ -44,12 +44,12 @@ exports.createPendingSignup = functions.https.onCall(async (data, context) => {
 });
 
 exports.approveUser = functions.https.onCall(async (data, context) => {
-  // Security: Only Owner can approve
-  if (!context.auth || context.auth.uid !== OWNER_UID) {
-    // Also allow if the caller has 'owner' claim (handle edge case of self-bootstrapping)
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
+  const isOwnerUid = context.auth.uid === OWNER_UID;
+  if (!isOwnerUid) {
     const caller = await admin.auth().getUser(context.auth.uid);
-    if (caller.customClaims?.role !== 'owner' && context.auth.uid !== OWNER_UID) {
-       throw new functions.https.HttpsError("permission-denied", "Owner access required.");
+    if (caller.customClaims?.role !== "owner") {
+      throw new functions.https.HttpsError("permission-denied", "Owner access required.");
     }
   }
 

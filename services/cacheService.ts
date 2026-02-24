@@ -6,14 +6,10 @@
 
 export enum CacheKey {
   USER = 'orin_user',
-  HISTORY = 'orin_history_v3', // Incremented version for stability
+  HISTORY = 'orin_history_v3',
   ACTIVE_CONV = 'orin_active_conv_id',
-  DRAFT_PROMPT = 'orin_draft_prompt',
   LANG = 'orin_lang',
   THEME = 'orin_theme',
-  USAGE_COUNT = 'orin_usage_count',
-  LAST_RESET = 'orin_last_reset',
-  HARDWARE_MODE = 'orin_hw_mode'
 }
 
 export class CacheService {
@@ -22,10 +18,9 @@ export class CacheService {
    */
   set<T>(key: CacheKey, value: T): void {
     try {
-      const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-      localStorage.setItem(key, serialized);
-    } catch (e) {
-      console.error(`Neural Cache: Write failure for ${key}`, e);
+      localStorage.setItem(key, typeof value === 'string' ? value : JSON.stringify(value));
+    } catch {
+      // Quota or privacy mode; fail silently in production
     }
   }
 
@@ -38,14 +33,9 @@ export class CacheService {
       if (data === null) return fallback;
       
       // If it looks like JSON, try to parse it
-      if (data.startsWith('{') || data.startsWith('[')) {
-        return JSON.parse(data) as T;
-      }
-      
-      // Otherwise return as is (for strings like theme/lang)
+      if (data.startsWith('{') || data.startsWith('[')) return JSON.parse(data) as T;
       return data as unknown as T;
-    } catch (e) {
-      console.warn(`Neural Cache: Corruption detected for ${key}. Reverting to fallback.`);
+    } catch {
       return fallback;
     }
   }
@@ -58,7 +48,7 @@ export class CacheService {
   }
 
   clearAll(): void {
-    Object.values(CacheKey).forEach(key => localStorage.removeItem(key));
+    for (const key of Object.values(CacheKey)) localStorage.removeItem(key);
   }
 
   /**

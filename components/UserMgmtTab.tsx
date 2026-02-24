@@ -10,10 +10,10 @@ interface UserMgmtTabProps {
 
 export default function UserMgmtTab({ requests, onRefresh }: UserMgmtTabProps) {
   
-  const handleAction = async (id: string, uid: string, role: UserRole) => {
+  const handleAction = async (uid: string, role: UserRole) => {
     if (!confirm(`Approve user as ${role}?`)) return;
     try {
-      await firebaseService.approveUser(id, uid, role);
+      await firebaseService.approveUser(uid, role);
       alert("User Approved.");
       onRefresh();
     } catch (e: any) {
@@ -43,8 +43,8 @@ export default function UserMgmtTab({ requests, onRefresh }: UserMgmtTabProps) {
                       <p className="text-[9px] font-black text-slate-600 uppercase">Requested: {new Date(req.createdAt).toLocaleString()}</p>
                    </div>
                    <div className="flex gap-2">
-                      <button onClick={() => handleAction(req.id, req.id, 'training')} className="px-4 py-2 bg-white text-black rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">Training</button>
-                      <button onClick={() => handleAction(req.id, req.id, 'devops')} className="px-4 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">DevOps</button>
+                      <button onClick={() => handleAction(req.id, 'training')} className="px-4 py-2 bg-white text-black rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">Training</button>
+                      <button onClick={() => handleAction(req.id, 'devops')} className="px-4 py-2 bg-cyan-600 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:scale-105 transition-all">DevOps</button>
                       <button className="px-4 py-2 bg-red-500/10 text-red-500 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">Reject</button>
                    </div>
                 </div>

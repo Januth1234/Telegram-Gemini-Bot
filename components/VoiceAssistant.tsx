@@ -213,15 +213,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                 nextStartTimeRef.current += buf.duration;
                 sourcesRef.current.add(s);
                 s.onended = () => { sourcesRef.current.delete(s); if (sourcesRef.current.size === 0) setIsSpeaking(false); };
-            } catch (err) { console.warn("Audio buffer error", err); }
+            } catch { /* skip failed chunk */ }
           }
           if (msg.serverContent?.interrupted) stopAiSpeaking();
         },
         onclose: () => { setIsActive(false); setIsConnecting(false); },
-        onerror: (e: any) => { 
-            console.error(e); 
-            setErrorMessage(e.message || "Connection Error"); 
-            stopSession(); 
+        onerror: (e: unknown) => {
+            setErrorMessage(e instanceof Error ? e.message : "Connection Error");
+            stopSession();
         }
       };
 
@@ -230,9 +229,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone });
 
       sessionRef.current = await p;
-    } catch (e: any) {
-      console.error(e);
-      setErrorMessage(e.message || "Microphone Error");
+    } catch (e: unknown) {
+      setErrorMessage(e instanceof Error ? e.message : "Microphone Error");
       setIsConnecting(false);
     }
   };

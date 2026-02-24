@@ -16,12 +16,12 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
 
   const handlePlanSelect = async (planName: string) => {
     if (!user) {
-        alert("Please sign in to upgrade.");
+        alert(t.pleaseSignInToUpgrade);
         return;
     }
-    if (confirm(`Confirm upgrade to ${planName}?`)) {
+    if (confirm(`${t.confirmUpgrade} ${planName}?`)) {
        await firebaseService.updatePlan(user.id, planName);
-       alert("Plan upgraded successfully! Refreshing session...");
+       alert(t.planUpgradedSuccess);
        window.location.reload();
     }
   };
@@ -29,10 +29,10 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
   const plans = [
     { 
       name: t.starterPlan, 
-      price: "Free", 
+      price: t.freeLabel, 
       key: "starter",
-      desc: "For casual exploration",
-      features: ["Daily Reset Limit", "Standard Speed", "Community Support"],
+      desc: t.planStarterDesc,
+      features: [t.planStarterF1, t.planStarterF2, t.planStarterF3],
       style: "border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5"
     },
     { 
@@ -40,16 +40,16 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       price: "1000", 
       key: "pro", 
       popular: true,
-      desc: "For creators & students",
-      features: ["Expanded Limits", "Priority Access", "Standard Logic Flow", "Voice Mode"],
+      desc: t.planProDesc,
+      features: [t.planProF1, t.planProF2, t.planProF3, t.planProF4],
       style: "border-cyan-500/50 bg-gradient-to-b from-cyan-500/10 to-transparent shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]"
     },
     { 
       name: t.elitePlan, 
       price: "3000", 
       key: "elite",
-      desc: "For professionals",
-      features: ["Unlimited Reasoning", "Orin Ultra Model", "4K Image Studio", "Veo Video Gen", "Dedicated Support"],
+      desc: t.planEliteDesc,
+      features: [t.planEliteF1, t.planEliteF2, t.planEliteF3, t.planEliteF4, t.planEliteF5],
       style: "border-indigo-500/50 bg-gradient-to-b from-indigo-600/20 to-purple-900/20 shadow-[0_0_40px_-10px_rgba(79,70,229,0.4)]"
     }
   ];
@@ -70,7 +70,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
            <div className="space-y-1">
              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.pricing}</h2>
-             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.4em]">Upgrade Your Intelligence</p>
+             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.4em]">{t.upgradeSubtitle}</p>
            </div>
            <button onClick={onClose} className="w-12 h-12 flex items-center justify-center rounded-2xl glass-panel text-slate-500 hover:text-red-500 transition-all hover:rotate-90"><i className="fa-solid fa-xmark text-lg"></i></button>
         </header>
@@ -98,10 +98,10 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
 
                 <div className="text-center py-4 border-b border-black/5 dark:border-white/5">
                   <div className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
-                    {plan.price === 'Free' ? '0' : plan.price}
-                    <span className="text-xs font-bold text-slate-400 align-top ml-1 mt-2 inline-block">{plan.price !== 'Free' ? t.lkr : ''}</span>
+                    {plan.price === t.freeLabel ? '0' : plan.price}
+                    <span className="text-xs font-bold text-slate-400 align-top ml-1 mt-2 inline-block">{plan.price !== t.freeLabel ? t.lkr : ''}</span>
                   </div>
-                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">{plan.price === 'Free' ? 'Forever' : 'Per Month'}</div>
+                  <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-2">{plan.price === t.freeLabel ? t.foreverLabel : t.perMonthLabel}</div>
                 </div>
 
                 <ul className="space-y-4 py-4 flex-1">

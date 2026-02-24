@@ -1,5 +1,5 @@
 
-import { GoogleGenAI, Modality, Type } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
@@ -145,17 +145,14 @@ export class GeminiService {
       }
 
       const links: GroundingLink[] = [];
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      if (groundingChunks) {
-        groundingChunks.forEach((chunk: any) => {
-          if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
-          else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
-        });
+      for (const chunk of response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
+        if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
+        else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
       }
 
       return { text: response.text || "", links };
-    } catch (e: any) {
-      if (e.name === 'AbortError') throw e;
+    } catch (e: unknown) {
+      if (e instanceof Error && e.name === 'AbortError') throw e;
       throw new AppError("Failed to chat.", 'generic');
     }
   }
@@ -182,7 +179,7 @@ export class GeminiService {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
       }
       throw new Error("No image generated.");
-    } catch (e: any) {
+    } catch {
       throw new AppError("Drawing failed.", 'generic');
     }
   }
@@ -218,8 +215,9 @@ export class GeminiService {
       const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
       const blob = await response.blob();
       return URL.createObjectURL(blob);
-    } catch (e: any) {
-      throw new AppError("Video generation failed: " + e.message, 'generic');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      throw new AppError("Video generation failed: " + msg, 'generic');
     }
   }
 

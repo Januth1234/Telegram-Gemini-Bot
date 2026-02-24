@@ -1,7 +1,8 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { geminiService } from '../services/geminiService';
-import { ChatMessage, Language, HardwareStatus, WorkspaceMode, Conversation } from '../types';
+import { getMarkovSuggestions } from '../services/markovService';
+import { ChatMessage, Language, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
 import MathsMode from './MathsMode';
 import VoiceAssistant from './VoiceAssistant';
@@ -10,7 +11,6 @@ import FeatureCreate from './FeatureCreate';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
-  hwStatus: HardwareStatus;
   initialPrompt: string;
   initialMode: WorkspaceMode;
   autoSubmit: boolean;
@@ -56,62 +56,22 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   // Active messages based on mode
   const currentMessages = isPrivate ? privateMessages : messages;
 
-  // --- MARKOV CHAIN SUGGESTION GENERATOR ---
-  const generateSuggestions = useCallback((mode: WorkspaceMode) => {
-    const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-    
-    // Vocabulary Banks
-    const verbs = {
-      chat: ["Explain", "Summarize", "Analyze", "Debate", "Critique"],
-      code: ["Write", "Debug", "Refactor", "Optimize", "Document"],
-      creative: ["Write a story about", "Compose a poem for", "Brainstorm ideas for", "Script a scene about"],
-      local: ["Tell me about", "History of", "Recipe for", "Travel guide to"],
-      math: ["Solve", "Graph", "Calculate", "Prove"],
-      vision: ["Identify", "Read text from", "Describe"]
-    };
-
-    const nouns = {
-      tech: ["Quantum Computing", "Neural Networks", "React Hooks", "Rust Ownership", "Docker Containers"],
-      science: ["Black Holes", "CRISPR", "String Theory", "Photosynthesis", "Dark Matter"],
-      local: ["Sigiriya", "Kandy Perahera", "Ceylon Tea", "Colombo Street Food", "Ella Rock"],
-      abstract: ["the concept of Time", "Stoicism", "Global Economics", "Modern Art", "Consciousness"],
-      math: ["Calculus", "Linear Algebra", "Statistics", "Geometry"],
-      obj: ["this image", "the file", "my screen"]
-    };
-
-    const modifiers = {
-      simple: ["in simple terms", "for a 5-year-old", "like I'm a beginner"],
-      pro: ["professionally", "with technical detail", "in bullet points"],
-      code: ["in Python", "using TypeScript", "in SQL", "with comments"],
-      visual: ["in high detail", "briefly", "with coordinates"]
-    };
-
-    const generate = () => {
-       const type = Math.random();
-       if (mode === 'chat' || mode === 'translator') {
-           if (type < 0.3) return `${pick(verbs.code)} ${pick(nouns.tech)} ${pick(modifiers.code)}`;
-           if (type < 0.6) return `${pick(verbs.chat)} ${pick(nouns.science)} ${pick(modifiers.simple)}`;
-           if (type < 0.8) return `${pick(verbs.local)} ${pick(nouns.local)}`;
-           return `${pick(verbs.chat)} ${pick(nouns.abstract)} ${pick(modifiers.pro)}`;
-       }
-       if (mode === 'studio') return `A ${pick(["cyberpunk", "watercolor", "photorealistic", "pencil sketch"])} image of ${pick(nouns.local)}`;
-       if (mode === 'maths') return `${pick(verbs.math)} ${pick(nouns.math)} problem`;
-       if (mode === 'vision') return `${pick(verbs.vision)} ${pick(nouns.obj)}`;
-       
-       return "How can I help?";
-    };
-
-    // Generate 3 unique suggestions
-    const newSet = new Set<string>();
-    while(newSet.size < 3) {
-        newSet.add(generate());
+  // Collect all user message texts from conversations for Markov suggestions
+  const userMessageTexts = useMemo(() => {
+    const out: string[] = [];
+    for (const c of conversations) {
+      for (const m of c.messages || []) {
+        if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) out.push(m.content.trim());
+      }
     }
-    setSuggestions(Array.from(newSet));
-  }, []);
+    return out;
+  }, [conversations]);
 
+  // Markov chain suggestions (blends your past messages with seed phrases for quick one-tap messages)
   useEffect(() => {
-    generateSuggestions(activeTab);
-  }, [activeTab, generateSuggestions]);
+    if (activeTab !== 'chat' && activeTab !== 'translator') return;
+    setSuggestions(getMarkovSuggestions(userMessageTexts, 3));
+  }, [activeTab, userMessageTexts]);
 
   useEffect(() => {
     setActiveTab(initialMode);
@@ -159,9 +119,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     startProgress(activeTab);
     setLocalInput('');
     onInputChange('');
-    
-    // Regenerate suggestions after sending to keep it fresh (Markov style)
-    generateSuggestions(activeTab);
 
     const userMsg: ChatMessage = { 
         id: Date.now().toString(), 
@@ -206,23 +163,18 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
          }
       }
       
-    } catch (e: any) {
-      if (e.name !== 'AbortError') alert(e.message);
+    } catch (e: unknown) {
+      if (!(e instanceof Error && e.name === 'AbortError')) alert(e instanceof Error ? e.message : String(e));
     } finally { 
        setIsTyping(false); 
        stopProgress(); 
        setSelectedFile(null);
     }
-  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, generateSuggestions]);
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages]);
 
   const togglePrivate = () => {
-      const newState = !isPrivate;
-      setIsPrivate(newState);
-      if (newState) {
-          setPrivateMessages([]); // Start clean private session
-      } else {
-          setPrivateMessages([]); // Clear private buffer on exit
-      }
+    setIsPrivate(prev => !prev);
+    setPrivateMessages([]);
   };
 
   const renderBody = () => {
@@ -246,7 +198,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             </div>
           ) : (
             currentMessages.map((msg, i) => (
-              <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
+              <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`} style={{ animationDelay: `${Math.min(i * 60, 240)}ms` }}>
                  <div className={`max-w-[92%] p-5 md:p-8 rounded-[24px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
                     <div className="whitespace-pre-wrap text-sm md:text-base">{msg.content}</div>
                  </div>
@@ -289,14 +241,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <button 
                         onClick={(e) => {
                             e.stopPropagation();
-                            if(window.confirm('Are you sure you want to delete this conversation?')) {
+                            if (window.confirm('Are you sure you want to delete this conversation?')) {
                                 onDeleteConv(c.id);
                             }
                         }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-white/50 dark:hover:bg-black/20 opacity-0 group-hover:opacity-100 transition-all"
-                        title="Delete Chat"
+                        className={`absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center rounded-lg transition-all ${activeConvId === c.id ? 'opacity-100 text-slate-500 hover:text-red-500' : 'text-slate-400 hover:text-red-500 hover:bg-white/50 dark:hover:bg-black/20 opacity-0 group-hover:opacity-100'}`}
+                        title="Delete conversation"
+                        aria-label="Delete conversation"
                     >
-                        <i className="fa-solid fa-trash text-xs"></i>
+                        <i className="fa-solid fa-trash text-xs" />
                     </button>
                 </div>
             ))}
@@ -308,9 +261,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           <div className="flex items-center gap-3 md:gap-4">
             <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center"><i className="fa-solid fa-bars"></i></button>
           </div>
-          <button onClick={togglePrivate} className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
-             <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`}></i>
-             <span className="text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
+          <button
+            onClick={togglePrivate}
+            title={isPrivate ? 'Private Mode (tap to turn off)' : 'Public (tap for Private Mode)'}
+            aria-label={isPrivate ? 'Turn off private mode' : 'Switch to private mode'}
+            className={`p-2 md:px-4 md:py-2 rounded-xl border flex items-center gap-2 transition-all ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
+          >
+            <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`} aria-hidden />
+            <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
           </button>
         </header>
 
@@ -327,8 +285,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                            <button 
                              key={i} 
                              onClick={() => handleSend(s)} 
-                             className="px-4 py-1.5 bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/30 transition-all shadow-sm whitespace-nowrap active:scale-95 animate-reveal"
-                             style={{ animationDelay: `${i * 100}ms` }}
+                             className="px-4 py-1.5 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/40 hover:scale-[1.03] transition-[transform,color,border-color] duration-150 shadow-sm whitespace-nowrap active:scale-[0.98] animate-reveal"
+                             style={{ animationDelay: `${i * 80}ms` }}
                            >
                              {s}
                            </button>
@@ -346,8 +304,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       placeholder={isPrivate ? "Private Mode (Not Saved)..." : "Ask Orin AI..."}
                       className={`flex-1 bg-transparent border-none focus:ring-0 text-base py-3 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                      />
-                     <button onClick={() => handleSend()} disabled={isTyping} className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-xl active:scale-95 disabled:opacity-50 ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}>
-                        <i className="fa-solid fa-arrow-up"></i>
+                     <button
+                       onClick={() => handleSend()}
+                       disabled={isTyping}
+                       className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-lg active:scale-[0.96] disabled:opacity-50 transition-[transform,box-shadow] duration-150 hover:shadow-xl ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}
+                     >
+                       <i className="fa-solid fa-arrow-up"></i>
                      </button>
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
                         const file = e.target.files?.[0];

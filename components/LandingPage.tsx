@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { geminiService, AppError } from '../services/geminiService';
+import React, { useEffect, useState, useMemo } from 'react';
+import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount } from '../types';
@@ -46,9 +46,8 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
     setIsLoggingIn(true);
     try {
       await firebaseService.loginWithGoogle();
-      // App.tsx auth listener will handle user state update automatically
-    } catch (e) {
-      console.error("Login failed", e);
+    } catch {
+      // Popup closed or network error; user can retry
     } finally {
       setIsLoggingIn(false);
     }
@@ -82,11 +81,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
-      
       {/* Promotional Banner */}
       {showPromo && (
         <div className="w-full bg-indigo-600 text-white px-4 py-2 flex items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest relative z-[200]">
-           <span className="text-center truncate">🚀 Orin AI v5.0 is Live! Free Elite Plan for Early Adopters.</span>
+           <span className="text-center truncate">🚀 {t.promoBanner}</span>
            <button onClick={() => { setShowPromo(false); sessionStorage.setItem('orin_promo_dismissed', 'true'); }} className="opacity-50 hover:opacity-100"><i className="fa-solid fa-xmark"></i></button>
         </div>
       )}
@@ -94,11 +92,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
       <article className="w-full max-w-6xl px-4 md:px-6 py-8 md:py-24 flex flex-col items-center gap-10 md:gap-24 text-center">
         
         {/* Hero Section */}
-        <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade">
+        <section className="w-full flex flex-col items-center gap-8 md:gap-12 animate-fade relative">
           <div className="flex flex-col items-center gap-6 md:gap-8">
-            <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-2xl hover:scale-105 transition-transform duration-500 relative group">
-              <div className="absolute inset-0 bg-cyan-400 blur-2xl opacity-20 group-hover:opacity-40 transition-opacity"></div>
-              <img src="favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px] relative z-10" alt="Orin AI" />
+            <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl hover:shadow-2xl hover:scale-[1.02] transition-[transform,box-shadow] duration-200 relative">
+              <img src="/favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px]" alt="Orin AI" />
             </div>
             
             <div className="space-y-4 md:space-y-6">
@@ -107,7 +104,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               </h1>
               <div className="min-h-[3rem] md:min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
                   <h2 className="text-lg md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight animate-reveal max-w-2xl leading-snug">
-                    {`Good ${context.timeOfDay}. Orin AI is ready.`}
+                    {context.timeOfDay === 'morning' ? t.goodMorning : context.timeOfDay === 'afternoon' ? t.goodAfternoon : t.goodEvening} {t.orinReady}
                   </h2>
               </div>
             </div>
@@ -115,23 +112,23 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
           <div className="w-full max-w-2xl px-2 relative z-10">
             {/* Guest Chat / Input Area */}
-            <div className="relative group w-full">
-              <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[24px] blur opacity-15 group-hover:opacity-30 transition duration-500"></div>
-              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-2xl bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 overflow-hidden">
+            <div className="relative group w-full focus-glow rounded-[24px] transition-shadow duration-200">
+              <div className="absolute -inset-px rounded-[24px] bg-gradient-to-r from-cyan-500/30 to-blue-600/30 group-hover:from-cyan-500/50 group-hover:to-blue-600/50 transition-colors duration-200" />
+              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-white/10 overflow-hidden">
                 
                 {/* Result Area (Guest Only) */}
                 {(guestResult || isGuestLoading) && (
                    <div className="p-4 md:p-6 border-b border-black/5 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 text-left animate-reveal max-h-60 overflow-y-auto custom-scrollbar">
                       <div className="flex items-center gap-2 mb-2">
                          <i className="fa-solid fa-robot text-cyan-600"></i>
-                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Orin Guest Mode</span>
+                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t.guestModeLabel}</span>
                       </div>
                       <div className="text-xs md:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                          {isGuestLoading ? <MarkovLoader /> : guestResult}
                       </div>
                       {guestResult && guestResult.includes("limit") && (
                          <button onClick={handleSignIn} disabled={isLoggingIn} className="mt-4 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50">
-                            {isLoggingIn ? "Signing In..." : "Sign In Free"}
+                            {isLoggingIn ? t.signingIn : t.signInFree}
                          </button>
                       )}
                    </div>
@@ -143,15 +140,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                     value={prompt} 
                     onChange={(e) => onPromptChange(e.target.value)} 
                     onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
-                    placeholder={user ? t.howHelp : "Try a demo (e.g. 'Explain Quantum Physics')"} 
+                    placeholder={user ? t.howHelp : t.tryDemoPlaceholder} 
                     className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
                     />
                     <button 
                     onClick={handleGuestSubmit} 
                     disabled={isGuestLoading || !prompt.trim()}
-                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-xl hover:scale-100 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 m-1"
+                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl active:scale-[0.98] transition-[box-shadow,transform] duration-150 flex items-center gap-2 disabled:opacity-50 m-1"
                     >
-                    <span>{user ? t.go : (isGuestLoading ? "..." : "Demo")}</span>
+                    <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
                     {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
                     </button>
                 </div>
@@ -160,10 +157,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
             
             {!user && !guestResult && (
                <div className="mt-6 flex flex-col items-center gap-3 animate-slide-in-up">
-                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Guest Limit: 5 Prompts</p>
+                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.guestLimitLabel}</p>
                  <button onClick={handleSignIn} disabled={isLoggingIn} className="flex items-center gap-3 px-6 py-3 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-sm hover:shadow-md transition-all active:scale-95 disabled:opacity-70">
                     {isLoggingIn ? <i className="fa-solid fa-circle-notch animate-spin text-slate-500"></i> : <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />}
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{isLoggingIn ? "Authenticating..." : "Sign In to Unlock Full Orin AI"}</span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{isLoggingIn ? t.authenticating : t.signInToUnlock}</span>
                  </button>
                </div>
             )}
@@ -173,13 +170,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-8 md:space-y-12 animate-slide-in-up">
           <div className="flex flex-wrap justify-center gap-3 md:gap-6 px-2 md:px-0">
-              <NavCard href="#telegram-bot" icon="fa-paper-plane" color="blue" title={t.telegramBot} lang={lang} />
-              <NavCard href="#downloads" icon="fa-download" color="cyan" title={t.downloads} lang={lang} />
-              <NavCard href="#creator" icon="fa-user-tie" color="orange" title={t.creator} lang={lang} />
-              <NavCard href="#pricing" icon="fa-tags" color="emerald" title={t.pricing} lang={lang} />
-              <NavCard href="#logic" icon="fa-diagram-project" color="violet" title={t.logicFlow} lang={lang} />
-              <NavCard href="#releases" icon="fa-rocket" color="pink" title={t.releases} lang={lang} />
-              <NavCard href="#privacy" icon="fa-shield-halved" color="blue" title={t.privacy} lang={lang} />
+              {[t.telegramBot, t.downloads, t.creator, t.pricing, t.logicFlow, t.releases, t.terms, t.privacy].map((title, i) => (
+                <NavCard key={i} href={['#telegram-bot', '#downloads', '#creator', '#pricing', '#logic', '#releases', '#terms', '#privacy'][i]} title={title} lang={lang} delayMs={i * 50} />
+              ))}
           </div>
         </section>
 
@@ -187,38 +180,38 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         <section className="w-full max-w-5xl px-4 py-16 space-y-16 text-slate-600 dark:text-slate-400 text-left md:text-center animate-reveal">
           
           <div className="space-y-6">
-             <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Your Intelligent Assistant for Sri Lanka</h3>
-             <p className="text-sm md:text-base font-medium leading-relaxed max-w-3xl mx-auto">
-               Orin AI is designed to bridge the gap between global artificial intelligence capabilities and local usability. Supporting Sinhala, Tamil, and English natively, Orin empowers students, professionals, and creatives to access state-of-the-art neural reasoning without language barriers. Whether you need to draft emails, solve complex mathematics, or generate photorealistic images, Orin acts as your personal digital companion.
+             <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">{t.heroTitle}</h3>
+             <p className={`text-sm md:text-base font-medium leading-relaxed max-w-3xl mx-auto ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>
+               {t.heroParagraph}
              </p>
           </div>
 
           <div className="space-y-8">
-             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">Core Capabilities</h4>
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">{t.coreCapabilities}</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-                <InfoCard icon="fa-language" title="Bilingual Reasoning" desc="Switch seamlessly between languages to get answers in the format you understand best. Orin understands local context, idioms, and cultural nuances in both Sinhala and Tamil." />
-                <InfoCard icon="fa-eye" title="Visual Intelligence (Vision)" desc="Upload photos to extract text (OCR) or get detailed descriptions of scenes. Solve math problems simply by taking a picture of your notebook." />
-                <InfoCard icon="fa-palette" title="Studio Create" desc="Generate high-quality images and short videos using simple text prompts. Perfect for content creators, marketers, and digital artists." />
-                <InfoCard icon="fa-microphone" title="Voice Assistant" desc="Talk to Orin naturally. The voice mode supports real-time conversation, making it accessible for users who prefer speaking over typing." />
+                <InfoCard icon="fa-language" title={t.infoBilingualTitle} desc={t.infoBilingualDesc} lang={lang} />
+                <InfoCard icon="fa-eye" title={t.infoVisualTitle} desc={t.infoVisualDesc} lang={lang} />
+                <InfoCard icon="fa-palette" title={t.infoStudioTitle} desc={t.infoStudioDesc} lang={lang} />
+                <InfoCard icon="fa-microphone" title={t.infoVoiceTitle} desc={t.infoVoiceDesc} lang={lang} />
              </div>
           </div>
 
           <div className="space-y-8">
-             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">Who is Orin For?</h4>
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">{t.whoIsOrinFor}</h4>
              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
-                <AudienceCard title="Students" desc="Get help with math problems, summaries, and research in your mother tongue. Clarify complex concepts instantly." />
-                <AudienceCard title="Professionals" desc="Draft emails, translate documents, and organize data instantly. Boost your workflow efficiency." />
-                <AudienceCard title="Creators" desc="Brainstorm ideas, write scripts, and visualize concepts with the Studio tool. Overcome writer's block." />
+                <AudienceCard title={t.audienceStudents} desc={t.audienceStudentsDesc} lang={lang} />
+                <AudienceCard title={t.audiencePro} desc={t.audienceProDesc} lang={lang} />
+                <AudienceCard title={t.audienceCreators} desc={t.audienceCreatorsDesc} lang={lang} />
              </div>
           </div>
 
           <div className="space-y-8">
-             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">How to Get Started</h4>
+             <h4 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 border-b border-black/5 dark:border-white/5 pb-4">{t.howToGetStarted}</h4>
              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
-                <StepRow num="01" title="Type a Prompt" desc="Use the main input box above to ask a question or give a command in English, Sinhala, or Tamil." />
-                <StepRow num="02" title="Select a Mode" desc="Click on specific tools like 'Studio' for images or 'Math' for calculations if you need specialized help." />
-                <StepRow num="03" title="Sign In (Optional)" desc="Create a free account to save your chat history and access higher usage limits." />
-                <StepRow num="04" title="Explore" desc="Try the 'Voice' mode for hands-free interaction or 'Vision' to analyze images." />
+                <StepRow num="01" title={t.step1Title} desc={t.step1Desc} lang={lang} />
+                <StepRow num="02" title={t.step2Title} desc={t.step2Desc} lang={lang} />
+                <StepRow num="03" title={t.step3Title} desc={t.step3Desc} lang={lang} />
+                <StepRow num="04" title={t.step4Title} desc={t.step4Desc} lang={lang} />
              </div>
           </div>
 
@@ -234,7 +227,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                   <SocialIcon icon="fa-youtube" href="#" />
                   <SocialIcon icon="fa-linkedin-in" href="#" />
                </div>
-               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 text-center">© 2026 JN Productions Global • All Rights Reserved</p>
+               <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 text-center">{t.footerAllRights}</p>
             </div>
         </footer>
       </article>
@@ -242,58 +235,55 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   );
 };
 
-const NavCard = ({ href, icon, title, color, lang }: any) => {
-  const colors: Record<string, string> = {
-    cyan: "group-hover:text-cyan-500 group-hover:bg-cyan-500/10",
-    indigo: "group-hover:text-indigo-500 group-hover:bg-indigo-500/10",
-    purple: "group-hover:text-purple-500 group-hover:bg-purple-500/10",
-    emerald: "group-hover:text-emerald-500 group-hover:bg-emerald-500/10",
-    orange: "group-hover:text-orange-500 group-hover:bg-orange-500/10",
-    pink: "group-hover:text-pink-500 group-hover:bg-pink-500/10",
-    violet: "group-hover:text-violet-500 group-hover:bg-violet-500/10",
-    blue: "group-hover:text-blue-500 group-hover:bg-blue-500/10"
+const NavCard = ({ href, title, lang, delayMs = 0 }: { href: string; title: string; lang: Language; delayMs?: number }) => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const hash = href.startsWith('#') ? href.slice(1) : href;
+    window.location.hash = hash;
   };
 
   return (
-    <a href={href} className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-3 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 transition-all border border-slate-200 dark:border-white/5 active:scale-95 bg-white/40 dark:bg-slate-900/20 shadow-sm group">
-      <div className={`w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 transition-all duration-300 group-hover:scale-110 shadow-inner ${colors[color] || colors.cyan}`}>
-        <i className={`fa-solid ${icon} text-lg`}></i>
-      </div>
-      <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 transition-colors group-hover:text-slate-900 dark:group-hover:text-white ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
+    <a
+      href={href}
+      onClick={handleClick}
+      style={{ animationDelay: `${delayMs}ms` }}
+      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-1 hover:shadow-md transition-[transform,box-shadow,background-color] duration-200 border border-slate-200 dark:border-white/5 active:scale-[0.98] bg-white/50 dark:bg-slate-900/30 shadow-sm animate-slide-in-up"
+    >
+      <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-center px-2 transition-colors duration-150 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );
 };
 
 // Helper Components for Info Section
-const InfoCard = ({ icon, title, desc }: any) => (
-  <div className="flex gap-4 p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-cyan-500/20 transition-colors">
+const InfoCard = ({ icon, title, desc, lang }: { icon: string; title: string; desc: string; lang?: Language }) => (
+  <div className="flex gap-4 p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-cyan-500/20 hover:shadow-sm transition-[border-color,box-shadow] duration-150">
      <div className="w-12 h-12 shrink-0 rounded-2xl bg-slate-100 dark:bg-white/10 flex items-center justify-center text-slate-500"><i className={`fa-solid ${icon} text-xl`}></i></div>
      <div>
         <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-2">{title}</h5>
-        <p className="text-xs leading-relaxed opacity-80">{desc}</p>
+        <p className={`text-xs leading-relaxed opacity-80 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
      </div>
   </div>
 );
 
-const AudienceCard = ({ title, desc }: any) => (
+const AudienceCard = ({ title, desc, lang }: { title: string; desc: string; lang?: Language }) => (
   <div className="p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:-translate-y-1 transition-transform">
      <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-3 border-b border-black/5 dark:border-white/5 pb-2 inline-block">{title}</h5>
-     <p className="text-xs leading-relaxed opacity-80">{desc}</p>
+     <p className={`text-xs leading-relaxed opacity-80 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
   </div>
 );
 
-const StepRow = ({ num, title, desc }: any) => (
+const StepRow = ({ num, title, desc, lang }: { num: string; title: string; desc: string; lang?: Language }) => (
   <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-white/50 dark:hover:bg-white/5 transition-colors">
      <span className="text-xs font-black text-cyan-600 dark:text-cyan-400 opacity-60 bg-cyan-500/10 px-2 py-1 rounded">{num}</span>
      <div>
         <h6 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide mb-1">{title}</h6>
-        <p className="text-xs leading-relaxed opacity-70">{desc}</p>
+        <p className={`text-xs leading-relaxed opacity-70 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
      </div>
   </div>
 );
 
 const SocialIcon = ({ icon, href }: any) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 transition-all shadow-sm">
+  <a href={href} target="_blank" rel="noopener noreferrer" className="w-10 h-10 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 hover:scale-110 active:scale-95 transition-[color,background,transform] duration-150 shadow-sm">
      <i className={`fa-brands ${icon} text-lg`}></i>
   </a>
 );

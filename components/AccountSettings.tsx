@@ -10,16 +10,21 @@ interface AccountSettingsProps {
   lang: Language;
   user: UserAccount | null;
   onClearHistory: () => void;
+  conversationsCount?: number;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0 }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
+  const [usage, setUsage] = useState<{ text: number; images: number; videos: number } | null>(null);
 
   useEffect(() => {
      if (user) {
         firebaseService.getUserMemory(user.id).then(setMemory);
+        firebaseService.getUsage(user.id).then(setUsage);
+     } else {
+        setUsage(null);
      }
   }, [user]);
 
@@ -135,17 +140,21 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  />
               </div>
 
-              {/* Stats */}
+              {/* Stats: real counts from Firestore + conversation list */}
               <div className="w-full space-y-4">
                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Activity (Today)</h4>
                  <div className="grid grid-cols-2 gap-4">
                     <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.text}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">{conversationsCount}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Chats</span>
                     </div>
                     <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2">
-                        <span className="text-2xl font-black text-slate-900 dark:text-white">{user.dailyUsage.images + user.dailyUsage.videos}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Generations</span>
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">{usage ? usage.text : user.dailyUsage.text}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
+                    </div>
+                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 col-span-2 md:col-span-1">
+                        <span className="text-2xl font-black text-slate-900 dark:text-white">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations</span>
                     </div>
                  </div>
               </div>

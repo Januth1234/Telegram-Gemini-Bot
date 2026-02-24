@@ -3,52 +3,43 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
-// --- GLOBAL ERROR SHIELD ---
-// Traps synchronous errors (like "undefined is not a function") to prevent white-screen crashes
+const ORINAI_HOSTS = ['www.orinai.org', 'orinai.org'];
+
+function isOrinAiOrigin(): boolean {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname.toLowerCase();
+  return ORINAI_HOSTS.some((h) => host === h);
+}
+
 window.addEventListener('error', (event) => {
-  console.warn('[Orin Runtime Guard] Caught:', event.message);
-  // event.preventDefault(); // Uncomment to suppress the red error in console
+  if (process.env.NODE_ENV !== 'production') console.warn('[Orin]', event.message);
 });
 
-// Traps unhandled promise rejections (like "Network Error" or "Permission Denied")
 window.addEventListener('unhandledrejection', (event) => {
   if (event.reason?.name === 'AbortError') return;
-  console.warn('[Orin Async Guard] Unhandled Rejection:', event.reason);
-  event.preventDefault(); // Prevents "Uncaught (in promise)" error
+  if (process.env.NODE_ENV !== 'production') console.warn('[Orin]', event.reason);
+  event.preventDefault();
 });
 
 const startApp = () => {
   const rootElement = document.getElementById('root');
-  if (!rootElement) {
-    console.error("Critical: 'root' element not found.");
-    return;
-  }
+  if (!rootElement) return;
 
-  // Register Main Service Worker (Caching + Messaging)
-  if ('serviceWorker' in navigator) {
+  // Register service workers on orinai.org (production) for caching + FCM
+  if ('serviceWorker' in navigator && isOrinAiOrigin()) {
     window.addEventListener('load', () => {
-      // FORCE ROOT SCOPE for proper caching across all routes
-      navigator.serviceWorker
-        .register('/sw.js', { scope: '/' })
-        .then((registration) => {
-          console.log('Orin SW registered with root scope:', registration.scope);
-        })
-        .catch((err) => {
-          console.debug('Orin SW registration skipped:', err);
-        });
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
     });
   }
 
   try {
-    const root = ReactDOM.createRoot(rootElement);
-    root.render(
+    ReactDOM.createRoot(rootElement).render(
       <React.StrictMode>
         <App />
       </React.StrictMode>
     );
-    console.log("Aura Neural Workspace: Successfully Mounted.");
   } catch (err) {
-    console.error("Mounting Error:", err);
+    if (process.env.NODE_ENV !== 'production') console.error('Mount error:', err);
   }
 };
 

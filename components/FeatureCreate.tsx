@@ -92,8 +92,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       document.body.removeChild(link);
       
       window.URL.revokeObjectURL(blobUrl);
-    } catch (err) {
-      console.error("Download failed:", err);
+    } catch {
+      // Download failed (e.g. blocked by browser)
     }
   };
 

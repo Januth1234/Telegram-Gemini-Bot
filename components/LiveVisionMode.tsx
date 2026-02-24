@@ -71,9 +71,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
         const cams = devices.filter(d => d.kind === 'videoinput');
         setCameraList(cams);
         if (cams.length > 0) setActiveCameraId(cams[0].deviceId);
-        }).catch(err => {
-            console.warn("Device enumeration failed:", err);
-        });
+        }).catch(() => {});
     }
     return () => stopSession();
   }, []);
@@ -121,7 +119,6 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
         for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i] / 32768.0;
         return buffer;
     } catch (e) {
-        console.warn("Audio decode failed", e);
         throw e;
     }
   }
@@ -192,7 +189,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
                       mimeType: `audio/pcm;rate=${inputSampleRate}`
                   } 
                });
-            }).catch(err => console.warn("Session not ready for audio input:", err));
+            }).catch(() => {});
           };
 
           // --- Input Video Pipeline (1 FPS) ---
@@ -211,7 +208,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
              const base64 = canvasRef.current.toDataURL('image/jpeg', 0.6).split(',')[1];
              sessionPromise.then(session => {
               session.sendRealtimeInput({ media: { data: base64, mimeType: 'image/jpeg' } });
-            }).catch(err => console.warn("Session not ready for video input:", err));
+            }).catch(() => {});
 
           }, 1000); // 1 Frame per second
         },
@@ -245,9 +242,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
                    sourcesRef.current.delete(s);
                    if (sourcesRef.current.size === 0) setAiSpeaking(false);
                 };
-            } catch(e) {
-                console.warn("Audio buffer error", e);
-            }
+            } catch { /* skip failed chunk */ }
           }
           
           if (msg.serverContent?.interrupted) {
@@ -258,19 +253,17 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
           }
         },
         onclose: () => stopSession(),
-        onerror: (e: any) => { console.error(e); stopSession(); }
+        onerror: () => { stopSession(); }
       }, { voiceName: selectedVoice, tone: selectedTone });
       
       sessionPromise.then(session => {
         sessionRef.current = session;
-      }).catch(e => {
-        console.error("Failed to connect live session", e);
+      }).catch(() => {
         alert("Connection failed. Please try again.");
         stopSession();
       });
 
-    } catch (e) {
-      console.error("Camera Init Failed", e);
+    } catch {
       setIsConnecting(false);
       alert("Could not access camera/mic. Please check permissions.");
     }

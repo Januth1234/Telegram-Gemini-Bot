@@ -12,15 +12,24 @@ import DownloadsPage from './components/DownloadsPage';
 import VoiceAssistant from './components/VoiceAssistant';
 import AdminPortal from './components/AdminPortal';
 import TelegramBotPage from './components/TelegramBotPage';
-import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount } from './types';
+import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
 import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
+const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat' };
+const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = { art: 'studio', camera: 'vision', math: 'maths', chat: 'chat', landing: 'chat', voice: 'voice', account: 'chat', privacy: 'chat', terms: 'chat', releases: 'chat', logic: 'chat', creator: 'chat', pricing: 'chat', downloads: 'chat', 'admin-portal': 'chat', 'telegram-bot': 'chat' };
+const WORKSPACE_VIEWS: AppView[] = ['chat', 'art', 'camera', 'voice', 'math'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
+const AUTH_TIMEOUT_MS = 8000;
+const SAVE_DEBOUNCE_MS = 3000;
+/** Local-only convs older than this are dropped on merge so deletes on other devices propagate. */
+const RECENT_LOCAL_MS = 5 * 60 * 1000;
+
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => cacheService.get<string | null>(CacheKey.THEME, null) as any || 'light');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => (cacheService.get<string | null>(CacheKey.THEME, null) as 'dark' | 'light' | null) || 'light');
   const t = translations[lang];
 
   // Global Auth State
@@ -68,14 +77,15 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    document.documentElement.lang = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
+  }, [lang]);
+
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
-      if (!authInitialized) {
-        console.warn("Auth initialization timed out.");
-        setAuthInitialized(true);
-      }
-    }, 8000);
+      if (!authInitialized) setAuthInitialized(true);
+    }, AUTH_TIMEOUT_MS);
 
     const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
       clearTimeout(safetyTimeout);
@@ -88,8 +98,7 @@ const App: React.FC = () => {
            const cloudHistory = await firebaseService.getHistory(authUser.uid);
            if (cloudHistory) mergeHistory(cloudHistory);
            setSyncStatus('success');
-         } catch (e) {
-           console.error("User Sync Failed", e);
+         } catch {
            setSyncStatus('error');
          }
       } else {
@@ -123,9 +132,8 @@ const App: React.FC = () => {
           setView('landing');
           return;
       }
-      const validViews: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
-      if (validViews.includes(hash as any)) {
-          if (['chat', 'art', 'camera', 'voice', 'math'].includes(hash) && !user && authInitialized) {
+      if (VALID_VIEWS.includes(hash as AppView)) {
+          if (WORKSPACE_VIEWS.includes(hash as AppView) && !user && authInitialized) {
               window.location.hash = ''; 
               return;
           }
@@ -139,40 +147,88 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, [user, authInitialized]);
 
-  // --- 3. CONVERSATION STATE ---
+  // --- 3. CONVERSATION STATE (only load conversations that have at least one message) ---
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
       const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
-      return Array.isArray(saved) ? saved.map((c: any) => ({
-        ...c, timestamp: new Date(c.timestamp), messages: c.messages.map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }))
-      })) : [];
+      if (!Array.isArray(saved)) return [];
+      return saved
+        .map((c: any) => ({
+          ...c,
+          timestamp: new Date(c.timestamp),
+          messages: (c.messages || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })),
+        }))
+        .filter((c: any) => (c.messages || []).some((m: { role: string }) => m.role === 'user'));
     } catch { return []; }
   });
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null));
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
+    const savedId = cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null);
+    const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
+    const meaningful = Array.isArray(saved) ? saved.filter((c: any) => (c.messages || []).some((m: { role: string }) => m.role === 'user')) : [];
+    const hasId = meaningful.some((c: any) => c.id === savedId);
+    return hasId ? savedId : (meaningful[0]?.id ?? null);
+  });
 
   const saveTimeoutRef = useRef<number | null>(null);
+
+  // Drop conversations with no user messages when switching away (AI-only welcome is not kept)
   useEffect(() => {
-    const meaningfulConversations = conversations.filter(c => c.messages.length > 0);
+    setConversations(prev => {
+      const keep = prev.filter(c => c.id === activeConversationId || conversationHasUserMessage(c));
+      return keep.length === prev.length ? prev : keep;
+    });
+  }, [activeConversationId]);
+
+  useEffect(() => {
+    const meaningfulConversations = conversations.filter(conversationHasUserMessage);
     cacheService.set(CacheKey.HISTORY, meaningfulConversations);
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     if (user?.id) {
-       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-       saveTimeoutRef.current = window.setTimeout(() => {
-          setSyncStatus('syncing');
-          firebaseService.saveHistory(user.id, meaningfulConversations).then(() => {
-             setSyncStatus('success');
-             setTimeout(() => setSyncStatus('idle'), 2000);
-          }).catch(() => setSyncStatus('error'));
-       }, 3000);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = window.setTimeout(() => {
+        setSyncStatus('syncing');
+        firebaseService.saveHistory(user.id, meaningfulConversations).then(() => {
+          setSyncStatus('success');
+          setTimeout(() => setSyncStatus('idle'), 2000);
+        }).catch(() => setSyncStatus('error'));
+      }, SAVE_DEBOUNCE_MS);
     }
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
   }, [conversations, activeConversationId, user?.id]);
 
+  useEffect(() => {
+    if (!activeConversationId) return;
+    const exists = conversations.some(c => c.id === activeConversationId);
+    if (!exists) setActiveConversationId(conversations[0]?.id ?? null);
+  }, [conversations, activeConversationId]);
+
+  /** Cloud is source of truth for which ids exist; local-only convs are kept only if recent (so deletes propagate). */
   const mergeHistory = (cloudHistory: Conversation[]) => {
-      setConversations(prev => {
-         const combined = new Map();
-         [...prev, ...cloudHistory].forEach(c => combined.set(c.id, c));
-         return Array.from(combined.values()).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-      });
+    const withUserMessages = (cloudHistory || []).filter(c => conversationHasUserMessage(c));
+    const cloudIds = new Set(withUserMessages.map(c => c.id));
+    setConversations(prev => {
+      const prevMeaningful = prev.filter(conversationHasUserMessage);
+      const combined = new Map<string, Conversation>();
+      for (const c of withUserMessages) combined.set(c.id, c);
+      for (const c of prevMeaningful) {
+        const inCloud = cloudIds.has(c.id);
+        const time = new Date(c.timestamp).getTime();
+        const recent = Date.now() - time < RECENT_LOCAL_MS;
+        if (inCloud) {
+          const cloud = combined.get(c.id)!;
+          const cloudMsg = (cloud.messages || []).length;
+          const localMsg = c.messages.length;
+          const cloudTime = new Date(cloud.timestamp).getTime();
+          const localTime = time;
+          if (localMsg > cloudMsg || (localMsg === cloudMsg && localTime > cloudTime)) combined.set(c.id, c);
+        } else if (recent) {
+          combined.set(c.id, c);
+        }
+      }
+      return [...combined.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    });
   };
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
@@ -183,22 +239,21 @@ const App: React.FC = () => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
     const activeConv = conversations.find(c => c.id === activeConversationId);
-    const canReuseActive = activeConv && activeConv.messages.length === 0 && activeConv.mode === mode;
+    const canReuseActive = activeConv && !conversationHasUserMessage(activeConv) && activeConv.mode === mode;
     if (!canReuseActive) {
        const newId = Date.now().toString();
        setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
        setActiveConversationId(newId);
     }
-    const modeMap: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat' };
-    window.location.hash = modeMap[mode];
+    window.location.hash = WORKSPACE_TO_VIEW[mode];
   };
 
   const handleDeleteConversation = (id: string) => {
-     setConversations(prev => {
-        const next = prev.filter(c => c.id !== id);
-        if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
-        return next;
-     });
+     const next = conversations.filter(c => c.id !== id);
+     setConversations(next);
+     if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
+     const meaningful = next.filter(conversationHasUserMessage);
+     if (user?.id) firebaseService.saveHistory(user.id, meaningful, [id]).catch(() => {});
   };
 
   const handleClearHistory = async () => {
@@ -213,7 +268,7 @@ const App: React.FC = () => {
   };
 
   const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
-    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all whitespace-nowrap ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}>
+    <button onClick={onClick} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 whitespace-nowrap ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm ring-1 ring-cyan-500/20' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-white/5'}`}>
       <i className={`fa-solid ${icon} text-xs`}></i>
       <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline-block">{label}</span>
     </button>
@@ -240,24 +295,23 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'chat': case 'art': case 'camera': case 'math':
-        const modeMap: Record<AppView, WorkspaceMode> = { 'art': 'studio', 'camera': 'vision', 'math': 'maths', 'chat': 'chat', 'landing': 'chat', 'voice': 'voice', 'account': 'chat', 'privacy': 'chat', 'terms': 'chat', 'releases': 'chat', 'logic': 'chat', 'creator': 'chat', 'pricing': 'chat', 'downloads': 'chat', 'admin-portal': 'chat', 'telegram-bot': 'chat' };
         return (
           <ChatWorkspace 
             onClose={() => window.location.hash = 'chat'}
-            hwStatus={{ mode: 'GPU', label: 'Ready' }} 
             initialPrompt={globalPrompt}
-            initialMode={modeMap[view]}
+            initialMode={VIEW_TO_MODE[view]}
             autoSubmit={shouldAutoSubmit}
             onInputChange={setGlobalPrompt}
             messages={conversations.find(c => c.id === activeConversationId)?.messages || []}
             setMessages={(updater) => {
-               if(!activeConversationId) return;
+               if (!activeConversationId) return;
+               const mode = VIEW_TO_MODE[view];
                setConversations(prev => {
                   const existing = prev.find(c => c.id === activeConversationId);
                   const newMessages = typeof updater === 'function' ? updater(existing?.messages || []) : updater;
                   if (!existing) {
                       const newConv: Conversation = {
-                          id: activeConversationId, title: "New Chat", messages: newMessages, timestamp: new Date(), mode: modeMap[view], modesUsed: [modeMap[view]]
+                          id: activeConversationId, title: "New Chat", messages: newMessages, timestamp: new Date(), mode, modesUsed: [mode]
                       };
                       return [newConv, ...prev];
                   }
@@ -276,9 +330,9 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} />;
-      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} />;
-      case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} />;
+      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -292,11 +346,11 @@ const App: React.FC = () => {
     <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {view !== 'admin-portal' && (
         <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => window.location.hash = user ? 'home' : ''}>
-            <img src="favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg" />
+          <div className="flex items-center gap-2 cursor-pointer group/logo" onClick={() => window.location.hash = user ? 'home' : ''}>
+            <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-300 group-hover/logo:scale-110" />
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
           </div>
-          {user && ['chat', 'art', 'camera', 'voice', 'math'].includes(view) && (
+          {user && WORKSPACE_VIEWS.includes(view) && (
             <div className="flex items-center bg-slate-100/90 dark:bg-white/5 backdrop-blur-md p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
               <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
@@ -306,7 +360,7 @@ const App: React.FC = () => {
             </div>
           )}
           <div className="flex items-center gap-2">
-            <button onClick={() => { const n = theme === 'dark' ? 'light' : 'dark'; setTheme(n); cacheService.set(CacheKey.THEME, n); document.documentElement.classList.toggle('dark', n === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500"><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`}></i></button>
+            <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); cacheService.set(CacheKey.THEME, next); document.documentElement.classList.toggle('dark', next === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`} /></button>
             <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
             {user ? (
               <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 shadow-sm active:scale-95 transition-all">
