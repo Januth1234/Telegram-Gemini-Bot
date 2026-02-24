@@ -10,7 +10,7 @@
 Set the owner UID and secret code:
 ```bash
 firebase functions:config:set orina.owner_uid="<YOUR_ADMIN_UID>"
-firebase functions:config:set orina.secret_code="#710273"
+firebase functions:config:set orina.secret_code="#"
 ```
 
 ## 3. Deploy
@@ -21,5 +21,5 @@ firebase deploy --only functions,firestore
 
 ## 4. Admin Access
 1. Sign up on the frontend.
-2. Enter the secret code `#710273` in the reason field.
+2. Enter the secret code `#` in the reason field.
 3. Use the Owner account to approve the request via the Admin Portal.
