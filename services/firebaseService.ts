@@ -225,12 +225,16 @@ class FirebaseService {
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
     const ref = this.userRef(uid);
     if (!ref) return false;
-    const snap = await getDoc(ref);
-    if (!snap.exists()) return false;
-    const data = snap.data();
-    const plan = data.plan || 'starter';
-    const usage = data.usage?.[type] ?? 0;
-    return usage >= FirebaseService.USAGE_LIMITS[plan]?.[type];
+    try {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return false;
+      const data = snap.data();
+      const plan = data.plan || 'starter';
+      const usage = data.usage?.[type] ?? 0;
+      return usage >= FirebaseService.USAGE_LIMITS[plan]?.[type];
+    } catch {
+      return false; // permission/network; allow request
+    }
   }
 
   async incrementUsage(uid: string, type: 'text' | 'images' | 'videos') {
@@ -265,8 +269,12 @@ class FirebaseService {
   async getUserMemory(uid: string): Promise<string> {
     const ref = this.userRef(uid);
     if (!ref) return "";
-    const snap = await getDoc(ref);
-    return snap.exists() ? (snap.data().memory ?? "") : "";
+    try {
+      const snap = await getDoc(ref);
+      return snap.exists() ? (snap.data().memory ?? "") : "";
+    } catch {
+      return ""; // permission/network; continue without memory
+    }
   }
 
   async updateUserMemory(uid: string, memory: string) {
