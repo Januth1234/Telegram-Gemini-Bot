@@ -60,23 +60,33 @@ class FirebaseService {
   }
 
   // --- AUTHENTICATION ---
-  /** Use redirect so sign-in works when popup is blocked or fails (e.g. Safari, strict cookies). */
-  async loginWithGoogle(): Promise<void> {
+  /** Try popup first; if it succeeds returns the user so the app can apply sign-in immediately. If blocked/fails, falls back to redirect and returns null. */
+  async loginWithGoogle(): Promise<firebase.User | null> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     const provider = new firebase.auth.GoogleAuthProvider();
-    await this.auth.signInWithRedirect(provider);
-    // Page will redirect to Google; after sign-in we return to the app and getRedirectResult() completes auth.
+    try {
+      const result = await this.auth.signInWithPopup(provider);
+      return result.user ?? null;
+    } catch (err: any) {
+      const code = err?.code || '';
+      const useRedirect = code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' || code === 'auth/web-storage-unsupported';
+      if (useRedirect) {
+        await this.auth.signInWithRedirect(provider);
+        return null;
+      }
+      throw err;
+    }
   }
 
-  /** Call once on app load to complete sign-in when returning from redirect. */
-  async getRedirectResult(): Promise<firebase.auth.UserCredential | null> {
-    if (!this.auth) return null;
+  /** Call once on app load to complete sign-in when returning from redirect. Returns credential or error. */
+  async getRedirectResult(): Promise<{ credential: firebase.auth.UserCredential | null; error: string | null }> {
+    if (!this.auth) return { credential: null, error: null };
     try {
-      const result = await this.auth.getRedirectResult();
-      return result;
+      const credential = await this.auth.getRedirectResult();
+      return { credential, error: null };
     } catch (err: any) {
-      if (err?.code) console.warn("Auth redirect result error:", err.code, err.message);
-      return null;
+      const msg = err?.message || err?.code || "Unknown error";
+      return { credential: null, error: msg };
     }
   }
 

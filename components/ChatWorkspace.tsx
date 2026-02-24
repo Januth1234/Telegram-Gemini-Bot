@@ -285,7 +285,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                            <button 
                              key={i} 
                              onClick={() => handleSend(s)} 
-                             className="px-4 py-1.5 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/40 hover:scale-[1.03] transition-[transform,color,border-color] duration-150 shadow-sm whitespace-nowrap active:scale-[0.98] animate-reveal"
+                             className="px-4 py-1.5 bg-white/90 dark:bg-slate-900/90 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 hover:border-cyan-500/40 hover:scale-[1.03] transition-[transform,color,border-color] duration-150 shadow-sm whitespace-nowrap tap-target animate-reveal"
                              style={{ animationDelay: `${i * 80}ms` }}
                            >
                              {s}
@@ -307,7 +307,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      <button
                        onClick={() => handleSend()}
                        disabled={isTyping}
-                       className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-lg active:scale-[0.96] disabled:opacity-50 transition-[transform,box-shadow] duration-150 hover:shadow-xl ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}
+                       className={`w-10 h-10 shrink-0 rounded-[18px] flex items-center justify-center shadow-lg tap-target disabled:opacity-50 hover:shadow-xl ${isPrivate ? 'bg-white text-black' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'}`}
                      >
                        <i className="fa-solid fa-arrow-up"></i>
                      </button>

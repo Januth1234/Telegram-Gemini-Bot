@@ -12,6 +12,7 @@ interface LandingPageProps {
   lang: Language;
   user: UserAccount | null;
   onLogin: () => void;
+  onSignInWithUser?: (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => Promise<void>;
 }
 
 // Client-side text generator for "Loading" states and non-critical content
@@ -29,7 +30,7 @@ const MarkovLoader = () => {
    return <span className="animate-pulse">{text}</span>;
 };
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
@@ -45,11 +46,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     try {
-      await firebaseService.loginWithGoogle();
-      // Redirect flow: page will navigate to Google; no need to setLoading(false)
+      const fbUser = await firebaseService.loginWithGoogle();
+      if (fbUser && onSignInWithUser) {
+        await onSignInWithUser(fbUser);
+      }
     } catch (e) {
-      setIsLoggingIn(false);
       alert((e as Error)?.message || "Sign-in failed. Try again.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -146,7 +150,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                     <button 
                     onClick={handleGuestSubmit} 
                     disabled={isGuestLoading || !prompt.trim()}
-                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl active:scale-[0.98] transition-[box-shadow,transform] duration-150 flex items-center gap-2 disabled:opacity-50 m-1"
+                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl tap-target flex items-center gap-2 disabled:opacity-50 m-1"
                     >
                     <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
                     {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
@@ -170,9 +174,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Navigation Grid */}
         <section className="w-full max-w-6xl space-y-8 md:space-y-12 animate-slide-in-up">
           <div className="flex flex-wrap justify-center gap-3 md:gap-6 px-2 md:px-0">
-              {[t.telegramBot, t.downloads, t.creator, t.pricing, t.logicFlow, t.releases, t.terms, t.privacy].map((title, i) => (
-                <NavCard key={i} href={['#telegram-bot', '#downloads', '#creator', '#pricing', '#logic', '#releases', '#terms', '#privacy'][i]} title={title} lang={lang} delayMs={i * 50} />
-              ))}
+              <NavCard href="#downloads" title={t.downloads} icon="fa-download" lang={lang} delayMs={0} />
+              <NavCard href="#creator" title={t.creator} icon="fa-user" lang={lang} delayMs={50} />
+              <NavCard href="#pricing" title={t.pricing} icon="fa-tag" lang={lang} delayMs={100} />
+              <NavCard href="#logic" title={t.logicFlow} icon="fa-sitemap" lang={lang} delayMs={150} />
+              <NavCard href="#releases" title={t.releases} icon="fa-code-branch" lang={lang} delayMs={200} />
+              <NavCard href="#terms" title={t.terms} icon="fa-file-contract" lang={lang} delayMs={250} />
+              <NavCard href="#privacy" title={t.privacy} icon="fa-shield-halved" lang={lang} delayMs={300} />
           </div>
         </section>
 
@@ -235,7 +243,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   );
 };
 
-const NavCard = ({ href, title, lang, delayMs = 0 }: { href: string; title: string; lang: Language; delayMs?: number }) => {
+const NavCard = ({ href, title, icon, lang, delayMs = 0 }: { href: string; title: string; icon: string; lang: Language; delayMs?: number }) => {
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     const hash = href.startsWith('#') ? href.slice(1) : href;
@@ -247,8 +255,9 @@ const NavCard = ({ href, title, lang, delayMs = 0 }: { href: string; title: stri
       href={href}
       onClick={handleClick}
       style={{ animationDelay: `${delayMs}ms` }}
-      className="glass-panel w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-1 hover:shadow-md transition-[transform,box-shadow,background-color] duration-200 border border-slate-200 dark:border-white/5 active:scale-[0.98] bg-white/50 dark:bg-slate-900/30 shadow-sm animate-slide-in-up"
+      className="glass-panel group w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-2 hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-1 hover:shadow-md transition-[transform,box-shadow,background-color] duration-200 border border-slate-200 dark:border-white/5 tap-target bg-white/50 dark:bg-slate-900/30 shadow-sm animate-slide-in-up"
     >
+      <i className={`fa-solid ${icon} text-2xl text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 transition-colors`} aria-hidden />
       <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-center px-2 transition-colors duration-150 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );

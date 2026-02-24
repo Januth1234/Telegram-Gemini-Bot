@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import LandingPage from './components/LandingPage';
 import ChatWorkspace from './components/ChatWorkspace';
 import AccountSettings from './components/AccountSettings';
@@ -41,6 +41,7 @@ const App: React.FC = () => {
   const [globalPrompt, setGlobalPrompt] = useState('');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Viewport Scaling & Height Fix for Small Devices
   useLayoutEffect(() => {
@@ -118,12 +119,15 @@ const App: React.FC = () => {
     };
 
     (async () => {
-      const redirectCred = await firebaseService.getRedirectResult();
+      const { credential: redirectCred, error: redirectErr } = await firebaseService.getRedirectResult();
+      if (redirectErr) setAuthError(redirectErr);
       const currentUser = firebaseService.currentUser();
       if (redirectCred?.user || currentUser) {
+        setAuthError(null);
         await applyAuthUser(redirectCred?.user ?? currentUser!);
       }
       unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
+        setAuthError(null);
         if (authUser) {
           await applyAuthUser(authUser);
         } else {
@@ -259,6 +263,34 @@ const App: React.FC = () => {
     });
   };
 
+  /** Call this when popup sign-in returns a user so we sync and set state immediately. */
+  const applySignInUser = useCallback(async (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => {
+    const fallbackUser: UserAccount = {
+      id: authUser.uid,
+      name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
+      email: authUser.email || 'user@orin.ai',
+      avatar: authUser.photoURL || undefined,
+      tier: 'Basic',
+      role: 'visitor',
+      approved: false,
+      dailyUsage: { text: 0, images: 0, videos: 0 },
+    };
+    try {
+      const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
+      geminiService.setSessionUser(syncedUser);
+      setUser(syncedUser);
+      setSyncStatus('syncing');
+      const cloudHistory = await firebaseService.getHistory(authUser.uid);
+      if (cloudHistory) mergeHistory(cloudHistory);
+      setSyncStatus('success');
+    } catch {
+      setUser(fallbackUser);
+      geminiService.setSessionUser(fallbackUser);
+      setSyncStatus('error');
+    }
+    setAuthError(null);
+  }, [mergeHistory]);
+
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     if (!user) {
         setGlobalPrompt(prompt);
@@ -358,7 +390,7 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -366,7 +398,7 @@ const App: React.FC = () => {
       case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      default: return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} />;
+      default: return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} onSignInWithUser={applySignInUser} />;
     }
   };
 
@@ -374,8 +406,8 @@ const App: React.FC = () => {
     <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {view !== 'admin-portal' && (
         <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
-          <div className="flex items-center gap-2 cursor-pointer group/logo" onClick={() => window.location.hash = user ? 'home' : ''}>
-            <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-300 group-hover/logo:scale-110" />
+          <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>
+            <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-200 group-hover/logo:scale-105" />
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
           </div>
           {user && WORKSPACE_VIEWS.includes(view) && (
@@ -391,16 +423,20 @@ const App: React.FC = () => {
             <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); cacheService.set(CacheKey.THEME, next); document.documentElement.classList.toggle('dark', next === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`} /></button>
             <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
             {user ? (
-              <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 shadow-sm active:scale-95 transition-all">
+              <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border border-black/5 dark:border-white/10 shadow-sm tap-target">
                 {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : <span className="font-bold text-xs text-slate-500">{user.name[0]}</span>}
               </button>
             ) : (
-              <button onClick={() => window.location.hash = 'account'} className="px-5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-md">Sign In</button>
+              <button onClick={() => window.location.hash = 'account'} className="px-5 py-2 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest tap-target shadow-md">Sign In</button>
             )}
           </div>
         </header>
       )}
-      <main className="flex-1 overflow-hidden relative flex flex-col">{renderContent()}</main>
+      <main className="flex-1 overflow-hidden relative flex flex-col">
+        <div key={view} className="flex-1 flex flex-col min-h-0 view-enter">
+          {renderContent()}
+        </div>
+      </main>
     </div>
   );
 };

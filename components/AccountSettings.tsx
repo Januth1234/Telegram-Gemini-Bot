@@ -11,9 +11,12 @@ interface AccountSettingsProps {
   user: UserAccount | null;
   onClearHistory: () => void;
   conversationsCount?: number;
+  authError?: string | null;
+  onDismissAuthError?: () => void;
+  onSignInWithUser?: (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => Promise<void>;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0 }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,11 +42,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
-      await firebaseService.loginWithGoogle();
-      // Redirect flow: page will navigate to Google; listener + getRedirectResult handle the return
+      const fbUser = await firebaseService.loginWithGoogle();
+      if (fbUser && onSignInWithUser) {
+        await onSignInWithUser(fbUser);
+      }
     } catch (err: any) {
-      setLoading(false);
       alert(err?.message || "Sign-in failed. Try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -61,6 +67,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
 
       <div className="flex-1 overflow-y-auto custom-scrollbar p-6 py-12">
         <div className="max-w-xl mx-auto flex flex-col items-center gap-10">
+          {authError && (
+            <div className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300 text-sm">
+              <span className="flex-1">{authError}</span>
+              {onDismissAuthError && <button type="button" onClick={onDismissAuthError} className="shrink-0 p-1 rounded-lg hover:bg-red-500/20" aria-label="Dismiss"><i className="fa-solid fa-xmark" /></button>}
+            </div>
+          )}
           {!user ? (
             <div className="w-full flex flex-col items-center text-center space-y-10 animate-scale-in">
                
