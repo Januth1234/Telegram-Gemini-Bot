@@ -87,28 +87,56 @@ const App: React.FC = () => {
       if (!authInitialized) setAuthInitialized(true);
     }, AUTH_TIMEOUT_MS);
 
-    const unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
+    let unsubscribe: (() => void) | undefined;
+
+    const applyAuthUser = async (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => {
       clearTimeout(safetyTimeout);
-      if (authUser) {
-         try {
-           const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || "user@orin.ai", authUser.photoURL);
-           geminiService.setSessionUser(syncedUser);
-           setUser(syncedUser);
-           setSyncStatus('syncing');
-           const cloudHistory = await firebaseService.getHistory(authUser.uid);
-           if (cloudHistory) mergeHistory(cloudHistory);
-           setSyncStatus('success');
-         } catch {
-           setSyncStatus('error');
-         }
-      } else {
-        setUser(null);
-        geminiService.logout();
+      const fallbackUser: UserAccount = {
+        id: authUser.uid,
+        name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
+        email: authUser.email || 'user@orin.ai',
+        avatar: authUser.photoURL || undefined,
+        tier: 'Basic',
+        role: 'visitor',
+        approved: false,
+        dailyUsage: { text: 0, images: 0, videos: 0 },
+      };
+      try {
+        const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
+        geminiService.setSessionUser(syncedUser);
+        setUser(syncedUser);
+        setSyncStatus('syncing');
+        const cloudHistory = await firebaseService.getHistory(authUser.uid);
+        if (cloudHistory) mergeHistory(cloudHistory);
+        setSyncStatus('success');
+      } catch {
+        setUser(fallbackUser);
+        geminiService.setSessionUser(fallbackUser);
+        setSyncStatus('error');
       }
       setAuthInitialized(true);
-    });
+    };
+
+    (async () => {
+      const redirectCred = await firebaseService.getRedirectResult();
+      const currentUser = firebaseService.currentUser();
+      if (redirectCred?.user || currentUser) {
+        await applyAuthUser(redirectCred?.user ?? currentUser!);
+      }
+      unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
+        if (authUser) {
+          await applyAuthUser(authUser);
+        } else {
+          clearTimeout(safetyTimeout);
+          setUser(null);
+          geminiService.logout();
+          setAuthInitialized(true);
+        }
+      });
+    })();
+
     return () => {
-      unsubscribe();
+      unsubscribe?.();
       clearTimeout(safetyTimeout);
     };
   }, []);

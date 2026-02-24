@@ -46,10 +46,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
     setIsLoggingIn(true);
     try {
       await firebaseService.loginWithGoogle();
-    } catch {
-      // Popup closed or network error; user can retry
-    } finally {
+      // Redirect flow: page will navigate to Google; no need to setLoading(false)
+    } catch (e) {
       setIsLoggingIn(false);
+      alert((e as Error)?.message || "Sign-in failed. Try again.");
     }
   };
 

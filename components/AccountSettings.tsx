@@ -40,11 +40,10 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
     setLoading(true);
     try {
       await firebaseService.loginWithGoogle();
-      // Auth listener in App.tsx will handle user state update automatically
+      // Redirect flow: page will navigate to Google; listener + getRedirectResult handle the return
     } catch (err: any) {
-      alert(err.message);
-    } finally {
       setLoading(false);
+      alert(err?.message || "Sign-in failed. Try again.");
     }
   };
 

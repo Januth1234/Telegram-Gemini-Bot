@@ -60,20 +60,32 @@ class FirebaseService {
   }
 
   // --- AUTHENTICATION ---
-  async loginWithGoogle(): Promise<firebase.User> {
+  /** Use redirect so sign-in works when popup is blocked or fails (e.g. Safari, strict cookies). */
+  async loginWithGoogle(): Promise<void> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     const provider = new firebase.auth.GoogleAuthProvider();
+    await this.auth.signInWithRedirect(provider);
+    // Page will redirect to Google; after sign-in we return to the app and getRedirectResult() completes auth.
+  }
+
+  /** Call once on app load to complete sign-in when returning from redirect. */
+  async getRedirectResult(): Promise<firebase.auth.UserCredential | null> {
+    if (!this.auth) return null;
     try {
-      const result = await this.auth.signInWithPopup(provider);
-      return result.user!;
-    } catch (error: any) {
-      if (error.code === 'auth/popup-closed-by-user') throw new Error("Sign-in cancelled.");
-      throw error;
+      const result = await this.auth.getRedirectResult();
+      return result;
+    } catch (err: any) {
+      if (err?.code) console.warn("Auth redirect result error:", err.code, err.message);
+      return null;
     }
   }
 
   async logout(): Promise<void> {
     if (this.auth) await this.auth.signOut();
+  }
+
+  currentUser(): firebase.User | null {
+    return this.auth?.currentUser ?? null;
   }
 
   onAuthStateChanged(callback: (user: firebase.User | null) => void) {
