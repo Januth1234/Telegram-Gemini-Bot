@@ -150,10 +150,20 @@ export class GeminiService {
         else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
       }
 
-      return { text: response.text || "", links };
+      // Prefer response.text; fallback to extracting from candidates (some SDK/API shapes omit .text)
+      let text = (response as any).text ?? "";
+      if (!text && response.candidates?.[0]?.content?.parts) {
+        text = response.candidates[0].content.parts
+          .map((p: any) => (p.text != null ? p.text : ""))
+          .join("");
+      }
+      if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
+
+      return { text, links };
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') throw e;
-      throw new AppError("Failed to chat.", 'generic');
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new AppError(msg || "Failed to chat.", 'generic');
     }
   }
 
