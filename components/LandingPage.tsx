@@ -85,6 +85,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
+      {user && (
+        <div className="w-full flex justify-center py-4 px-4 z-[100]">
+          <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-lg hover:shadow-xl tap-target">
+            <i className="fa-solid fa-arrow-left" aria-hidden />
+            Back to Chat
+          </button>
+        </div>
+      )}
       {/* Promotional Banner */}
       {showPromo && (
         <div className="w-full bg-indigo-600 text-white px-4 py-2 flex items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest relative z-[200]">
@@ -145,7 +153,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                     onChange={(e) => onPromptChange(e.target.value)} 
                     onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
                     placeholder={user ? t.howHelp : t.tryDemoPlaceholder} 
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
+                    className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
                     />
                     <button 
                     onClick={handleGuestSubmit} 

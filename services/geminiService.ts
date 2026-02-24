@@ -138,9 +138,9 @@ export class GeminiService {
         config
       });
 
-      if (this.currentUser) {
-         if (!options.isPrivate) await firebaseService.incrementUsage(this.currentUser.id, 'text');
-      } else {
+      if (this.currentUser && !options.isPrivate) {
+         firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
+      } else if (!this.currentUser) {
          this.guestUsage.text++;
       }
 
@@ -173,7 +173,7 @@ export class GeminiService {
         config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: size as any } }
       });
 
-      if (this.currentUser) await firebaseService.incrementUsage(this.currentUser.id, 'images');
+      if (this.currentUser) firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
@@ -207,7 +207,7 @@ export class GeminiService {
         operation = await ai.operations.getVideosOperation({operation: operation});
       }
 
-      if (this.currentUser) await firebaseService.incrementUsage(this.currentUser.id, 'videos');
+      if (this.currentUser) firebaseService.incrementUsage(this.currentUser.id, 'videos').catch(() => {});
 
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!videoUri) throw new Error("No video generated.");

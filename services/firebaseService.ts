@@ -236,10 +236,14 @@ class FirebaseService {
   async incrementUsage(uid: string, type: 'text' | 'images' | 'videos') {
     const ref = this.userRef(uid);
     if (!ref) return;
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const current = snap.data().usage?.[type] ?? 0;
-      await updateDoc(ref, { [`usage.${type}`]: current + 1 });
+    try {
+      const snap = await getDoc(ref);
+      const usage = snap.exists() ? (snap.data().usage ?? { text: 0, images: 0, videos: 0 }) : { text: 0, images: 0, videos: 0 };
+      const next = (usage[type] ?? 0) + 1;
+      const nextUsage = { ...usage, [type]: next };
+      await setDoc(ref, { usage: nextUsage, lastUpdated: serverTimestamp() }, { merge: true });
+    } catch {
+      // Permission or network; don't block chat
     }
   }
 

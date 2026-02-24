@@ -17,7 +17,7 @@ const BotSimulator: React.FC<BotSimulatorProps> = ({ onClose, lang = 'en' }) => 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type a message..."
-          className="mt-4 w-full p-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+          className="mt-4 w-full p-3 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:outline-none focus:ring-0"
         />
         {onClose && (
           <button onClick={onClose} className="mt-4 px-4 py-2 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">

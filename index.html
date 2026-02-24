@@ -224,6 +224,8 @@
       .safe-pt { padding-top: env(safe-area-inset-top); }
       .focus-glow:focus-within { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.4); }
       .dark .focus-glow:focus-within { box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.3); }
+      input:not([type=file]):not([type=hidden]), textarea { outline: none !important; }
+      input:not([type=file]):not([type=hidden]):focus, textarea:focus { outline: none !important; }
       .view-enter { animation: fadeIn 0.2s ease-out forwards; }
       .tap-target { transition: transform 0.15s ease, opacity 0.15s ease; }
       .tap-target:active { transform: scale(0.97); }

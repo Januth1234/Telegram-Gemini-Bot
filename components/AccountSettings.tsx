@@ -146,7 +146,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  <textarea 
                     value={memory} 
                     onChange={e => setMemory(e.target.value)} 
-                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
+                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
                  />
               </div>

@@ -93,7 +93,7 @@ export const OrinSearch = () => {
   return (
     <div className="max-w-md mx-auto p-4">
       <form onSubmit={handleSearch} className="flex bg-white rounded-3xl p-1 shadow-lg border border-slate-100">
-        <input value={q} onChange={e => setQ(e.target.value)} className="flex-1 px-5 py-3 outline-none" placeholder="Ask Orin..." />
+        <input value={q} onChange={e => setQ(e.target.value)} className="flex-1 px-5 py-3 outline-none focus:outline-none focus:ring-0 min-w-0" placeholder="Ask Orin..." />
         <button className="bg-cyan-600 text-white px-6 rounded-2xl font-black text-xs uppercase">GO</button>
       </form>
       <div className="text-center mt-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">
