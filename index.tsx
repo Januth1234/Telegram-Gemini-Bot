@@ -25,7 +25,6 @@ const startApp = () => {
   const rootElement = document.getElementById('root');
   if (!rootElement) return;
 
-  // Register service workers on orinai.org (production) for caching + FCM
   if ('serviceWorker' in navigator && isOrinAiOrigin()) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
@@ -43,7 +42,6 @@ const startApp = () => {
   }
 };
 
-// Ensure DOM is fully ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', startApp);
 } else {

@@ -1,9 +1,9 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { firebaseService } from '../services/firebaseService';
 import { geminiService } from '../services/geminiService';
+import { createCheckoutSession } from '../services/stripeService';
 
 interface PricingPageProps {
   onClose: () => void;
@@ -13,16 +13,40 @@ interface PricingPageProps {
 const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
   const user = geminiService.getCurrentUser();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'cancel' | null }>({ type: null });
 
-  const handlePlanSelect = async (planName: string) => {
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
+    if (params.get('success') === 'true') setMessage({ type: 'success' });
+    if (params.get('canceled') === 'true') setMessage({ type: 'cancel' });
+  }, []);
+
+  const handlePlanSelect = async (planKey: string) => {
     if (!user) {
-        alert(t.pleaseSignInToUpgrade);
-        return;
+      alert(t.pleaseSignInToUpgrade);
+      return;
     }
-    if (confirm(`${t.confirmUpgrade} ${planName}?`)) {
-       await firebaseService.updatePlan(user.id, planName);
-       alert(t.planUpgradedSuccess);
-       window.location.reload();
+    if (planKey === 'starter') return;
+    if (!confirm(`${t.confirmUpgrade} ${planKey}?`)) return;
+
+    setCheckoutLoading(planKey);
+    try {
+      const origin = window.location.origin;
+      const result = await createCheckoutSession({
+        planKey,
+        userId: user.id,
+        userEmail: user.email,
+        successUrl: `${origin}/#pricing?success=true&session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${origin}/#pricing?canceled=true`,
+      });
+      if ('url' in result) {
+        window.location.href = result.url;
+        return;
+      }
+      alert((result as { error: string }).error || t.planUpgradedSuccess);
+    } finally {
+      setCheckoutLoading(null);
     }
   };
 
@@ -67,6 +91,16 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
       <div className="max-w-6xl mx-auto px-6 py-12 pb-32">
+        {message.type === 'success' && (
+          <div className="mb-6 p-4 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-800 dark:text-cyan-200 text-sm font-bold text-center">
+            Payment successful. Your plan is updated — refresh to see changes.
+          </div>
+        )}
+        {message.type === 'cancel' && (
+          <div className="mb-6 p-4 rounded-2xl bg-slate-200/50 dark:bg-slate-800/50 border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-sm font-bold text-center">
+            Checkout canceled. You can try again when ready.
+          </div>
+        )}
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
            <div className="space-y-1">
              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.pricing}</h2>
@@ -117,13 +151,20 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
 
                 <button 
                   onClick={() => handlePlanSelect(plan.key)}
-                  className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 shadow-lg ${
+                  disabled={plan.key === 'starter' || checkoutLoading !== null}
+                  className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed ${
                     plan.key === 'elite' ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20' : 
                     plan.popular ? 'bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20' : 
                     'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
                   }`}
                 >
-                  {user?.tier.toLowerCase().includes(plan.key) ? "Current Plan" : "Choose Plan"}
+                  {plan.key === 'starter'
+                    ? (user?.tier.toLowerCase().includes('basic') || !user ? t.freeLabel : 'Current Plan')
+                    : (user?.tier.toLowerCase().includes(plan.key) || (plan.key === 'elite' && user?.tier.toLowerCase().includes('verified')))
+                      ? 'Current Plan'
+                      : checkoutLoading === plan.key
+                        ? '...'
+                        : 'Choose Plan'}
                 </button>
               </div>
             ))}

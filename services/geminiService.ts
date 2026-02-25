@@ -4,6 +4,8 @@ import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessa
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export class AppError extends Error {
   constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
     super(message);
@@ -46,7 +48,14 @@ RULES:
 
 export class GeminiService {
   private currentUser: UserAccount | null = null;
-  private guestUsage = { text: 0, max: 5 }; // Guest Limit
+  private guestUsage = {
+    textCount: 0,
+    textResetAt: 0,
+    uploadCount: 0,
+    uploadResetAt: 0,
+    textMax: 5,
+    uploadMax: 1,
+  };
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
@@ -67,7 +76,18 @@ export class GeminiService {
     try { await firebaseService.logout(); } catch(e) {}
   }
 
-  /** Returns the API key to use; throws if none is available. */
+  private resetGuestWindows() {
+    const now = Date.now();
+    if (!this.guestUsage.textResetAt || now - this.guestUsage.textResetAt > DAY_MS) {
+      this.guestUsage.textCount = 0;
+      this.guestUsage.textResetAt = now;
+    }
+    if (!this.guestUsage.uploadResetAt || now - this.guestUsage.uploadResetAt > DAY_MS) {
+      this.guestUsage.uploadCount = 0;
+      this.guestUsage.uploadResetAt = now;
+    }
+  }
+
   private async getApiKey(): Promise<string> {
     const envKey = process.env.API_KEY;
     if (envKey && envKey.trim()) return envKey.trim();
@@ -106,7 +126,8 @@ export class GeminiService {
        const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
     } else {
-       if (this.guestUsage.text >= this.guestUsage.max) {
+       this.resetGuestWindows();
+       if (this.guestUsage.textCount >= this.guestUsage.textMax) {
          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
        }
     }
@@ -123,7 +144,6 @@ export class GeminiService {
     const promptText = (prompt || "Continue.").trim();
 
     try {
-      // Build contents: history (last 10 turns) + current user message
       const contents: { role: 'user' | 'model'; parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] }[] = [];
       if (options.history && options.history.length > 0) {
         for (const msg of options.history.slice(-10)) {
@@ -169,7 +189,8 @@ export class GeminiService {
       if (this.currentUser && !options.isPrivate) {
          firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
       } else if (!this.currentUser) {
-         this.guestUsage.text++;
+         this.resetGuestWindows();
+         this.guestUsage.textCount++;
       }
 
       const links: GroundingLink[] = [];
@@ -186,6 +207,10 @@ export class GeminiService {
       }
       if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
 
+      if (this.currentUser && !options.isPrivate && memory !== undefined) {
+        this.updateMemoryFromExchange(this.currentUser.id, memory, promptText, text).catch(() => {});
+      }
+
       return { text, links };
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') throw e;
@@ -198,7 +223,10 @@ export class GeminiService {
     if (this.currentUser) {
        if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
-       throw new AppError("Sign in to generate images.", "auth");
+       this.resetGuestWindows();
+       if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
+         throw new AppError("Guest upload limit reached. Sign in to continue.", "limit_reached");
+       }
     }
 
     try {
@@ -210,7 +238,12 @@ export class GeminiService {
         config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: size as any } }
       });
 
-      if (this.currentUser) firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
+      if (this.currentUser) {
+        firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
+      } else {
+        this.resetGuestWindows();
+        this.guestUsage.uploadCount++;
+      }
 
       for (const part of response.candidates?.[0]?.content?.parts || []) {
         if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
@@ -225,7 +258,10 @@ export class GeminiService {
     if (this.currentUser) {
        if (await firebaseService.checkLimit(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
     } else {
-       throw new AppError("Sign in to generate videos.", "auth");
+       this.resetGuestWindows();
+       if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
+         throw new AppError("Guest upload limit reached. Sign in to continue.", "limit_reached");
+       }
     }
 
     try {
@@ -244,7 +280,12 @@ export class GeminiService {
         operation = await ai.operations.getVideosOperation({operation: operation});
       }
 
-      if (this.currentUser) firebaseService.incrementUsage(this.currentUser.id, 'videos').catch(() => {});
+      if (this.currentUser) {
+        firebaseService.incrementUsage(this.currentUser.id, 'videos').catch(() => {});
+      } else {
+        this.resetGuestWindows();
+        this.guestUsage.uploadCount++;
+      }
 
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!videoUri) throw new Error("No video generated.");
@@ -258,6 +299,29 @@ export class GeminiService {
     }
   }
 
+  private async updateMemoryFromExchange(uid: string, previousMemory: string, userPrompt: string, assistantReply: string): Promise<void> {
+    const apiKey = await this.getApiKey().catch(() => null);
+    if (!apiKey) return;
+    const ai = new GoogleGenAI({ apiKey });
+    const systemInstruction = `You are a memory updater for a personal AI assistant. Given the PREVIOUS MEMORY and the NEW EXCHANGE, output ONLY the updated memory: a single block of text (a few concise sentences) that summarizes what to remember about the user. Include any new facts, preferences, or context the user shared. Do not include greetings or meta-commentary. Output nothing but the updated memory.`;
+    const userContent = `PREVIOUS MEMORY:\n${previousMemory || "(none)"}\n\nUSER: ${userPrompt}\n\nASSISTANT: ${assistantReply}`;
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: { role: 'user', parts: [{ text: userContent }] },
+        config: { systemInstruction },
+      });
+      let newMemory = (response as { text?: string }).text ?? "";
+      if (!newMemory && response.candidates?.[0]?.content?.parts) {
+        newMemory = response.candidates[0].content.parts
+          .map((p: { text?: string }) => (p?.text ?? ""))
+          .join("")
+          .trim();
+      }
+      if (newMemory) await firebaseService.updateUserMemory(uid, newMemory);
+    } catch {}
+  }
+
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
       const apiKey = await this.getApiKey();
@@ -269,17 +333,42 @@ export class GeminiService {
     } catch { return "New Chat"; }
   }
 
+  private getVoiceSystemInstruction(tone: string, sessionContext?: { timezone: string; localTime: string; country: string; currency: string; locale: string }) {
+    const tonePart = getToneInstruction(tone || 'neutral');
+    const now = new Date();
+    const tz = sessionContext?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const localTime = sessionContext?.localTime || now.toLocaleString('en-US', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' });
+    const country = sessionContext?.country || 'user\'s region';
+    const currency = sessionContext?.currency || 'local currency';
+    const locale = sessionContext?.locale || (typeof navigator !== 'undefined' ? navigator.language : 'en');
+    return `${tonePart}
+
+VOICE RULES (CRITICAL):
+1. SPEED: Answer in 1–2 short sentences. Be fast and concise. No long monologues.
+2. NOISE: Ignore background noise, coughs, and non-speech sounds. Only respond to clear, directed speech from the user. If input seems like noise or incomplete, give a very brief prompt like "Yes?" or "Go on."
+3. INTERRUPTION: If the user starts speaking while you are talking, stop immediately (you will be cut off by the system). Do not repeat yourself after being interrupted.
+
+SESSION CONTEXT (use for answers about time, place, money, weather):
+- User's timezone: ${tz}
+- Local date and time: ${localTime}
+- User's region/country: ${country}
+- Local currency: ${currency}
+- Locale: ${locale}
+When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.`;
+  }
+
   async connectLive(callbacks: any, config: any) {
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
-      let finalConfig = config;
-      if (config.voiceName || config.tone) {
-         finalConfig = {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
-            systemInstruction: getToneInstruction(config.tone || 'neutral')
-         };
-      }
+      const systemInstruction = config.systemInstruction != null
+        ? config.systemInstruction
+        : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
+      const finalConfig = {
+        ...config,
+        responseModalities: [Modality.AUDIO],
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
+        systemInstruction
+      };
       return ai.live.connect({ model: 'gemini-2.5-flash-native-audio-preview-12-2025', callbacks, config: finalConfig });
   }
 

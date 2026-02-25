@@ -24,24 +24,19 @@ try {
   const messaging = firebase.messaging();
   
   messaging.onBackgroundMessage((payload) => {
-    console.log('[sw.js] Background message: ', payload);
-    const title = payload.notification.title;
+    const title = payload.notification?.title || 'Orin AI';
     const options = {
-      body: payload.notification.body,
-      icon: 'favicon.svg'
+      body: payload.notification?.body || '',
+      icon: '/favicon.svg'
     };
     self.registration.showNotification(title, options);
   });
-} catch (error) {
-  console.log("Firebase SW Error:", error);
-}
+} catch (e) {}
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch(err => console.log('Precache error:', err));
-    })
+    event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS).catch(() => {}))
   );
 });
 
@@ -62,7 +57,6 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // Exclude API, Firebase, and non-GET requests from caching
   if (event.request.method !== 'GET' || 
       url.pathname.startsWith('/api') || 
       url.origin.includes('firebase') || 
@@ -71,7 +65,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Network-first for HTML navigation (ensures fresh content)
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetch(event.request).catch(() => {
@@ -81,7 +74,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Stale-while-revalidate for static assets (JS, CSS, Images, Fonts)
   if (['script', 'style', 'image', 'font'].includes(event.request.destination)) {
     event.respondWith(
       caches.match(event.request).then((cached) => {
@@ -91,9 +83,7 @@ self.addEventListener('fetch', (event) => {
              caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return networkResponse;
-        }).catch(() => {
-           // Silent fail for network fetch
-        });
+        }).catch(() => null);
         return cached || fetched;
       })
     );

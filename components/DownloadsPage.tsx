@@ -31,13 +31,11 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
       if (url) {
           const link = document.createElement('a');
           link.href = url;
-          // Note: Browser might ignore download attribute for cross-origin URLs, but it's good practice.
           link.setAttribute('download', '');
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
       } else {
-          // Fallback simulation for platforms without links (iOS/macOS)
           const filename = `orin-setup-${platform.toLowerCase()}${arch ? '-' + arch.toLowerCase().replace(' ', '-') : ''}.exe`;
           const dummyContent = `Orin AI Platform v4.5.3 Installer\nTarget: ${label}\nVerified Artifact: JN-PROD-${Date.now()}\n\nThis is a secure system download from JN Productions Global.`;
           

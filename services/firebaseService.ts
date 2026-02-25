@@ -6,6 +6,12 @@ import "firebase/compat/functions";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where } from "firebase/firestore";
 import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage } from "../types";
 
+interface UsagePlanLimits {
+  textPerDay: number | null;
+  imagesPer30Days: number | null;
+  videosPer30Days: number | null;
+}
+
 // Configuration
 const firebaseConfig = {
   apiKey: process.env.FIREBASE_API_KEY || "AIzaSyB5rY4e-_GOkkl4qwDZuvHqwq0_IP9mFmA",
@@ -50,17 +56,11 @@ class FirebaseService {
 
         try {
           this.analytics = getAnalytics(this.app);
-        } catch (e) {
-          console.debug("Analytics initialization skipped");
-        }
+        } catch (_) {}
       }
-    } catch (e) {
-      console.warn("Firebase initialization warning:", e);
-    }
+    } catch (_) {}
   }
 
-  // --- AUTHENTICATION ---
-  /** Try popup first; if it succeeds returns the user so the app can apply sign-in immediately. If blocked/fails, falls back to redirect and returns null. */
   async loginWithGoogle(): Promise<firebase.User | null> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     const provider = new firebase.auth.GoogleAuthProvider();
@@ -78,7 +78,6 @@ class FirebaseService {
     }
   }
 
-  /** Call once on app load to complete sign-in when returning from redirect. Returns credential or error. */
   async getRedirectResult(): Promise<{ credential: firebase.auth.UserCredential | null; error: string | null }> {
     if (!this.auth) return { credential: null, error: null };
     try {
@@ -104,8 +103,6 @@ class FirebaseService {
     return () => {};
   }
 
-  // --- ADMIN PORTAL LOGIC (CLOUD FUNCTIONS) ---
-  
   async submitSignupRequest(email: string, reason: string): Promise<void> {
     if (!this.functions) return;
     const createPendingSignup = this.functions.httpsCallable('createPendingSignup');
@@ -131,8 +128,6 @@ class FirebaseService {
     const result = await ocrFunc({ imageUrl, lang });
     return result.data;
   }
-
-  // --- FIRESTORE READS (Direct) ---
 
   async getPendingRequests(): Promise<SignupRequest[]> {
     if (!this.db) return [];
@@ -168,7 +163,9 @@ class FirebaseService {
     return this.db ? doc(this.db, "users", uid) : null;
   }
 
-  // --- FIRESTORE USER SYNC ---
+  private static readonly DAY_MS = 24 * 60 * 60 * 1000;
+  private static readonly THIRTY_DAYS_MS = 30 * FirebaseService.DAY_MS;
+
   async syncUserSession(uid: string, email: string, photoURL?: string | null): Promise<UserAccount> {
     if (!this.db) throw new Error("DB not init");
     const userRef = doc(this.db, "users", uid);
@@ -181,13 +178,13 @@ class FirebaseService {
         email,
         name: email.split('@')[0],
         avatar: photoURL || null,
-        plan: 'starter',
+        plan: 'free',
         role: 'visitor', 
         approved: false,
         subscriptionStatus: 'active',
         createdAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
-        usage: { text: 0, images: 0, videos: 0 },
+        usage: { text: 0, images: 0, videos: 0, mediaWindowStart: Date.now() },
         memory: "User is new to Orin AI.",
         lastReset: Date.now()
       };
@@ -196,11 +193,35 @@ class FirebaseService {
       userData = snap.data();
       const updates: any = {};
       if (photoURL && userData.avatar !== photoURL) updates.avatar = photoURL;
-      if (Date.now() - (userData.lastReset || 0) > 86400000) {
-        updates.usage = { text: 0, images: 0, videos: 0 };
-        updates.lastReset = Date.now();
-        userData.usage = updates.usage;
+
+      const now = Date.now();
+      const usage = userData.usage ?? { text: 0, images: 0, videos: 0 };
+      let lastReset: number = userData.lastReset || 0;
+      let mediaWindowStart: number = usage.mediaWindowStart || lastReset || now;
+      let changed = false;
+
+      // Reset daily text usage if a full day has passed
+      if (!lastReset || now - lastReset > FirebaseService.DAY_MS) {
+        usage.text = 0;
+        lastReset = now;
+        changed = true;
       }
+
+      // Reset 30-day window for images/videos if needed
+      if (!mediaWindowStart || now - mediaWindowStart > FirebaseService.THIRTY_DAYS_MS) {
+        usage.images = 0;
+        usage.videos = 0;
+        mediaWindowStart = now;
+        changed = true;
+      }
+
+      if (changed) {
+        usage.mediaWindowStart = mediaWindowStart;
+        updates.usage = usage;
+        updates.lastReset = lastReset;
+        userData.usage = usage;
+      }
+
       if (Object.keys(updates).length > 0) await updateDoc(userRef, updates);
     }
 
@@ -209,17 +230,21 @@ class FirebaseService {
       name: userData.name || email.split('@')[0],
       email: email,
       avatar: userData.avatar,
-      tier: userData.plan === 'elite' ? 'Verified Member' : userData.plan === 'pro' ? 'Pro (BYO-Google)' : 'Basic',
+      tier: userData.plan === 'elite' ? 'Verified Member' : (userData.plan === 'pro' || userData.plan === 'pro_yearly') ? 'Pro (BYO-Google)' : 'Basic',
       role: userData.role || 'visitor',
       approved: userData.approved || false,
       dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },
     };
   }
 
-  private static readonly USAGE_LIMITS: Record<string, { text: number; images: number; videos: number }> = {
-    starter: { text: 200, images: 10, videos: 0 },
-    pro: { text: 500, images: 50, videos: 5 },
-    elite: { text: 999999, images: 9999, videos: 999 },
+  private static readonly USAGE_LIMITS: Record<string, UsagePlanLimits> = {
+    free:         { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 },
+    starter:      { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 }, // legacy alias
+    basic:        { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
+    basic_yearly: { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
+    pro:          { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
+    pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
+    elite:        { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null }, // legacy alias
   };
 
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
@@ -229,9 +254,28 @@ class FirebaseService {
       const snap = await getDoc(ref);
       if (!snap.exists()) return false;
       const data = snap.data();
-      const plan = data.plan || 'starter';
-      const usage = data.usage?.[type] ?? 0;
-      return usage >= FirebaseService.USAGE_LIMITS[plan]?.[type];
+      const now = Date.now();
+      const planKey: string = data.plan || 'free';
+      const limits = FirebaseService.USAGE_LIMITS[planKey] || FirebaseService.USAGE_LIMITS['free'];
+      const usage = data.usage ?? { text: 0, images: 0, videos: 0 };
+      const lastReset: number = data.lastReset || 0;
+      const mediaWindowStart: number = usage.mediaWindowStart || lastReset || now;
+
+      if (type === 'text') {
+        const limit = limits.textPerDay;
+        if (limit == null) return false;
+        const effectiveText = (!lastReset || now - lastReset > FirebaseService.DAY_MS) ? 0 : (usage.text ?? 0);
+        return effectiveText >= limit;
+      }
+
+      const isImage = type === 'images';
+      const limit = isImage ? limits.imagesPer30Days : limits.videosPer30Days;
+      if (limit == null) return false;
+
+      const windowFresh = !!mediaWindowStart && now - mediaWindowStart <= FirebaseService.THIRTY_DAYS_MS;
+      const rawUsage = isImage ? (usage.images ?? 0) : (usage.videos ?? 0);
+      const effectiveUsage = windowFresh ? rawUsage : 0;
+      return effectiveUsage >= limit;
     } catch {
       return false; // permission/network; allow request
     }
@@ -242,13 +286,52 @@ class FirebaseService {
     if (!ref) return;
     try {
       const snap = await getDoc(ref);
-      const usage = snap.exists() ? (snap.data().usage ?? { text: 0, images: 0, videos: 0 }) : { text: 0, images: 0, videos: 0 };
-      const next = (usage[type] ?? 0) + 1;
-      const nextUsage = { ...usage, [type]: next };
-      await setDoc(ref, { usage: nextUsage, lastUpdated: serverTimestamp() }, { merge: true });
+      const data = snap.exists() ? snap.data() : {};
+      const now = Date.now();
+
+      const usage = (data.usage ?? { text: 0, images: 0, videos: 0 }) as any;
+      let lastReset: number = data.lastReset || 0;
+      let mediaWindowStart: number = usage.mediaWindowStart || lastReset || now;
+
+      // Reset daily text if needed
+      if (!lastReset || now - lastReset > FirebaseService.DAY_MS) {
+        usage.text = 0;
+        lastReset = now;
+      }
+
+      // Reset 30-day window for media if needed
+      if (!mediaWindowStart || now - mediaWindowStart > FirebaseService.THIRTY_DAYS_MS) {
+        usage.images = 0;
+        usage.videos = 0;
+        mediaWindowStart = now;
+      }
+
+      if (type === 'text') {
+        usage.text = (usage.text ?? 0) + 1;
+      } else if (type === 'images') {
+        usage.images = (usage.images ?? 0) + 1;
+      } else {
+        usage.videos = (usage.videos ?? 0) + 1;
+      }
+
+      usage.mediaWindowStart = mediaWindowStart;
+
+      await setDoc(ref, { usage, lastReset, lastUpdated: serverTimestamp() }, { merge: true });
     } catch {
       // Permission or network; don't block chat
     }
+  }
+
+  async saveFCMToken(uid: string, token: string): Promise<void> {
+    const ref = this.userRef(uid);
+    if (!ref) return;
+    try {
+      await updateDoc(ref, {
+        fcmToken: token,
+        fcmTokenUpdatedAt: serverTimestamp(),
+        lastUpdated: serverTimestamp(),
+      });
+    } catch (_) {}
   }
 
   async updatePlan(uid: string, plan: string) {
@@ -283,18 +366,20 @@ class FirebaseService {
     await updateDoc(ref, { memory });
   }
 
-  /**
-   * Saves conversation history with read-merge-write for cross-device sync.
-   * - Merges local + cloud by id; for same id keeps the one with more messages or newer timestamp.
-   * - Pass deletedIds so deletes propagate (those ids are removed from merged result).
-   */
   async saveHistory(uid: string, history: Conversation[], deletedIds: string[] = []) {
     const ref = this.userRef(uid);
     if (!ref) return;
     try {
-      const cloud = await this.getHistory(uid);
+      let cloud: Conversation[] | null = null;
+      try {
+        cloud = await this.getHistory(uid);
+      } catch {
+        // Use empty cloud so we still persist local history (e.g. offline or permission)
+      }
       const cloudList = (cloud || []).filter(c => conversationHasUserMessage(c));
-      const localById = new Map(history.filter(c => conversationHasUserMessage(c)).map(c => [c.id, c]));
+      const localList = history.filter(c => conversationHasUserMessage(c));
+      const localById = new Map(localList.map(c => [c.id, c]));
+      // Merge: for each cloud conv, keep cloud unless local has more messages or newer timestamp
       for (const c of cloudList) {
         const existing = localById.get(c.id);
         if (!existing) {
@@ -302,7 +387,7 @@ class FirebaseService {
           continue;
         }
         const cMsg = (c.messages || []).length;
-        const eMsg = existing.messages.length;
+        const eMsg = (existing.messages || []).length;
         const cTime = new Date(c.timestamp).getTime();
         const eTime = new Date(existing.timestamp).getTime();
         if (cMsg > eMsg || (cMsg === eMsg && cTime > eTime)) localById.set(c.id, c);
@@ -323,12 +408,20 @@ class FirebaseService {
     try {
       const snap = await getDoc(ref);
       const blob = snap.data()?.historyBlob;
-      if (!blob) return null;
+      if (blob === undefined || blob === null) return null;
+      if (typeof blob !== 'string') return null;
       const parsed = JSON.parse(blob) as any[];
+      if (!Array.isArray(parsed)) return null;
       return parsed.map((c: any) => ({
         ...c,
-        timestamp: new Date(c.timestamp),
-        messages: (c.messages || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) })),
+        id: c.id ?? String(Date.now()),
+        title: c.title ?? 'Chat',
+        mode: c.mode ?? 'chat',
+        timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
+        messages: (c.messages || []).map((m: any) => ({
+          ...m,
+          timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+        })),
       }));
     } catch {
       return null;

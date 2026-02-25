@@ -142,12 +142,30 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setTranscription([]);
   }, [stopAiSpeaking]);
 
+  const getSessionContext = (): { timezone: string; localTime: string; country: string; currency: string; locale: string } => {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const now = new Date();
+    const localTime = now.toLocaleString('en-US', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' });
+    const locale = navigator.language || 'en';
+    const region = (locale.split('-')[1] || '').toUpperCase();
+    const countryByTz: Record<string, string> = { 'Asia/Colombo': 'Sri Lanka', 'Asia/Kolkata': 'India', 'America/New_York': 'United States', 'Europe/London': 'United Kingdom', 'Asia/Dubai': 'UAE' };
+    const currencyByRegion: Record<string, string> = { LK: 'LKR', IN: 'INR', US: 'USD', GB: 'GBP', AE: 'AED' };
+    let country = countryByTz[tz];
+    if (!country && region) {
+      try { country = new Intl.DisplayNames(['en'], { type: 'region' }).of(region) || 'user\'s region'; } catch { country = 'user\'s region'; }
+    }
+    if (!country) country = 'user\'s region';
+    const currency = currencyByRegion[region] || (tz === 'Asia/Colombo' ? 'LKR' : 'USD');
+    return { timezone: tz, localTime, country, currency, locale };
+  };
+
   const startSession = async () => {
     if (isActive || isConnecting) return; // Prevent double taps during freezes
     
     setErrorMessage(null);
     setIsConnecting(true);
     setTranscription([]);
+    const sessionContext = getSessionContext();
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -157,7 +175,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       const inputSampleRate = inputAudioContextRef.current.sampleRate;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: { echoCancellation: true, noiseSuppression: true } 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
       
       analyserRef.current = audioContextRef.current.createAnalyser();
@@ -226,7 +244,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       const p = mode === 'translator' 
         ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
-        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone });
+        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext });
 
       sessionRef.current = await p;
     } catch (e: unknown) {
@@ -242,7 +260,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
   const containerClass = inline 
     ? "w-full h-full flex flex-col items-center p-4 overflow-hidden relative" 
-    : "w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center p-6 bg-white dark:bg-slate-900/95 shadow-2xl transition-all duration-500 overflow-hidden relative";
+    : "w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center p-4 md:p-6 bg-white dark:bg-slate-900/95 shadow-2xl transition-all duration-500 overflow-hidden relative max-h-[min(90vh,calc(var(--vh,1vh)*90))]";
 
   const applySettings = () => {
     setShowSettings(false);
@@ -253,10 +271,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   };
 
   return (
-    <div className={inline ? "h-full w-full" : "fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md safe-p-all"}>
-      {!inline && <div className="absolute inset-0" onClick={onClose}></div>}
+    <div className={inline ? "h-full w-full flex flex-col items-center justify-center min-h-0" : "fixed inset-0 z-[150] flex items-center justify-center p-4 safe-pt safe-pb bg-black/40 backdrop-blur-md overflow-y-auto"}>
+      {!inline && <div className="absolute inset-0" onClick={onClose} aria-hidden />}
       
-      <div className={containerClass} style={!inline ? { height: 'calc(var(--vh, 1vh) * 90)' } : undefined}>
+      <div className={containerClass}>
         
         {/* Settings Modal */}
         {showSettings && (
@@ -305,8 +323,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           </div>
         )}
 
-        {/* Header */}
-        <div className="w-full flex items-center justify-between shrink-0 pb-4">
+        {/* Header - always visible */}
+        <div className="w-full flex items-center justify-between shrink-0 py-2 pb-3">
            <div className={`px-3 py-1 rounded-full border transition-all ${isActive ? 'bg-slate-100 dark:bg-white/5 border-slate-200' : `bg-${activeColor}-500/10 border-${activeColor}-500/20`}`}>
               <span className={`text-[9px] font-black uppercase tracking-widest animate-beta-pulse ${isActive ? 'text-slate-400' : `text-${activeColor}-600`}`}>BETA v5.0</span>
            </div>
@@ -317,9 +335,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
            </div>
         </div>
 
-        {/* Core Viewport */}
-        <div className="flex-1 w-full flex flex-col items-center overflow-y-auto no-scrollbar py-2">
-            <div className="relative flex flex-col items-center justify-center py-6">
+        {/* Core Viewport - scrollable so upper part is never cut */}
+        <div className="flex-1 w-full flex flex-col items-center min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar py-2">
+            <div className="relative flex flex-col items-center justify-center py-4 md:py-6">
                <div className="relative">
                   <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
                   <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
@@ -386,14 +404,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                </div>
             </div>
 
-            <div className={`w-full flex flex-col gap-4 transition-all duration-500 ${isActive ? 'opacity-100' : 'opacity-0 h-0 pointer-events-none'}`}>
-                <div className="w-full h-8 flex items-end justify-center gap-1.5 px-10">
+            <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 h-0 pointer-events-none overflow-hidden'}`}>
+                <div className="w-full h-6 flex items-end justify-center gap-1.5 px-8">
                   {Array.from({ length: BAR_COUNT }).map((_, i) => (
                     <div key={i} ref={(el) => { barsRef.current[i] = el; }} className={`w-2.5 rounded-full transition-all duration-100 ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`} style={{ height: '10%' }}></div>
                   ))}
                 </div>
 
-                <div ref={scrollTranscriptionRef} className="w-full h-44 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-black/20 rounded-3xl p-5 flex flex-col gap-3 border border-black/5 dark:border-white/5 shadow-inner">
+                <div ref={scrollTranscriptionRef} className="w-full min-h-[8rem] max-h-40 overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-black/20 rounded-2xl p-4 flex flex-col gap-3 border border-black/5 dark:border-white/5 shadow-inner">
                   {transcription.length === 0 ? (
                       <div className="flex flex-col items-center justify-center h-full opacity-30 text-center px-4">
                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
@@ -415,8 +433,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             </div>
         </div>
 
-        {/* Bottom Pinned Controls */}
-        <div className="w-full pt-4 shrink-0 pb-2 safe-pb">
+        {/* Bottom Pinned Controls - always visible */}
+        <div className="w-full pt-3 shrink-0 safe-pb">
           {!isActive ? (
             <button 
               onClick={startSession} 

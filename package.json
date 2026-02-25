@@ -11,9 +11,11 @@
   },
   "dependencies": {
     "@google/genai": "*",
+    "firebase": "^10.12.0",
+    "firebase-admin": "^12.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "firebase": "^10.12.0"
+    "stripe": "^17.0.0"
   },
   "devDependencies": {
     "@types/node": "^20.12.7",

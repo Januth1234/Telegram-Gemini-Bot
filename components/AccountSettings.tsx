@@ -160,10 +160,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Chats</span>
                     </div>
                     <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.1s' }}>
-                        <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.text : user.dailyUsage.text}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Messages</span>
-                    </div>
-                    <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 col-span-2 md:col-span-1 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.15s' }}>
                         <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations</span>
                     </div>

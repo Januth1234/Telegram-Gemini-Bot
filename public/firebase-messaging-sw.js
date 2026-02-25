@@ -1,5 +1,3 @@
-
-// Firebase Cloud Messaging – served at root for orinai.org (FCM default path)
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
 

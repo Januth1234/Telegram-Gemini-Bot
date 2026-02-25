@@ -15,6 +15,7 @@ import TelegramBotPage from './components/TelegramBotPage';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
+import { notificationService } from './services/notificationService';
 import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
@@ -24,7 +25,6 @@ const WORKSPACE_VIEWS: AppView[] = ['chat', 'art', 'camera', 'voice', 'math'];
 const VALID_VIEWS: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
-/** Local-only convs older than this are dropped on merge so deletes on other devices propagate. */
 const RECENT_LOCAL_MS = 5 * 60 * 1000;
 
 const App: React.FC = () => {
@@ -110,6 +110,7 @@ const App: React.FC = () => {
         const cloudHistory = await firebaseService.getHistory(authUser.uid);
         if (cloudHistory) mergeHistory(cloudHistory);
         setSyncStatus('success');
+        notificationService.setupForUser().catch(() => {});
       } catch {
         setUser(fallbackUser);
         geminiService.setSessionUser(fallbackUser);
@@ -246,8 +247,7 @@ const App: React.FC = () => {
     setActiveConversationId(newId);
   }, [view, activeConversationId]);
 
-  /** Cloud is source of truth for which ids exist; local-only convs are kept only if recent (so deletes propagate). */
-  const mergeHistory = (cloudHistory: Conversation[]) => {
+  const mergeHistory = useCallback((cloudHistory: Conversation[]) => {
     const withUserMessages = (cloudHistory || []).filter(c => conversationHasUserMessage(c));
     const cloudIds = new Set(withUserMessages.map(c => c.id));
     setConversations(prev => {
@@ -271,9 +271,31 @@ const App: React.FC = () => {
       }
       return [...combined.values()].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     });
-  };
+  }, []);
 
-  /** Call this when popup sign-in returns a user so we sync and set state immediately. */
+  const SYNC_PULL_INTERVAL_MS = 60_000;
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) return;
+    const pull = async () => {
+      try {
+        const cloud = await firebaseService.getHistory(uid);
+        if (cloud?.length !== undefined) mergeHistory(cloud);
+      } catch {
+        // ignore; will retry on next focus or interval
+      }
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') pull();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    const intervalId = window.setInterval(pull, SYNC_PULL_INTERVAL_MS);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.clearInterval(intervalId);
+    };
+  }, [user?.id, mergeHistory]);
+
   const applySignInUser = useCallback(async (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => {
     const fallbackUser: UserAccount = {
       id: authUser.uid,
@@ -293,6 +315,7 @@ const App: React.FC = () => {
       const cloudHistory = await firebaseService.getHistory(authUser.uid);
       if (cloudHistory) mergeHistory(cloudHistory);
       setSyncStatus('success');
+      notificationService.setupForUser().catch(() => {});
     } catch {
       setUser(fallbackUser);
       geminiService.setSessionUser(fallbackUser);
