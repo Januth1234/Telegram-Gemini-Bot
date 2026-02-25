@@ -46,6 +46,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [localInput, setLocalInput] = useState(initialPrompt);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -115,6 +116,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
     
     abortControllerRef.current = new AbortController();
+    setChatError(null);
     setIsTyping(true);
     startProgress(activeTab);
     setLocalInput('');
@@ -164,7 +166,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
       
     } catch (e: unknown) {
-      if (!(e instanceof Error && e.name === 'AbortError')) alert(e instanceof Error ? e.message : String(e));
+      if (e instanceof Error && e.name === 'AbortError') return;
+      const msg = e instanceof Error ? e.message : String(e);
+      setChatError(msg || 'Something went wrong. Try again.');
+      alert(msg || 'Something went wrong. Try again.');
     } finally { 
        setIsTyping(false); 
        stopProgress(); 
@@ -278,6 +283,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && activeTab !== 'maths' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] safe-pb mb-0">
                <div className="max-w-3xl mx-auto pointer-events-auto relative">
+                  {chatError && (
+                    <div className="absolute -top-14 left-0 right-0 flex items-center justify-between gap-2 px-4 py-2 rounded-xl bg-red-500/15 dark:bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-300 text-xs font-medium animate-reveal">
+                      <span>{chatError}</span>
+                      <button type="button" onClick={() => setChatError(null)} className="shrink-0 p-1 rounded hover:bg-red-500/20" aria-label="Dismiss"><i className="fa-solid fa-xmark" /></button>
+                    </div>
+                  )}
                   {/* Markov Chain Suggestions */}
                   {!localInput && currentMessages.length === 0 && !isPrivate && (
                      <div className="absolute -top-12 left-0 right-0 flex justify-center gap-2 overflow-x-auto no-scrollbar pb-2 px-4">

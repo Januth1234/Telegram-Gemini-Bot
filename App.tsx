@@ -236,6 +236,16 @@ const App: React.FC = () => {
     if (!exists) setActiveConversationId(conversations[0]?.id ?? null);
   }, [conversations, activeConversationId]);
 
+  // When on chat (or workspace) with no active conversation, create one so the first message isn't dropped
+  useEffect(() => {
+    if (view !== 'chat' && !WORKSPACE_VIEWS.includes(view)) return;
+    if (activeConversationId != null) return;
+    const newId = Date.now().toString();
+    const mode = VIEW_TO_MODE[view];
+    setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+    setActiveConversationId(newId);
+  }, [view, activeConversationId]);
+
   /** Cloud is source of truth for which ids exist; local-only convs are kept only if recent (so deletes propagate). */
   const mergeHistory = (cloudHistory: Conversation[]) => {
     const withUserMessages = (cloudHistory || []).filter(c => conversationHasUserMessage(c));
