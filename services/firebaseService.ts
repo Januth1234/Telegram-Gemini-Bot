@@ -230,7 +230,7 @@ class FirebaseService {
       name: userData.name || email.split('@')[0],
       email: email,
       avatar: userData.avatar,
-      tier: userData.plan === 'elite' ? 'Verified Member' : (userData.plan === 'pro' || userData.plan === 'pro_yearly') ? 'Pro (BYO-Google)' : 'Basic',
+      tier: (userData.plan === 'pro' || userData.plan === 'pro_yearly' || userData.plan === 'elite') ? 'Pro (BYO-Google)' : 'Basic',
       role: userData.role || 'visitor',
       approved: userData.approved || false,
       dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },
@@ -244,7 +244,6 @@ class FirebaseService {
     basic_yearly: { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
     pro:          { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
     pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
-    elite:        { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null }, // legacy alias
   };
 
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
@@ -255,7 +254,7 @@ class FirebaseService {
       if (!snap.exists()) return false;
       const data = snap.data();
       const now = Date.now();
-      const planKey: string = data.plan || 'free';
+      const planKey: string = (data.plan || 'free') === 'elite' ? 'pro' : (data.plan || 'free');
       const limits = FirebaseService.USAGE_LIMITS[planKey] || FirebaseService.USAGE_LIMITS['free'];
       const usage = data.usage ?? { text: 0, images: 0, videos: 0 };
       const lastReset: number = data.lastReset || 0;

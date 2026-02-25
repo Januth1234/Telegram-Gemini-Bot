@@ -6,7 +6,6 @@ const PLAN_STRIPE = {
   pro:           { priceId: 'price_1St8ZQQguCNBtUJsIfn3XDEt' },
   basic_yearly:  { priceId: 'price_1StOwMQguCNBtUJsvqzrTCoa' },
   pro_yearly:    { priceId: 'price_1StOvpQguCNBtUJs2ei9gxkE' },
-  elite:         { priceId: 'price_1StOvpQguCNBtUJs2ei9gxkE' }, // same as Pro Yearly (15000 LKR)
 };
 
 function getOrigin(req) {
@@ -31,7 +30,7 @@ export default async function handler(req, res) {
 
   const plan = planKey ? PLAN_STRIPE[planKey.toLowerCase()] : null;
   if (!plan?.priceId) {
-    return res.status(400).json({ error: 'Invalid plan. Use: basic, pro, basic_yearly, pro_yearly, elite' });
+    return res.status(400).json({ error: 'Invalid plan. Use: basic, pro, basic_yearly, pro_yearly' });
   }
 
   const origin = getOrigin(req);

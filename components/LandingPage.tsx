@@ -35,8 +35,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const [showPromo, setShowPromo] = useState(() => !sessionStorage.getItem('orin_promo_dismissed'));
-
   const context = useMemo(() => {
     const hour = new Date().getHours();
     return { timeOfDay: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening' };
@@ -93,14 +91,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           </button>
         </div>
       )}
-      {/* Promotional Banner - slide down */}
-      {showPromo && (
-        <div className="w-full bg-gradient-to-r from-indigo-600 to-cyan-600 text-white px-4 py-3 flex items-center justify-center gap-4 text-[10px] font-black uppercase tracking-widest relative z-[200] opacity-0 animate-slide-in-up shadow-lg" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
-           <span className="text-center truncate flex items-center gap-2"><i className="fa-solid fa-bolt animate-shimmer" /> {t.promoBanner}</span>
-           <button onClick={() => { setShowPromo(false); sessionStorage.setItem('orin_promo_dismissed', 'true'); }} className="opacity-70 hover:opacity-100 p-1 rounded hover:bg-white/20 transition-all"><i className="fa-solid fa-xmark" /></button>
-        </div>
-      )}
-
       <article className="w-full max-w-6xl px-4 md:px-6 py-8 md:py-24 flex flex-col items-center gap-10 md:gap-24 text-center">
         
         {/* Hero Section - animations only on landing */}
