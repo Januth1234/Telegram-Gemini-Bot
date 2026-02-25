@@ -1,11 +1,12 @@
 import Stripe from 'stripe';
 
+// Use Stripe Price IDs so amounts (300/1500/3000/15000 LKR) meet Stripe's minimum (~50 cents USD)
 const PLAN_STRIPE = {
-  basic:    { productId: 'prod_TqkoeMg8E0bPjg', unitAmount: 500 },
-  pro:      { productId: 'prod_TqqFGqkDNOzfU9', unitAmount: 1000 },
-  elite:    { productId: 'prod_Tr7ARTolkwQVoL', unitAmount: 3000 },
-  basic_yearly: { productId: 'prod_Tr7AD8al5JQCA1', unitAmount: 5000 },
-  pro_yearly:   { productId: 'prod_Tr7ARTolkwQVoL', unitAmount: 10000 },
+  basic:         { priceId: 'price_1St3JKQguCNBtUJsTT2IIdNv' },
+  pro:           { priceId: 'price_1St8ZQQguCNBtUJsIfn3XDEt' },
+  basic_yearly:  { priceId: 'price_1StOwMQguCNBtUJsvqzrTCoa' },
+  pro_yearly:    { priceId: 'price_1StOvpQguCNBtUJs2ei9gxkE' },
+  elite:         { priceId: 'price_1StOvpQguCNBtUJs2ei9gxkE' }, // same as Pro Yearly (15000 LKR)
 };
 
 function getOrigin(req) {
@@ -29,8 +30,8 @@ export default async function handler(req, res) {
   const { planKey, userId, userEmail, successUrl, cancelUrl } = req.body || {};
 
   const plan = planKey ? PLAN_STRIPE[planKey.toLowerCase()] : null;
-  if (!plan) {
-    return res.status(400).json({ error: 'Invalid plan. Use: basic, pro, elite, basic_yearly, pro_yearly' });
+  if (!plan?.priceId) {
+    return res.status(400).json({ error: 'Invalid plan. Use: basic, pro, basic_yearly, pro_yearly, elite' });
   }
 
   const origin = getOrigin(req);
@@ -39,18 +40,11 @@ export default async function handler(req, res) {
 
   try {
     const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+      mode: 'subscription',
       customer_email: userEmail || undefined,
       client_reference_id: userId || undefined,
       metadata: { planKey: planKey.toLowerCase() },
-      line_items: [{
-        price_data: {
-          currency: 'lkr',
-          product: plan.productId,
-          unit_amount: plan.unitAmount,
-        },
-        quantity: 1,
-      }],
+      line_items: [{ price: plan.priceId, quantity: 1 }],
       success_url: success,
       cancel_url: cancel,
     });
