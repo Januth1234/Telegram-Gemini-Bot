@@ -9,7 +9,6 @@
     <!-- PERFORMANCE -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://cdn.tailwindcss.com" />
     
     <!-- PRIMARY SEO -->
     <title>Orin AI | Best Free AI Assistant & Chatbot Interface 2026</title>
@@ -135,11 +134,10 @@
     <link rel="apple-touch-icon" href="/favicon.svg" />
     <link rel="mask-icon" href="/favicon.svg" color="#0f172a" />
     
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind is built via PostCSS (see index.css + tailwind.config.js); do not use CDN in production -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     
-    <!-- MathLive -->
-    <script src="//unpkg.com/mathlive"></script>
+    <!-- MathLive is loaded by MathsMode when the maths tab is opened -->
 
     <script>
       (function() {
@@ -153,38 +151,6 @@
           }
         } catch (e) {}
       })();
-
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            screens: { 'xs': '320px', 'tiny': '380px' },
-            fontFamily: { 
-              sans: ['Plus Jakarta Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', 'sans-serif'],
-            },
-            animation: {
-              'reveal': 'reveal 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              'fade': 'fadeIn 0.25s ease-out forwards',
-              'fade-in': 'fadeIn 0.2s ease-out forwards',
-              'slide-in-up': 'slideInUp 0.35s ease-out forwards',
-            },
-            keyframes: {
-              reveal: {
-                '0%': { opacity: '0', transform: 'translateY(6px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              },
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              slideInUp: {
-                '0%': { opacity: '0', transform: 'translateY(12px)' },
-                '100%': { opacity: '1', transform: 'translateY(0)' },
-              }
-            }
-          },
-        },
-      };
     </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Sinhala:wght@400;700&family=Noto+Sans+Tamil:wght@400;700&display=swap');

@@ -67,17 +67,28 @@ export class GeminiService {
     try { await firebaseService.logout(); } catch(e) {}
   }
 
-  private async checkApiKey(): Promise<boolean> {
-    const key = process.env.API_KEY;
-    if (key) return true;
-    
+  /** Returns the API key to use; throws if none is available. */
+  private async getApiKey(): Promise<string> {
+    const envKey = process.env.API_KEY;
+    if (envKey && envKey.trim()) return envKey.trim();
     if (typeof window !== 'undefined' && (window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (hasKey) return true;
-        await (window as any).aistudio.openSelectKey();
-        return true;
+      const hasKey = await (window as any).aistudio.hasSelectedApiKey?.();
+      if (hasKey) {
+        const key = await (window as any).aistudio.getApiKey?.();
+        if (key) return key;
+      }
+      await (window as any).aistudio.openSelectKey?.();
     }
-    return false;
+    throw new AppError("API Key required. Add your Gemini API key in environment or AI Studio.", 'auth');
+  }
+
+  private async checkApiKey(): Promise<boolean> {
+    try {
+      await this.getApiKey();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async chat(prompt: string, options: { 
@@ -99,44 +110,61 @@ export class GeminiService {
          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
        }
     }
+
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
     
+    let memory = "";
+    if (this.currentUser && !options.isPrivate) {
+       memory = await firebaseService.getUserMemory(this.currentUser.id);
+    }
+
+    const systemInstruction = getSystemInstruction('neutral', memory);
+    const promptText = (prompt || "Continue.").trim();
+
     try {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const modelName = options.useThinking ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
-      
-      let memory = "";
-      if (this.currentUser && !options.isPrivate) {
-         memory = await firebaseService.getUserMemory(this.currentUser.id);
-      }
-
-      let contents: any[] = [];
+      // Build contents: history (last 10 turns) + current user message
+      const contents: { role: 'user' | 'model'; parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] }[] = [];
       if (options.history && options.history.length > 0) {
-          options.history.slice(-10).forEach(msg => {
-              if (msg.role === 'user' && msg.imageUrl) {
-                 contents.push({ role: 'user', parts: [{ text: msg.content + " [Image sent]" }] });
-              } else {
-                 contents.push({ role: msg.role === 'user' ? 'user' : 'model', parts: [{ text: msg.content }] });
-              }
-          });
+        for (const msg of options.history.slice(-10)) {
+          const role = msg.role === 'user' ? 'user' : 'model';
+          const text = msg.role === 'user' && msg.imageUrl ? (msg.content + " [Image sent]") : msg.content;
+          if (text) contents.push({ role, parts: [{ text }] });
+        }
       }
 
-      const currentParts: any[] = [];
+      const currentParts: { text?: string; inlineData?: { data: string; mimeType: string } }[] = [];
       if (options.fileData) {
-          currentParts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
+        currentParts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
       }
-      currentParts.push({ text: prompt || "Continue." });
+      currentParts.push({ text: promptText });
       contents.push({ role: 'user', parts: currentParts });
 
-      const config: any = { systemInstruction: getSystemInstruction('neutral', memory) };
+      const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
       if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
       else if (options.grounding === 'maps') config.tools = [{ googleMaps: {} }];
 
-      const response = await ai.models.generateContent({
-        model: modelName,
-        contents,
-        config
-      });
+      const modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
+      let lastError: unknown = null;
+      let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
+
+      for (const modelName of modelsToTry) {
+        try {
+          response = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config,
+          });
+          break;
+        } catch (err) {
+          lastError = err;
+          continue;
+        }
+      }
+
+      if (!response) {
+        throw lastError instanceof Error ? lastError : new Error(String(lastError));
+      }
 
       if (this.currentUser && !options.isPrivate) {
          firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
@@ -150,11 +178,10 @@ export class GeminiService {
         else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
       }
 
-      // Prefer response.text; fallback to extracting from candidates (some SDK/API shapes omit .text)
-      let text = (response as any).text ?? "";
+      let text = (response as { text?: string }).text ?? "";
       if (!text && response.candidates?.[0]?.content?.parts) {
         text = response.candidates[0].content.parts
-          .map((p: any) => (p.text != null ? p.text : ""))
+          .map((p: { text?: string }) => (p.text != null ? p.text : ""))
           .join("");
       }
       if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
@@ -175,8 +202,8 @@ export class GeminiService {
     }
 
     try {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = await this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
@@ -202,8 +229,8 @@ export class GeminiService {
     }
 
     try {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = await this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
       const model = resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
 
       let operation = await ai.models.generateVideos({
@@ -222,7 +249,7 @@ export class GeminiService {
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!videoUri) throw new Error("No video generated.");
       
-      const response = await fetch(`${videoUri}&key=${process.env.API_KEY}`);
+      const response = await fetch(`${videoUri}&key=${apiKey}`);
       const blob = await response.blob();
       return URL.createObjectURL(blob);
     } catch (e: unknown) {
@@ -233,16 +260,18 @@ export class GeminiService {
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = await this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
       const prompt = `Generate 3 word title for chat starting with: "${messages[0]?.content}". Lang: ${lang}.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-      return response.text?.trim() || "New Chat";
+      const response = await ai.models.generateContent({ model: 'gemini-2.0-flash', contents: prompt });
+      const text = (response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
+      return text.trim() || "New Chat";
     } catch { return "New Chat"; }
   }
 
   async connectLive(callbacks: any, config: any) {
-      if (!await this.checkApiKey()) throw new AppError("API Key required.", 'auth');
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = await this.getApiKey();
+      const ai = new GoogleGenAI({ apiKey });
       let finalConfig = config;
       if (config.voiceName || config.tone) {
          finalConfig = {

@@ -69,22 +69,42 @@ interface MathsModeProps {
   isTyping: boolean;
 }
 
+const MATHLIVE_SCRIPT = 'https://unpkg.com/mathlive';
+
 const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
   const t = translations[lang];
   const [activeCat, setActiveCat] = useState<MathCategory>('General');
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
+  const [mathLiveReady, setMathLiveReady] = useState(false);
   const mfRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Load MathLive only when Maths mode is opened so the custom element is defined before first render (avoids "Params are not set")
   useEffect(() => {
-    // MathLive Init
-    if (mfRef.current) {
-      mfRef.current.smartMode = true;
-      mfRef.current.virtualKeyboardMode = "manual";
-      // Ensure focus after mount
-      setTimeout(() => mfRef.current.focus(), 300);
+    if (typeof document === 'undefined') return;
+    if (customElements.get('math-field')) {
+      setMathLiveReady(true);
+      return;
     }
+    const existing = document.querySelector(`script[src="${MATHLIVE_SCRIPT}"]`);
+    if (existing) {
+      setMathLiveReady(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = MATHLIVE_SCRIPT;
+    script.async = true;
+    script.onload = () => setMathLiveReady(true);
+    script.onerror = () => setMathLiveReady(false);
+    document.head.appendChild(script);
   }, []);
+
+  useEffect(() => {
+    if (!mathLiveReady || !mfRef.current) return;
+    mfRef.current.smartMode = true;
+    mfRef.current.virtualKeyboardMode = "manual";
+    setTimeout(() => mfRef.current?.focus(), 300);
+  }, [mathLiveReady]);
 
   const handleAction = async (command: string) => {
     const rawLatex = mfRef.current?.value;
@@ -202,13 +222,17 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
                   </div>
                 )}
 
-                {/* MathLive Component */}
+                {/* MathLive Component - only mount after script has loaded to avoid "Params are not set" */}
+                {mathLiveReady ? (
                 <MathFieldTag 
                     ref={mfRef} 
                     className="w-full text-xl md:text-3xl p-6 bg-transparent text-slate-900 dark:text-white outline-none min-h-[80px]"
                     style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' }}
                 >
                 </MathFieldTag>
+                ) : (
+                <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm">Loading math input…</div>
+                )}
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               </div>
               
