@@ -25,6 +25,25 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
     if (params.get('canceled') === 'true') setMessage({ type: 'cancel' });
   }, []);
 
+  // Single source of truth: normalize free/starter, fallback from tier when plan missing
+  const effectivePlan = (() => {
+    const raw = (user?.plan ?? '').toLowerCase();
+    if (raw === 'free' || raw === 'starter') return 'free';
+    if (raw === 'basic' || raw === 'basic_yearly') return raw;
+    if (raw === 'pro' || raw === 'pro_yearly') return raw;
+    const tier = (user?.tier ?? '').toLowerCase();
+    if (tier.includes('pro') || tier.includes('verified')) return 'pro';
+    if (tier.includes('basic')) return 'basic';
+    return 'free';
+  })();
+
+  const isCurrentPlan = (cardKey: string): boolean => {
+    if (cardKey === 'starter') return effectivePlan === 'free';
+    if (cardKey === 'basic' || cardKey === 'basic_yearly') return effectivePlan === 'basic' || effectivePlan === 'basic_yearly';
+    if (cardKey === 'pro' || cardKey === 'pro_yearly') return effectivePlan === 'pro' || effectivePlan === 'pro_yearly';
+    return false;
+  };
+
   const handlePlanSelect = async (planKey: string) => {
     if (!user) {
       alert(t.pleaseSignInToUpgrade);
@@ -68,20 +87,20 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       name: t.basicPlan,
       price: isYearly ? '3000' : '300',
       key: isYearly ? 'basic_yearly' : 'basic',
+      popular: true,
       desc: t.planStarterDesc,
       periodLabel: isYearly ? t.perYearLabel : t.perMonthLabel,
       features: [t.planStarterF1, t.planStarterF2, t.planStarterF3],
-      style: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5',
+      style: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/10 to-transparent shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]',
     };
     const pro = {
       name: t.proPlan,
       price: isYearly ? '15000' : '1500',
       key: isYearly ? 'pro_yearly' : 'pro',
-      popular: true,
       desc: t.planProDesc,
       periodLabel: isYearly ? t.perYearLabel : t.perMonthLabel,
       features: [t.planProF1, t.planProF2, t.planProF3, t.planProF4],
-      style: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/10 to-transparent shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]',
+      style: 'border-slate-200 dark:border-white/10 bg-white/50 dark:bg-white/5',
     };
     return [starter, basic, pro];
   })();
@@ -114,7 +133,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.pricing}</h2>
              <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.4em]">{t.upgradeSubtitle}</p>
            </div>
-           <button onClick={onClose} className="w-12 h-12 flex items-center justify-center rounded-2xl glass-panel text-slate-500 hover:text-red-500 transition-all hover:rotate-90"><i className="fa-solid fa-xmark text-lg"></i></button>
+           <button type="button" onClick={onClose} aria-label="Close" className="w-12 h-12 flex items-center justify-center rounded-2xl glass-panel text-slate-500 hover:text-red-500 transition-all hover:rotate-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"><i className="fa-solid fa-xmark text-lg" aria-hidden /></button>
         </header>
 
         {/* Billing interval toggle */}
@@ -167,22 +186,34 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                   ))}
                 </ul>
 
-                <button 
-                  onClick={() => handlePlanSelect(plan.key)}
-                  disabled={plan.key === 'starter' || checkoutLoading !== null}
-                  className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed ${
-                    plan.popular ? 'bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20' : 
-                    'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
-                  }`}
-                >
-                  {plan.key === 'starter'
-                    ? (!user ? t.freeLabel : (user?.tier?.toLowerCase().includes('pro') || user?.tier?.toLowerCase().includes('verified') ? t.freeLabel : 'Current Plan'))
-                    : (user?.tier?.toLowerCase().includes('basic') && (plan.key === 'basic' || plan.key === 'basic_yearly')) || ((user?.tier?.toLowerCase().includes('pro') || user?.tier?.toLowerCase().includes('verified')) && (plan.key === 'pro' || plan.key === 'pro_yearly'))
-                      ? 'Current Plan'
-                      : checkoutLoading === plan.key
-                        ? '...'
-                        : 'Choose Plan'}
-                </button>
+                {(() => {
+                  const isCurrent = isCurrentPlan(plan.key);
+                  const isLoading = checkoutLoading === plan.key;
+                  const isDisabled = plan.key === 'starter' || checkoutLoading !== null || isCurrent;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => handlePlanSelect(plan.key)}
+                      disabled={isDisabled}
+                      aria-busy={isLoading}
+                      className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 ${
+                        isCurrent
+                          ? 'bg-slate-300 dark:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-500'
+                          : plan.popular
+                            ? 'bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20'
+                            : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
+                      }`}
+                    >
+                      {plan.key === 'starter'
+                        ? (!user ? t.freeLabel : isCurrent ? 'Current Plan' : t.freeLabel)
+                        : isCurrent
+                          ? 'Current Plan'
+                          : isLoading
+                            ? '...'
+                            : 'Choose Plan'}
+                    </button>
+                  );
+                })()}
               </div>
             ))}
         </div>

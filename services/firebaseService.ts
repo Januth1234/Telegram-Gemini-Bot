@@ -225,12 +225,19 @@ class FirebaseService {
       if (Object.keys(updates).length > 0) await updateDoc(userRef, updates);
     }
 
+    const plan = (userData.plan || 'free').toLowerCase();
+    const tier = (plan === 'pro' || plan === 'pro_yearly' || plan === 'elite')
+      ? 'Pro (BYO-Google)'
+      : (plan === 'basic' || plan === 'basic_yearly')
+        ? 'Basic'
+        : 'Free';
     return {
       id: uid,
       name: userData.name || email.split('@')[0],
       email: email,
       avatar: userData.avatar,
-      tier: (userData.plan === 'pro' || userData.plan === 'pro_yearly' || userData.plan === 'elite') ? 'Pro (BYO-Google)' : 'Basic',
+      tier,
+      plan: userData.plan || 'free',
       role: userData.role || 'visitor',
       approved: userData.approved || false,
       dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },

@@ -1,6 +1,6 @@
 
 export type Language = 'en' | 'si' | 'ta';
-export type UserTier = 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
+export type UserTier = 'Free' | 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
 export type UserRole = 'visitor' | 'training' | 'devops' | 'owner';
 
 export interface UserAccount {
@@ -9,6 +9,7 @@ export interface UserAccount {
   email: string;
   avatar?: string;
   tier: UserTier;
+  plan?: string; // Firestore plan: free, starter, basic, basic_yearly, pro, pro_yearly
   role?: UserRole;
   approved?: boolean;
   token?: string;
