@@ -296,33 +296,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm">
           <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center" aria-label="History"><i className="fa-solid fa-bars" /></button>
           <div className="flex items-center gap-2">
-            {/* Reasoning mode toggles – chat tab only */}
-            {activeTab === 'chat' && (
-              <div className="hidden md:flex items-center gap-2 mr-2">
-                <button
-                  type="button"
-                  onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
-                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                    thinkingMode
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
-                  }`}
-                >
-                  Thinking
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
-                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                    descriptiveMode
-                      ? 'bg-slate-900 text-white border-slate-900'
-                      : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
-                  }`}
-                >
-                  Descriptive
-                </button>
-              </div>
-            )}
             <button
               onClick={togglePrivate}
               title={isPrivate ? 'Private (tap off)' : 'Public (tap for Private)'}
@@ -373,6 +346,35 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       placeholder={isPrivate ? "Private (not saved)..." : "Ask Orin AI..."}
                       className={`flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-base py-2.5 px-2 font-medium min-w-0 ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                      />
+                     {/* Thinking & Descriptive in input bar (chat only), Claude-style */}
+                     {activeTab === 'chat' && (
+                       <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                         <button
+                           type="button"
+                           onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
+                           title="Deeper reasoning"
+                           className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-colors ${
+                             thinkingMode
+                               ? 'bg-cyan-600 text-white border-cyan-600'
+                               : 'bg-transparent text-slate-400 border-slate-300/50 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/20'
+                           }`}
+                         >
+                           Thinking
+                         </button>
+                         <button
+                           type="button"
+                           onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
+                           title="More detailed answers"
+                           className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-colors ${
+                             descriptiveMode
+                               ? 'bg-cyan-600 text-white border-cyan-600'
+                               : 'bg-transparent text-slate-400 border-slate-300/50 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/20'
+                           }`}
+                         >
+                           Descriptive
+                         </button>
+                       </div>
+                     )}
                      <button
                        onClick={() => handleSend()}
                        disabled={isTyping}
