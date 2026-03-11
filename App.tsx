@@ -87,6 +87,11 @@ const App: React.FC = () => {
     document.documentElement.lang = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
   }, [lang]);
 
+  // Keep HTML dark class in sync with theme state at all times
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+  }, [theme]);
+
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
@@ -383,6 +388,15 @@ const App: React.FC = () => {
   };
 
   const handleThemeChange = async (nextTheme: UserThemeId) => {
+    // Some themes are fundamentally dark / light – snap system mode accordingly so it never looks "broken".
+    if (nextTheme === 'midnight' || nextTheme === 'terminal' || nextTheme === 'aurora') {
+      setTheme('dark');
+      cacheService.set(CacheKey.THEME, 'dark');
+    } else if (nextTheme === 'paper') {
+      setTheme('light');
+      cacheService.set(CacheKey.THEME, 'light');
+    }
+
     setUserTheme(nextTheme);
     cacheService.set(CacheKey.USER_THEME, nextTheme);
     if (user?.id) {
