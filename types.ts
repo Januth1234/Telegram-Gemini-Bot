@@ -3,6 +3,9 @@ export type Language = 'en' | 'si' | 'ta';
 export type UserTier = 'Free' | 'Basic' | 'Pro (BYO-Google)' | 'Verified Member';
 export type UserRole = 'visitor' | 'training' | 'devops' | 'owner';
 
+// Site-wide visual theme (independent of dark/light toggle)
+export type UserThemeId = 'classic' | 'midnight' | 'aurora' | 'terminal' | 'paper';
+
 export interface UserAccount {
   id: string;
   name: string;
@@ -13,6 +16,7 @@ export interface UserAccount {
   role?: UserRole;
   approved?: boolean;
   token?: string;
+  theme?: UserThemeId;
   dailyUsage: {
     text: number;
     images: number;

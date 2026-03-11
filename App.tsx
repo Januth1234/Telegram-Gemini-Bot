@@ -12,7 +12,7 @@ import DownloadsPage from './components/DownloadsPage';
 import VoiceAssistant from './components/VoiceAssistant';
 import AdminPortal from './components/AdminPortal';
 import TelegramBotPage from './components/TelegramBotPage';
-import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage } from './types';
+import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
 import { notificationService } from './services/notificationService';
@@ -30,6 +30,7 @@ const RECENT_LOCAL_MS = 5 * 60 * 1000;
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
   const [theme, setTheme] = useState<'dark' | 'light'>(() => (cacheService.get<string | null>(CacheKey.THEME, null) as 'dark' | 'light' | null) || 'light');
+  const [userTheme, setUserTheme] = useState<UserThemeId>(() => cacheService.get<UserThemeId>(CacheKey.USER_THEME, 'classic'));
   const t = translations[lang];
 
   // Global Auth State
@@ -111,6 +112,10 @@ const App: React.FC = () => {
         const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
         geminiService.setSessionUser(syncedUser);
         setUser(syncedUser);
+        if (syncedUser.theme) {
+          setUserTheme(syncedUser.theme);
+          cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
+        }
         setSyncStatus('syncing');
         const cloudHistory = await firebaseService.getHistory(authUser.uid);
         if (cloudHistory) mergeHistory(cloudHistory);
@@ -317,6 +322,10 @@ const App: React.FC = () => {
       const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
       geminiService.setSessionUser(syncedUser);
       setUser(syncedUser);
+      if (syncedUser.theme) {
+        setUserTheme(syncedUser.theme);
+        cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
+      }
       setSyncStatus('syncing');
       const cloudHistory = await firebaseService.getHistory(authUser.uid);
       if (cloudHistory) mergeHistory(cloudHistory);
@@ -371,6 +380,14 @@ const App: React.FC = () => {
     const nextDescriptive = opts.descriptive ?? descriptiveMode;
     setThinkingMode(nextThinking);
     setDescriptiveMode(nextDescriptive);
+  };
+
+  const handleThemeChange = async (nextTheme: UserThemeId) => {
+    setUserTheme(nextTheme);
+    cacheService.set(CacheKey.USER_THEME, nextTheme);
+    if (user?.id) {
+      firebaseService.updateUserTheme(user.id, nextTheme).catch(() => {});
+    }
   };
 
   const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
@@ -439,7 +456,7 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -465,8 +482,19 @@ const App: React.FC = () => {
     }
   };
 
+  const themeBg =
+    userTheme === 'classic'
+      ? 'bg-slate-50 dark:bg-slate-950'
+      : userTheme === 'midnight'
+        ? 'bg-slate-950'
+        : userTheme === 'aurora'
+          ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-900'
+          : userTheme === 'terminal'
+            ? 'bg-[#050816]'
+            : 'bg-gradient-to-br from-zinc-50 to-amber-50';
+
   return (
-    <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-slate-50 dark:bg-slate-950 overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {view !== 'admin-portal' && (
         <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
           <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>

@@ -4,7 +4,7 @@ import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/functions";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where } from "firebase/firestore";
-import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage } from "../types";
+import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage, UserThemeId } from "../types";
 
 interface UsagePlanLimits {
   textPerDay: number | null;
@@ -186,7 +186,8 @@ class FirebaseService {
         lastUpdated: serverTimestamp(),
         usage: { text: 0, images: 0, videos: 0, mediaWindowStart: Date.now() },
         memory: "User is new to Orin AI.",
-        lastReset: Date.now()
+        lastReset: Date.now(),
+        theme: 'classic'
       };
       await setDoc(userRef, userData);
     } else {
@@ -241,6 +242,7 @@ class FirebaseService {
       role: userData.role || 'visitor',
       approved: userData.approved || false,
       dailyUsage: userData.usage || { text: 0, images: 0, videos: 0 },
+      theme: (userData.theme as UserThemeId) || 'classic',
     };
   }
 
@@ -344,6 +346,16 @@ class FirebaseService {
     const ref = this.userRef(uid);
     if (!ref) return;
     await updateDoc(ref, { plan: plan.toLowerCase(), lastUpdated: serverTimestamp() });
+  }
+
+  async updateUserTheme(uid: string, theme: UserThemeId) {
+    const ref = this.userRef(uid);
+    if (!ref) return;
+    try {
+      await updateDoc(ref, { theme, lastUpdated: serverTimestamp() });
+    } catch {
+      // Do not block UI if theme update fails
+    }
   }
 
   async getUsage(uid: string): Promise<{ text: number; images: number; videos: number }> {

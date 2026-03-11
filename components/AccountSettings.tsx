@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
-import { UserAccount, Language } from '../types';
+import { UserAccount, Language, UserThemeId } from '../types';
 import { translations } from '../translations';
 
 interface AccountSettingsProps {
@@ -14,9 +14,11 @@ interface AccountSettingsProps {
   authError?: string | null;
   onDismissAuthError?: () => void;
   onSignInWithUser?: (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => Promise<void>;
+  userTheme?: UserThemeId;
+  onThemeChange?: (theme: UserThemeId) => void;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -149,6 +151,47 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                     className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
                  />
+              </div>
+
+              {/* Theme Picker */}
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.04s' }}>
+                <div className="flex justify-between items-center px-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <i className="fa-solid fa-palette text-cyan-500/80" />
+                    Workspace Theme
+                  </label>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
+                    { id: 'midnight', label: 'Midnight', desc: 'Pure dark studio look.' },
+                    { id: 'aurora', label: 'Aurora', desc: 'Gradient, glowing backdrop.' },
+                    { id: 'terminal', label: 'Terminal', desc: 'Deep navy hacker vibe.' },
+                    { id: 'paper', label: 'Paper', desc: 'Soft, warm document feel.' },
+                  ].map((tDef) => {
+                    const active = userTheme === (tDef.id as UserThemeId);
+                    return (
+                      <button
+                        key={tDef.id}
+                        type="button"
+                        onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
+                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
+                          active
+                            ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                            : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                            {tDef.label}
+                          </span>
+                          {active && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{tDef.desc}</p>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Activity: total counts with light animations */}
