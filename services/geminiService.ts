@@ -43,7 +43,10 @@ RULES:
 2. IDENTITY: You are Orin AI (never state this in your reply).
 3. LANGUAGE: STRICTLY MIMIC THE USER'S LANGUAGE. If Sinhala, reply in Sinhala. If Tamil, reply in Tamil.
 4. CONTEXT: Time in Sri Lanka is ${timeStr}. Use this only to answer time-sensitive questions; do not repeat it in your reply.
-5. USER MEMORY: ${memory}`;
+5. USER MEMORY: ${memory}
+6. REAL-TIME FACTS: For questions about current events, live data, jobs, vacancies, weather, stock prices, sports scores, news, or any other time-sensitive information, ALWAYS use the web search tools when available. If tools are unavailable, clearly say that you do not have real-time access instead of guessing.
+7. LINKS: When you mention websites or job posts, ALWAYS include full, valid URLs (for example, https://topjobs.lk, https://www.linkedin.com/jobs). NEVER output placeholder text like [Link to job site 1]; instead, show real, clickable links.
+8. HONESTY: If you are not sure about a real-time fact even after using tools, say you are not sure and recommend trusted Sri Lankan or global sites the user can check.`;
 };
 
 export class GeminiService {
@@ -113,6 +116,7 @@ export class GeminiService {
 
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
+    descriptive?: boolean;
     grounding?: 'search' | 'maps'; 
     fileData?: { data: string; mimeType: string; name?: string };
     lang?: Language;
@@ -140,7 +144,25 @@ export class GeminiService {
        memory = await firebaseService.getUserMemory(this.currentUser.id);
     }
 
-    const systemInstruction = getSystemInstruction('neutral', memory);
+    const useThinking = !!options.useThinking;
+    const descriptive = !!options.descriptive;
+
+    let systemInstruction = getSystemInstruction('neutral', memory);
+    systemInstruction += `
+
+EXPLANATION STYLE:
+- Descriptive mode: ${descriptive ? 'ON' : 'OFF'}.
+- When descriptive mode is ON, give clear, step-by-step explanations with short examples or analogies when helpful, but avoid unnecessary repetition.
+- When descriptive mode is OFF, keep answers short and focused unless the user explicitly asks for more detail.
+- Never include your internal reasoning steps or chain-of-thought—only the final explanation.`;
+
+    if (useThinking) {
+      systemInstruction += `
+
+REASONING MODE:
+- For complex or technical questions, think through the problem internally before answering.
+- Use structured reasoning to avoid mistakes, but only output the final answer and concise explanation, not your intermediate thoughts.`;
+    }
     const promptText = (prompt || "Continue.").trim();
 
     try {
@@ -160,9 +182,24 @@ export class GeminiService {
       currentParts.push({ text: promptText });
       contents.push({ role: 'user', parts: currentParts });
 
+      const lowerPrompt = promptText.toLowerCase();
+      const looksTimeSensitive = /job|jobs|vacanc|career|internship|news|weather|stock|price|exchange rate|results|live/i.test(lowerPrompt);
+
       const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
-      if (options.grounding === 'search') config.tools = [{ googleSearch: {} }];
-      else if (options.grounding === 'maps') config.tools = [{ googleMaps: {} }];
+
+      // Prefer explicit grounding if caller requested it
+      if (options.grounding === 'maps') {
+        config.tools = [{ googleMaps: {} }];
+      } else {
+        // Default: enable web search for general chat so answers can use real-time data
+        config.tools = [{ googleSearch: {} }];
+
+        // If caller explicitly disabled grounding in the future we could respect that here.
+        // For now, we bias towards search for better, real-time answers—especially for time-sensitive queries.
+        if (options.grounding === 'search' || looksTimeSensitive) {
+          config.tools = [{ googleSearch: {} }];
+        }
+      }
 
       const modelsToTry = ['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
       let lastError: unknown = null;

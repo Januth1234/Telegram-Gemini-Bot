@@ -13,6 +13,9 @@ interface LandingPageProps {
   user: UserAccount | null;
   onLogin: () => void;
   onSignInWithUser?: (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => Promise<void>;
+  thinkingMode: boolean;
+  descriptiveMode: boolean;
+  onReasoningModeChange: (opts: { thinking?: boolean; descriptive?: boolean }) => void;
 }
 
 // Client-side text generator for "Loading" states and non-critical content
@@ -30,7 +33,7 @@ const MarkovLoader = () => {
    return <span className="animate-pulse">{text}</span>;
 };
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
@@ -68,7 +71,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
      setIsGuestLoading(true);
      setGuestResult(null);
      try {
-        const res = await geminiService.chat(prompt, { useThinking: false }); // Fast model for guests
+        const res = await geminiService.chat(prompt, { 
+          useThinking: thinkingMode, 
+          descriptive: descriptiveMode 
+        });
         setGuestResult(res.text);
      } catch (e: any) {
         if (e.message && e.message.includes("limit")) {
@@ -138,7 +144,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                    </div>
                 )}
 
-                <div className="flex items-center pl-2">
+                <div className="flex items-center pl-2 gap-2">
                     <input 
                     type="text" 
                     value={prompt} 
@@ -155,6 +161,31 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                     <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
                     {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
                     </button>
+                    {/* Reasoning mode toggles (chat only) */}
+                    <div className="hidden md:flex items-center gap-2 mr-2">
+                      <button
+                        type="button"
+                        onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
+                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                          thinkingMode
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
+                        }`}
+                      >
+                        Thinking
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
+                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                          descriptiveMode
+                            ? 'bg-slate-900 text-white border-slate-900'
+                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
+                        }`}
+                      >
+                        Descriptive
+                      </button>
+                    </div>
                 </div>
               </div>
             </div>

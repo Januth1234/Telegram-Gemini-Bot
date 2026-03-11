@@ -43,6 +43,10 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [authError, setAuthError] = useState<string | null>(null);
 
+  // Global reasoning style for chat workspace
+  const [thinkingMode, setThinkingMode] = useState(false);
+  const [descriptiveMode, setDescriptiveMode] = useState(false);
+
   // Viewport Scaling & Height Fix for Small Devices
   useLayoutEffect(() => {
     const handleResize = () => {
@@ -362,6 +366,13 @@ const App: React.FC = () => {
     }
   };
 
+  const updateReasoningModes = (opts: { thinking?: boolean; descriptive?: boolean }) => {
+    const nextThinking = opts.thinking ?? thinkingMode;
+    const nextDescriptive = opts.descriptive ?? descriptiveMode;
+    setThinkingMode(nextThinking);
+    setDescriptiveMode(nextDescriptive);
+  };
+
   const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
     <button onClick={onClick} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all duration-200 whitespace-nowrap ${active ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm ring-1 ring-cyan-500/20' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 hover:bg-white/50 dark:hover:bg-white/5'}`}>
       <i className={`fa-solid ${icon} text-xs`}></i>
@@ -422,6 +433,9 @@ const App: React.FC = () => {
             onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
             onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
             isSyncing={syncStatus === 'syncing'}
+            thinkingMode={thinkingMode}
+            descriptiveMode={descriptiveMode}
+            onReasoningModeChange={updateReasoningModes}
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
@@ -433,7 +447,21 @@ const App: React.FC = () => {
       case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      default: return <LandingPage prompt={globalPrompt} onPromptChange={setGlobalPrompt} onStartChat={handleStartWorkspace} onVoiceOpen={() => handleStartWorkspace('', 'voice')} lang={lang} user={user} onLogin={() => window.location.hash = 'account'} onSignInWithUser={applySignInUser} />;
+      default: return (
+        <LandingPage
+          prompt={globalPrompt}
+          onPromptChange={setGlobalPrompt}
+          onStartChat={handleStartWorkspace}
+          onVoiceOpen={() => handleStartWorkspace('', 'voice')}
+          lang={lang}
+          user={user}
+          onLogin={() => window.location.hash = 'account'}
+          onSignInWithUser={applySignInUser}
+          thinkingMode={thinkingMode}
+          descriptiveMode={descriptiveMode}
+          onReasoningModeChange={updateReasoningModes}
+        />
+      );
     }
   };
 

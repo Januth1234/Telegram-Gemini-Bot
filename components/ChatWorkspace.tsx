@@ -26,11 +26,15 @@ interface ChatWorkspaceProps {
   onUpdateTitle: (title: string, modes?: WorkspaceMode[]) => void;
   onModeSwitch?: (mode: WorkspaceMode) => void;
   isSyncing?: boolean;
+  thinkingMode: boolean;
+  descriptiveMode: boolean;
+  onReasoningModeChange: (opts: { thinking?: boolean; descriptive?: boolean }) => void;
 }
 
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
-  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, isSyncing = false
+  conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, isSyncing = false,
+  thinkingMode, descriptiveMode, onReasoningModeChange
 }) => {
   const t = translations[lang];
   const [activeTab, setActiveTab] = useState<WorkspaceMode>(initialMode);
@@ -147,9 +151,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
 
     try {
+      const isChatMode = activeTab === 'chat';
       const res = await geminiService.chat(text || "Continue.", { 
         fileData: fileToUse || undefined, 
-        useThinking: false, // OPTIMIZED: Changed from true (Pro) to false (Flash) for speed
+        useThinking: isChatMode ? thinkingMode : false,
+        descriptive: isChatMode ? descriptiveMode : false,
         history: isPrivate ? privateMessages : messages, 
         signal: abortControllerRef.current.signal,
         isPrivate: isPrivate 
@@ -184,7 +190,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
        stopProgress(); 
        setSelectedFile(null);
     }
-  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages]);
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, thinkingMode, descriptiveMode]);
 
   const togglePrivate = () => {
     setIsPrivate(prev => !prev);
@@ -214,14 +220,23 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             currentMessages.map((msg, i) => (
               <div key={msg.id || i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                  <div className={`max-w-[92%] p-5 md:p-6 rounded-2xl shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                   <div className={`whitespace-pre-wrap text-sm md:text-base leading-relaxed ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
-                   {msg.links && msg.links.length > 0 && (
-                     <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-200/50 dark:border-white/10">
-                       {msg.links.slice(0, 5).map((link, j) => (
-                         <a key={j} href={link.uri} target="_blank" rel="noopener noreferrer" className="text-xs text-cyan-600 dark:text-cyan-400 hover:underline">{link.title || link.uri}</a>
-                       ))}
-                     </div>
-                   )}
+                  <div className={`whitespace-pre-wrap text-sm md:text-base leading-relaxed ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                  {msg.links && msg.links.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-200/50 dark:border-white/10">
+                      {msg.links.slice(0, 5).map((link, j) => (
+                        <a
+                          key={j}
+                          href={link.uri}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest hover:bg-slate-700 dark:hover:bg-slate-200 transition-colors"
+                        >
+                          <span className="truncate max-w-[160px]">{link.title || link.uri}</span>
+                          <i className="fa-solid fa-arrow-up-right-from-square text-[9px]" aria-hidden />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                  </div>
               </div>
             ))
@@ -280,15 +295,44 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
         <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm">
           <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center" aria-label="History"><i className="fa-solid fa-bars" /></button>
-          <button
-            onClick={togglePrivate}
-            title={isPrivate ? 'Private (tap off)' : 'Public (tap for Private)'}
-            aria-label={isPrivate ? 'Turn off private' : 'Private mode'}
-            className={`p-2 md:px-3 md:py-2 rounded-xl border flex items-center gap-2 ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
-          >
-            <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`} />
-            <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* Reasoning mode toggles – chat tab only */}
+            {activeTab === 'chat' && (
+              <div className="hidden md:flex items-center gap-2 mr-2">
+                <button
+                  type="button"
+                  onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
+                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                    thinkingMode
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  Thinking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
+                  className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                    descriptiveMode
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
+                  }`}
+                >
+                  Descriptive
+                </button>
+              </div>
+            )}
+            <button
+              onClick={togglePrivate}
+              title={isPrivate ? 'Private (tap off)' : 'Public (tap for Private)'}
+              aria-label={isPrivate ? 'Turn off private' : 'Private mode'}
+              className={`p-2 md:px-3 md:py-2 rounded-xl border flex items-center gap-2 ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
+            >
+              <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`} />
+              <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
+            </button>
+          </div>
         </header>
 
         {renderBody()}
