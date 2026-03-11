@@ -21,6 +21,20 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
   // Historical log using official language
   const officialUpdates: LocalCodeSnapshot[] = [
     {
+      version: "4.6.0",
+      date: "March 2026",
+      features: [
+        "Thinking Mode (Deeper Reasoning)",
+        "Descriptive Mode for Step-by-Step Answers",
+        "Minimal Neural Themes (5 full skins)",
+        "Per-User Workspace Theme Sync",
+        "Live Neural Memory Tuning"
+      ],
+      body: "This release makes Orin feel more personal and modern. Thinking Mode lets Orin slow down and reason more deeply on hard questions, while Descriptive Mode adds clearer, step‑by‑step explanations when you need them. A new set of minimal neural themes (Classic, Midnight, Aurora, Terminal, and Paper) now skin the entire workspace and follow you across devices. Neural memory continues to be updated live from your chats, keeping a short summary of what matters to you.",
+      bodySi: "මෙම නිකුතුව ඔරින්‍ව වඩාත් පුද්ගලික සහ නවීන ලෙස පෙනෙන විධියට යාවත්කාලීන කරයි. “Thinking Mode” සක්‍රීය කළ විට අසීරු ප්‍රශ්න සඳහා වඩා ගැඹුරු ව සලකා බැලීමක් කරන අතර “Descriptive Mode” සවිස්තර සතරෙන්, පියවරෙන් පියවර පැහැදිලි කිරීම් ලබා දෙයි. Classic, Midnight, Aurora, Terminal සහ Paper යන අතිමත් සරල නව තේමාවන් මුළු වැඩබිමටම අදාළ වෙමින් ඔබ ගිණුම සමඟ උපාංග අතර සමමුහුර්ත වේ. ඔබට වැදගත් දේ පිළිබඳ කෙටි සාරාංශයක් රඳවා තබා ගැනීමට ස්නායු මතකය ඔබේ සංවාද වලින් දිගටම යාවත්කාලීන වේ.",
+      htmlUrl: "#releases"
+    },
+    {
       version: "5.0.0-Beta",
       date: "February 1, 2026",
       features: [
@@ -76,7 +90,7 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
   }, []);
 
   return (
-    <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
+    <div className="h-full w-full overflow-y-auto custom-scrollbar bg-transparent animate-reveal">
       <div className="max-w-4xl mx-auto space-y-12 pb-32 px-6 pt-12 text-slate-900 dark:text-slate-100">
         
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8">
