@@ -61,7 +61,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   };
 
   return (
-    <div className="fixed inset-0 z-[120] bg-slate-50 dark:bg-slate-950 flex flex-col animate-reveal h-[100dvh] overflow-hidden">
+    <div className="fixed inset-0 z-[120] bg-black/5 dark:bg-black/60 flex flex-col animate-reveal h-[100dvh] overflow-hidden">
       <header className="shrink-0 h-20 glass-panel flex items-center justify-between px-6 md:px-12 border-b border-black/5 dark:border-white/5 z-50">
         <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.profile}</h2>
         <button onClick={onClose} className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>

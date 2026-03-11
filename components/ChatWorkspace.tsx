@@ -204,7 +204,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-slate-50/30 dark:bg-slate-950/30 pb-40 md:pb-48">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-black/5 dark:bg-black/40 pb-40 md:pb-48">
         <div className="max-w-3xl mx-auto space-y-6 md:space-y-10">
           {currentMessages.length === 0 ? (
             <div className="py-24 text-center space-y-6 min-h-[400px] flex flex-col justify-center">
@@ -249,7 +249,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
-    <div className="flex h-full w-full bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
+    <div className="flex h-full w-full bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
       
       {/* Sidebar Overlay */}
       {isHistoryOpen && <div className="fixed inset-0 bg-black/50 z-[140]" onClick={() => setIsHistoryOpen(false)} />}
