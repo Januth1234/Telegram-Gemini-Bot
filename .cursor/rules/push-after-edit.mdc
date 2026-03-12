@@ -1,0 +1,15 @@
+---
+description: After making code edits, push to GitHub using the user's repo (Januth1234/Telegram-Gemini-Bot).
+alwaysApply: true
+---
+
+# Push to GitHub after edits
+
+When you complete code changes in this project:
+
+1. Run `git status` to see modified files.
+2. Stage relevant files (e.g. `git add <files>` or `git add -A` for all).
+3. Commit with a clear message describing the change.
+4. Run `git push` to push to origin (user's GitHub: Januth1234/Telegram-Gemini-Bot).
+
+Use the user's existing git config (no need to set author – already configured). Skip pushing if the user only asked a question or no files were changed.
