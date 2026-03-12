@@ -51,15 +51,15 @@ const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: 
   sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/35,via-orange-400/30,to-rose-400/35 dark:from-amber-500/35 dark:to-rose-600/40' },
 };
 
-/** Hero glow behind logo + greeting: rich per-theme gradient, faded at top/bottom */
-const THEME_HERO_GLOW: Record<UserThemeId, string> = {
-  classic: 'bg-gradient-to-b from-transparent via-cyan-500/40 to-transparent dark:via-cyan-500/35',
-  midnight: 'bg-gradient-to-b from-transparent via-violet-500/45 to-transparent dark:via-indigo-500/40',
-  aurora: 'bg-gradient-to-b from-transparent via-emerald-400/40 to-transparent dark:via-cyan-500/35',
-  terminal: 'bg-gradient-to-b from-transparent via-emerald-500/42 to-transparent dark:via-emerald-500/38',
-  paper: 'bg-gradient-to-b from-transparent via-amber-400/45 to-transparent dark:via-amber-600/38',
-  ocean: 'bg-gradient-to-b from-transparent via-sky-400/40 to-transparent dark:via-blue-500/35',
-  sunset: 'bg-gradient-to-b from-transparent via-orange-400/42 to-transparent dark:via-amber-500/38',
+/** Hero glow: full-bleed radial gradient so no vertical/horizontal cutouts – smooth in all directions */
+const THEME_HERO_GLOW_RADIAL: Record<UserThemeId, string> = {
+  classic: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(34,211,238,0.38), rgba(34,211,238,0.12) 45%, transparent 65%)',
+  midnight: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(139,92,246,0.4), rgba(139,92,246,0.12) 45%, transparent 65%)',
+  aurora: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(52,211,153,0.36), rgba(34,211,238,0.1) 45%, transparent 65%)',
+  terminal: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(16,185,129,0.4), rgba(16,185,129,0.1) 45%, transparent 65%)',
+  paper: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(251,191,36,0.42), rgba(251,191,36,0.12) 45%, transparent 65%)',
+  ocean: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(56,189,248,0.38), rgba(99,102,241,0.1) 45%, transparent 65%)',
+  sunset: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(251,146,60,0.4), rgba(251,113,133,0.12) 45%, transparent 65%)',
 };
 
 /** Hero glow animation style per theme – each theme feels different */
@@ -155,10 +155,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
           <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
-            {/* Glow: no overflow-hidden so blur softens naturally, no cutout */}
-            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
-              <div className={`w-[min(100%,32rem)] h-[26rem] md:h-[30rem] rounded-full blur-[80px] ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
-            </div>
+            {/* Glow: full-bleed radial gradient – no vertical/horizontal edges, very smooth */}
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-0 z-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
+              style={{ background: THEME_HERO_GLOW_RADIAL[landingTheme] ?? THEME_HERO_GLOW_RADIAL.classic }}
+            />
             {/* Very smooth fade into input area – tall, gradual gradient */}
             <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-32 md:h-40 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-slate-950/95 dark:via-slate-950/50 z-[1]" />
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
