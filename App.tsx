@@ -407,15 +407,7 @@ const App: React.FC = () => {
   };
 
   const handleThemeChange = async (nextTheme: UserThemeId) => {
-    // Some themes are fundamentally dark / light – snap system mode accordingly so it never looks "broken".
-    if (nextTheme === 'midnight' || nextTheme === 'terminal' || nextTheme === 'aurora' || nextTheme === 'ocean') {
-      setTheme('dark');
-      cacheService.set(CacheKey.THEME, 'dark');
-    } else if (nextTheme === 'paper' || nextTheme === 'sunset') {
-      setTheme('light');
-      cacheService.set(CacheKey.THEME, 'light');
-    }
-
+    // Themes now have light + dark variants; no need to force mode.
     setUserTheme(nextTheme);
     cacheService.set(CacheKey.USER_THEME, nextTheme);
     if (user?.id) {
@@ -515,20 +507,17 @@ const App: React.FC = () => {
     }
   };
 
-  const themeBg =
-    userTheme === 'classic'
-      ? 'bg-slate-50 dark:bg-slate-950'
-      : userTheme === 'midnight'
-        ? 'bg-[#0f172a]'
-        : userTheme === 'aurora'
-          ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-900'
-          : userTheme === 'terminal'
-            ? 'bg-gradient-to-b from-[#0a0e14] to-[#0d1810]'
-            : userTheme === 'ocean'
-              ? 'bg-gradient-to-br from-[#0c1929] via-[#0f2744] to-[#0d2137]'
-              : userTheme === 'sunset'
-                ? 'bg-gradient-to-br from-amber-50 via-orange-50 to-rose-100'
-                : 'bg-gradient-to-br from-zinc-50 to-amber-50';
+  // Each theme has light and dark variants so it looks good in both modes.
+  const themeBgByMode: Record<UserThemeId, { light: string; dark: string }> = {
+    classic: { light: 'bg-slate-50', dark: 'bg-slate-950' },
+    midnight: { light: 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200', dark: 'bg-[#0f172a]' },
+    aurora: { light: 'bg-gradient-to-br from-emerald-50 via-slate-50 to-cyan-50', dark: 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-900' },
+    terminal: { light: 'bg-gradient-to-b from-slate-100 to-emerald-50', dark: 'bg-gradient-to-b from-[#0a0e14] to-[#0d1810]' },
+    paper: { light: 'bg-gradient-to-br from-zinc-50 to-amber-50', dark: 'bg-gradient-to-br from-stone-900 via-amber-950/30 to-zinc-900' },
+    ocean: { light: 'bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50', dark: 'bg-gradient-to-br from-[#0c1929] via-[#0f2744] to-[#0d2137]' },
+    sunset: { light: 'bg-gradient-to-br from-amber-50 via-orange-50 to-rose-100', dark: 'bg-gradient-to-br from-amber-950 via-orange-900 to-rose-950' },
+  };
+  const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
   return (
     <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
