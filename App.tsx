@@ -657,8 +657,13 @@ const App: React.FC = () => {
     }
   };
 
+  const rootBgClass =
+    view === 'landing'
+      ? 'bg-black'
+      : themeBg;
+
   return (
-    <div className={`w-screen h-[100dvh] flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div className={`w-screen h-[100dvh] flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${rootBgClass} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
       {view === 'landing' && (
         <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
           {renderLandingBackground()}
