@@ -117,6 +117,103 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const landingTheme = resolveLandingTheme(userTheme);
   const themeFx = THEME_ANIMATION[landingTheme];
 
+  const renderHeroBackground = () => {
+    switch (landingTheme) {
+      case 'aurora':
+        return (
+          <DarkVeil
+            hueShift={-35}
+            noiseIntensity={0.02}
+            scanlineIntensity={0}
+            scanlineFrequency={0}
+            speed={0.5}
+            warpAmount={0.08}
+            resolutionScale={0.9}
+          />
+        );
+      case 'midnight':
+        return (
+          <Particles
+            particleColors={['#e5e7eb', '#a5b4fc', '#38bdf8']}
+            particleCount={220}
+            particleSpread={10}
+            speed={0.12}
+            particleBaseSize={105}
+            moveParticlesOnHover
+            particleHoverFactor={1.2}
+            alphaParticles={false}
+            sizeRandomness={1}
+            cameraDistance={22}
+            disableRotation={false}
+            pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
+            className="opacity-80"
+          />
+        );
+      case 'terminal':
+        return (
+          <PixelBlast
+            variant="square"
+            pixelSize={4}
+            color={isDark ? '#22c55e' : '#059669'}
+            patternScale={2}
+            patternDensity={1}
+            pixelSizeJitter={0.15}
+            enableRipples
+            rippleSpeed={0.4}
+            rippleThickness={0.12}
+            rippleIntensityScale={1.6}
+            liquid={false}
+            speed={0.55}
+            edgeFade={0.3}
+            transparent
+          />
+        );
+      case 'ocean':
+        return (
+          <Silk
+            speed={4.2}
+            scale={1.2}
+            color={isDark ? '#0ea5e9' : '#22d3ee'}
+            noiseIntensity={1.0}
+            rotation={0.15}
+          />
+        );
+      case 'sunset':
+        return (
+          <LightRays
+            raysOrigin="top-center"
+            raysColor={isDark ? '#fed7aa' : '#fed7aa'}
+            raysSpeed={0.85}
+            lightSpread={0.7}
+            rayLength={3.2}
+            followMouse
+            mouseInfluence={0.1}
+            noiseAmount={0.04}
+            distortion={0.08}
+            fadeDistance={1}
+            saturation={1.05}
+            pulsating
+            className="opacity-95"
+          />
+        );
+      case 'paper':
+        return (
+          <Beams
+            beamWidth={2}
+            beamHeight={18}
+            beamNumber={16}
+            lightColor={isDark ? '#fed7aa' : '#f97316'}
+            speed={2}
+            noiseIntensity={1.5}
+            scale={0.22}
+            rotation={20}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <main className="h-full overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
       {/* Theme overlay: visible, animated, smooth when switching */}
@@ -124,6 +221,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-0 transition-all duration-700 ease-out ${themeFx.className} ${themeFx.animationClass}`}
       />
+      {/* Full-page per-theme shader background behind all landing content */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        {renderHeroBackground()}
+      </div>
       {user && (
         <div className="w-full flex justify-center py-4 px-4 z-[100] opacity-0 animate-slide-in-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
           <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-105 transition-transform tap-target">
@@ -134,106 +235,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
       )}
       <article className="w-full max-w-6xl px-4 md:px-6 py-8 md:py-24 flex flex-col items-center gap-10 md:gap-24 text-center">
         
-        {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
+        {/* Hero Section – shader background already covers full page; this just positions content */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
           <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
-            {/* Per-theme hero backgrounds: ONLY your shader components, no extra gradient boxes */}
-            {landingTheme === 'aurora' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <DarkVeil
-                  hueShift={-35}
-                  noiseIntensity={0.02}
-                  scanlineIntensity={0}
-                  scanlineFrequency={0}
-                  speed={0.5}
-                  warpAmount={0.08}
-                  resolutionScale={0.9}
-                />
-              </div>
-            )}
-            {landingTheme === 'midnight' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <Particles
-                  particleColors={['#e5e7eb', '#a5b4fc', '#38bdf8']}
-                  particleCount={220}
-                  particleSpread={10}
-                  speed={0.12}
-                  particleBaseSize={105}
-                  moveParticlesOnHover
-                  particleHoverFactor={1.2}
-                  alphaParticles={false}
-                  sizeRandomness={1}
-                  cameraDistance={22}
-                  disableRotation={false}
-                  pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-                  className="opacity-80"
-                />
-              </div>
-            )}
-            {landingTheme === 'terminal' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <PixelBlast
-                  variant="square"
-                  pixelSize={4}
-                  color={isDark ? '#22c55e' : '#059669'}
-                  patternScale={2}
-                  patternDensity={1}
-                  pixelSizeJitter={0.15}
-                  enableRipples
-                  rippleSpeed={0.4}
-                  rippleThickness={0.12}
-                  rippleIntensityScale={1.6}
-                  liquid={false}
-                  speed={0.55}
-                  edgeFade={0.3}
-                  transparent
-                />
-              </div>
-            )}
-            {landingTheme === 'ocean' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <Silk
-                  speed={4.2}
-                  scale={1.2}
-                  color={isDark ? '#0ea5e9' : '#22d3ee'}
-                  noiseIntensity={1.0}
-                  rotation={0.15}
-                />
-              </div>
-            )}
-            {landingTheme === 'sunset' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <LightRays
-                  raysOrigin="top-center"
-                  raysColor={isDark ? '#fed7aa' : '#fed7aa'}
-                  raysSpeed={0.85}
-                  lightSpread={0.7}
-                  rayLength={3.2}
-                  followMouse
-                  mouseInfluence={0.1}
-                  noiseAmount={0.04}
-                  distortion={0.08}
-                  fadeDistance={1}
-                  saturation={1.05}
-                  pulsating
-                  className="opacity-95"
-                />
-              </div>
-            )}
-            {landingTheme === 'paper' && (
-              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
-                <Beams
-                  beamWidth={2}
-                  beamHeight={18}
-                  beamNumber={16}
-                  lightColor={isDark ? '#fed7aa' : '#f97316'}
-                  speed={2}
-                  noiseIntensity={1.5}
-                  scale={0.22}
-                  rotation={20}
-                />
-              </div>
-            )}
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
