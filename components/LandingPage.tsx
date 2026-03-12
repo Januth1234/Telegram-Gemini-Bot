@@ -7,8 +7,8 @@ import DarkVeil from './backgrounds/DarkVeil';
 import PixelBlast from './backgrounds/PixelBlast';
 import Particles from './backgrounds/Particles';
 import LightRays from './backgrounds/LightRays';
-import Silk from './backgrounds/Silk';
-import Beams from './backgrounds/Beams';
+import Silk from './backgrounds/Silk.tsx';
+import Beams from './backgrounds/Beams.tsx';
 
 interface LandingPageProps {
   prompt: string;
