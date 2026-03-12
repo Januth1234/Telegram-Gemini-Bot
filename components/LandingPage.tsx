@@ -51,6 +51,28 @@ const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: 
   sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/15,via-orange-400/10,to-rose-400/15 dark:from-amber-500/10 dark:to-rose-500/10' },
 };
 
+/** Hero glow behind logo + greeting: unique gradient per theme */
+const THEME_HERO_GLOW: Record<UserThemeId, string> = {
+  classic: 'bg-gradient-to-b from-cyan-400/25 via-cyan-500/20 to-blue-500/25 dark:from-cyan-400/20 dark:via-cyan-500/15 dark:to-blue-500/20',
+  midnight: 'bg-gradient-to-b from-indigo-400/30 via-violet-500/20 to-slate-700/25 dark:from-indigo-500/25 dark:via-violet-500/20 dark:to-slate-800/30',
+  aurora: 'bg-gradient-to-b from-emerald-400/20 via-cyan-400/25 to-teal-500/20 dark:from-emerald-500/20 dark:via-cyan-500/20 dark:to-teal-600/25',
+  terminal: 'bg-gradient-to-b from-emerald-400/25 via-green-500/20 to-emerald-600/20 dark:from-emerald-500/25 dark:via-green-600/20 dark:to-emerald-700/25',
+  paper: 'bg-gradient-to-b from-amber-300/30 via-orange-300/25 to-amber-400/20 dark:from-amber-600/25 dark:via-orange-600/20 dark:to-amber-700/20',
+  ocean: 'bg-gradient-to-b from-sky-400/25 via-blue-400/25 to-indigo-500/20 dark:from-sky-500/25 dark:via-blue-500/20 dark:to-indigo-600/25',
+  sunset: 'bg-gradient-to-b from-amber-400/25 via-orange-400/25 to-rose-400/25 dark:from-amber-500/25 dark:via-orange-500/20 dark:to-rose-500/25',
+};
+
+/** Hero glow animation style per theme – each theme feels different */
+const THEME_HERO_GLOW_ANIMATION: Record<UserThemeId, string> = {
+  classic: 'animate-hero-glow',
+  midnight: 'animate-hero-glow-breathe',
+  aurora: 'animate-hero-glow-drift',
+  terminal: 'animate-hero-glow-flicker',
+  paper: 'animate-hero-glow-shimmer',
+  ocean: 'animate-hero-glow-wave',
+  sunset: 'animate-hero-glow-warm',
+};
+
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
@@ -132,7 +154,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         
         {/* Hero Section - animations only on landing */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative">
-          <div className="flex flex-col items-center gap-6 md:gap-8">
+          {/* Slow glowing background behind logo + greeting – unique gradient + motion per theme */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+            <div className={`w-[min(100%,28rem)] h-[18rem] md:h-[22rem] rounded-full blur-3xl ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
+          </div>
+          <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
                 <img src="/favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px]" alt="Orin AI" />

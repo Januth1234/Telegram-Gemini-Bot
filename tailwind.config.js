@@ -24,6 +24,13 @@ export default {
         'theme-paper': 'themePaper 5s ease-in-out infinite',
         'theme-ocean': 'themeOcean 10s ease-in-out infinite',
         'theme-sunset': 'themeSunset 9s ease-in-out infinite',
+        'hero-glow': 'heroGlow 4s ease-in-out infinite',
+        'hero-glow-breathe': 'heroGlowBreathe 6s ease-in-out infinite',
+        'hero-glow-drift': 'heroGlowDrift 8s ease-in-out infinite',
+        'hero-glow-flicker': 'heroGlowFlicker 3.5s steps(4) infinite',
+        'hero-glow-shimmer': 'heroGlowShimmer 5s ease-in-out infinite',
+        'hero-glow-wave': 'heroGlowWave 6s ease-in-out infinite',
+        'hero-glow-warm': 'heroGlowWarm 5.5s ease-in-out infinite',
       },
       keyframes: {
         reveal: {
@@ -45,6 +52,40 @@ export default {
         glowPulse: {
           '0%, 100%': { boxShadow: '0 0 30px rgba(34, 211, 238, 0.12)' },
           '50%': { boxShadow: '0 0 50px rgba(34, 211, 238, 0.2)' },
+        },
+        heroGlow: {
+          '0%, 100%': { opacity: '0.35' },
+          '50%': { opacity: '0.7' },
+        },
+        heroGlowBreathe: {
+          '0%, 100%': { opacity: '0.3', transform: 'scale(0.96)' },
+          '50%': { opacity: '0.6', transform: 'scale(1.04)' },
+        },
+        heroGlowDrift: {
+          '0%': { opacity: '0.3' },
+          '25%': { opacity: '0.65' },
+          '50%': { opacity: '0.4' },
+          '75%': { opacity: '0.7' },
+          '100%': { opacity: '0.3' },
+        },
+        heroGlowFlicker: {
+          '0%, 100%': { opacity: '0.35' },
+          '25%': { opacity: '0.6' },
+          '50%': { opacity: '0.4' },
+          '75%': { opacity: '0.65' },
+        },
+        heroGlowShimmer: {
+          '0%, 100%': { opacity: '0.45' },
+          '50%': { opacity: '0.8' },
+        },
+        heroGlowWave: {
+          '0%, 100%': { opacity: '0.4' },
+          '33%': { opacity: '0.7' },
+          '66%': { opacity: '0.5' },
+        },
+        heroGlowWarm: {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.75' },
         },
         shimmer: {
           '0%, 100%': { opacity: '1' },
