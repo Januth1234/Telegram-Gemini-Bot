@@ -122,12 +122,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
       case 'aurora':
         return (
           <DarkVeil
-            hueShift={-35}
-            noiseIntensity={0.02}
+            hueShift={135}
+            noiseIntensity={0.012}
             scanlineIntensity={0}
             scanlineFrequency={0}
-            speed={0.5}
-            warpAmount={0.08}
+            speed={0.45}
+            warpAmount={0.06}
             resolutionScale={0.9}
           />
         );
