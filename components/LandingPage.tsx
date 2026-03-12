@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
-import { Language, WorkspaceMode, UserAccount } from '../types';
+import { Language, WorkspaceMode, UserAccount, UserThemeId } from '../types';
 
 interface LandingPageProps {
   prompt: string;
@@ -16,6 +16,7 @@ interface LandingPageProps {
   thinkingMode: boolean;
   descriptiveMode: boolean;
   onReasoningModeChange: (opts: { thinking?: boolean; descriptive?: boolean }) => void;
+  userTheme?: UserThemeId;
 }
 
 // Client-side text generator for "Loading" states and non-critical content
@@ -33,7 +34,24 @@ const MarkovLoader = () => {
    return <span className="animate-pulse">{text}</span>;
 };
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange }) => {
+const VALID_THEME_IDS: UserThemeId[] = ['classic', 'midnight', 'aurora', 'terminal', 'paper', 'ocean', 'sunset'];
+
+function resolveLandingTheme(theme: UserThemeId | undefined | string | null): UserThemeId {
+  if (theme && VALID_THEME_IDS.includes(theme as UserThemeId)) return theme as UserThemeId;
+  return 'classic'; // new users, "standard", or any invalid value → classic (animation always works)
+}
+
+const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: string }> = {
+  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-500/20 to-blue-600/20 dark:from-cyan-500/10 dark:to-blue-600/10' },
+  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/15 to-slate-900/30 dark:from-indigo-400/10 dark:to-slate-950/40' },
+  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.15),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.12),transparent_40%)]' },
+  terminal: { animationClass: '', className: 'bg-emerald-500/5 dark:bg-emerald-400/10' },
+  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-500/15 to-orange-500/10 dark:from-amber-500/10 dark:to-stone-600/15' },
+  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/10 via-transparent to-indigo-400/15 dark:from-sky-500/10 dark:to-indigo-500/10' },
+  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/15,via-orange-400/10,to-rose-400/15 dark:from-amber-500/10 dark:to-rose-500/10' },
+};
+
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
@@ -87,8 +105,21 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
      }
   };
 
+  const landingTheme = resolveLandingTheme(userTheme);
+  const themeFx = THEME_ANIMATION[landingTheme];
+
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
+      {/* Theme-based minimal animation overlay (behind content) */}
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 z-0 ${themeFx.className} ${themeFx.animationClass}`}
+      />
+      {landingTheme === 'terminal' && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute left-0 right-0 h-px bg-emerald-400/30 dark:bg-emerald-400/20 animate-theme-terminal" />
+        </div>
+      )}
       {user && (
         <div className="w-full flex justify-center py-4 px-4 z-[100] opacity-0 animate-slide-in-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
           <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-105 transition-transform tap-target">

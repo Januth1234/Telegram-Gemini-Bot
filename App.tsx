@@ -1,23 +1,32 @@
-import React, { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
 import LandingPage from './components/LandingPage';
-import ChatWorkspace from './components/ChatWorkspace';
-import AccountSettings from './components/AccountSettings';
-import PrivacyPage from './components/PrivacyPage';
-import TermsPage from './components/TermsPage';
-import ReleasesPage from './components/ReleasesPage';
-import LogicFlowPage from './components/LogicFlowPage';
-import CreatorPage from './components/CreatorPage';
-import PricingPage from './components/PricingPage';
-import DownloadsPage from './components/DownloadsPage';
-import VoiceAssistant from './components/VoiceAssistant';
-import AdminPortal from './components/AdminPortal';
-import TelegramBotPage from './components/TelegramBotPage';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
 import { notificationService } from './services/notificationService';
 import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
+
+// Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
+const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
+const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
+const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
+const TermsPage = lazy(() => import('./components/TermsPage').then(m => ({ default: m.default })));
+const ReleasesPage = lazy(() => import('./components/ReleasesPage').then(m => ({ default: m.default })));
+const LogicFlowPage = lazy(() => import('./components/LogicFlowPage').then(m => ({ default: m.default })));
+const CreatorPage = lazy(() => import('./components/CreatorPage').then(m => ({ default: m.default })));
+const PricingPage = lazy(() => import('./components/PricingPage').then(m => ({ default: m.default })));
+const DownloadsPage = lazy(() => import('./components/DownloadsPage').then(m => ({ default: m.default })));
+const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m => ({ default: m.default })));
+const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
+const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
+
+const PageFallback = () => (
+  <div className="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 dark:bg-slate-950">
+    <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin" />
+    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Loading…</span>
+  </div>
+);
 
 const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat' };
 const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = { art: 'studio', camera: 'vision', math: 'maths', chat: 'chat', landing: 'chat', voice: 'voice', account: 'chat', privacy: 'chat', terms: 'chat', releases: 'chat', logic: 'chat', creator: 'chat', pricing: 'chat', downloads: 'chat', 'admin-portal': 'chat', 'telegram-bot': 'chat' };
@@ -34,11 +43,17 @@ const getIsNightByLocalTime = (): boolean => {
   return hour < 6 || hour >= 18; // 6am–6pm = day (light), else night (dark)
 };
 
+const VALID_USER_THEMES: UserThemeId[] = ['classic', 'midnight', 'aurora', 'terminal', 'paper', 'ocean', 'sunset'];
+const normalizeUserTheme = (value: unknown): UserThemeId => {
+  if (value && typeof value === 'string' && VALID_USER_THEMES.includes(value as UserThemeId)) return value as UserThemeId;
+  return 'classic'; // new users, "standard", or invalid → classic so animations and theme always work
+};
+
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
   const [theme, setTheme] = useState<ThemeMode>(() => (cacheService.get<string | null>(CacheKey.THEME, null) as ThemeMode | null) || 'light');
   const [autoDark, setAutoDark] = useState(() => getIsNightByLocalTime()); // when theme === 'auto', true = dark
-  const [userTheme, setUserTheme] = useState<UserThemeId>(() => cacheService.get<UserThemeId>(CacheKey.USER_THEME, 'classic'));
+  const [userTheme, setUserTheme] = useState<UserThemeId>(() => normalizeUserTheme(cacheService.get(CacheKey.USER_THEME, 'classic')));
   const t = translations[lang];
 
   const effectiveDark = theme === 'auto' ? autoDark : theme === 'dark';
@@ -137,7 +152,7 @@ const App: React.FC = () => {
         geminiService.setSessionUser(syncedUser);
         setUser(syncedUser);
         if (syncedUser.theme) {
-          setUserTheme(syncedUser.theme);
+          setUserTheme(normalizeUserTheme(syncedUser.theme));
           cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
         }
         setSyncStatus('syncing');
@@ -347,7 +362,7 @@ const App: React.FC = () => {
       geminiService.setSessionUser(syncedUser);
       setUser(syncedUser);
       if (syncedUser.theme) {
-        setUserTheme(syncedUser.theme);
+        setUserTheme(normalizeUserTheme(syncedUser.theme));
         cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
       }
       setSyncStatus('syncing');
@@ -502,6 +517,7 @@ const App: React.FC = () => {
           thinkingMode={thinkingMode}
           descriptiveMode={descriptiveMode}
           onReasoningModeChange={updateReasoningModes}
+          userTheme={userTheme}
         />
       );
     }
@@ -562,7 +578,9 @@ const App: React.FC = () => {
       )}
       <main className="flex-1 overflow-hidden relative flex flex-col">
         <div key={view} className="flex-1 flex flex-col min-h-0 view-enter">
-          {renderContent()}
+          <Suspense fallback={<PageFallback />}>
+            {renderContent()}
+          </Suspense>
         </div>
       </main>
     </div>

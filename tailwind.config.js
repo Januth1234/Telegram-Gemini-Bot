@@ -17,6 +17,13 @@ export default {
         'glow-pulse': 'glowPulse 3s ease-in-out infinite',
         'shimmer': 'shimmer 2s ease-in-out infinite',
         'scale-in': 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
+        'theme-classic': 'themeClassic 6s ease-in-out infinite',
+        'theme-midnight': 'themeMidnight 8s ease-in-out infinite',
+        'theme-aurora': 'themeAurora 12s ease-in-out infinite',
+        'theme-terminal': 'themeTerminal 4s linear infinite',
+        'theme-paper': 'themePaper 5s ease-in-out infinite',
+        'theme-ocean': 'themeOcean 10s ease-in-out infinite',
+        'theme-sunset': 'themeSunset 9s ease-in-out infinite',
       },
       keyframes: {
         reveal: {
@@ -46,6 +53,35 @@ export default {
         scaleIn: {
           '0%': { opacity: '0', transform: 'scale(0.96)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        themeClassic: {
+          '0%, 100%': { opacity: '0.4' },
+          '50%': { opacity: '0.7' },
+        },
+        themeMidnight: {
+          '0%, 100%': { opacity: '0.25' },
+          '50%': { opacity: '0.5' },
+        },
+        themeAurora: {
+          '0%': { backgroundPosition: '0% 50%' },
+          '50%': { backgroundPosition: '100% 50%' },
+          '100%': { backgroundPosition: '0% 50%' },
+        },
+        themeTerminal: {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100vh)' },
+        },
+        themePaper: {
+          '0%, 100%': { opacity: '0.5' },
+          '50%': { opacity: '0.85' },
+        },
+        themeOcean: {
+          '0%': { backgroundPosition: '0% 0%' },
+          '100%': { backgroundPosition: '200% 0%' },
+        },
+        themeSunset: {
+          '0%': { backgroundPosition: '0% 50%' },
+          '100%': { backgroundPosition: '100% 50%' },
         },
       },
     },

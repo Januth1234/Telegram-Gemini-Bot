@@ -336,7 +336,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      </div>
                   )}
 
-                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex items-center gap-2 ${isPrivate ? 'bg-slate-900/90 border-slate-700' : 'bg-white/95 dark:bg-slate-900/95 border-slate-200 dark:border-white/10'}`}>
+                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex items-center gap-2 backdrop-blur-xl ${isPrivate ? 'bg-slate-900/70 border-slate-600/50' : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/10'}`}>
                      <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach"><i className="fa-solid fa-paperclip" /></button>
                      <input 
                       ref={inputRef} 

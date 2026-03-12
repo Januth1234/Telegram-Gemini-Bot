@@ -214,7 +214,17 @@
     <noscript><img height="1" width="1" style="display:none"
       src="https://www.facebook.com/tr?id=1425367891&ev=PageView&noscript=1"
     /></noscript>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static shell: visible on first paint before JS loads (SSG-style) -->
+      <div class="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 text-slate-800" style="min-height: 100dvh;">
+        <img src="/favicon.svg" alt="Orin AI" width="64" height="64" class="rounded-xl shadow-lg" />
+        <h1 class="text-sm font-black uppercase tracking-widest">Orin AI</h1>
+        <div class="flex items-center gap-2">
+          <div class="w-6 h-6 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin"></div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-slate-500">Loading…</span>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
