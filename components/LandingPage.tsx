@@ -3,12 +3,6 @@ import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount, UserThemeId } from '../types';
-import DarkVeil from './backgrounds/DarkVeil';
-import PixelBlast from './backgrounds/PixelBlast';
-import Particles from './backgrounds/Particles';
-import LightRays from './backgrounds/LightRays';
-import Silk from './backgrounds/Silk.tsx';
-import Beams from './backgrounds/Beams.tsx';
 
 interface LandingPageProps {
   prompt: string;
@@ -117,114 +111,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const landingTheme = resolveLandingTheme(userTheme);
   const themeFx = THEME_ANIMATION[landingTheme];
 
-  const renderHeroBackground = () => {
-    switch (landingTheme) {
-      case 'aurora':
-        return (
-          <DarkVeil
-            hueShift={135}
-            noiseIntensity={0.012}
-            scanlineIntensity={0}
-            scanlineFrequency={0}
-            speed={0.45}
-            warpAmount={0.06}
-            resolutionScale={0.9}
-          />
-        );
-      case 'midnight':
-        return (
-          <Particles
-            particleColors={['#e5e7eb', '#a5b4fc', '#38bdf8']}
-            particleCount={220}
-            particleSpread={10}
-            speed={0.12}
-            particleBaseSize={105}
-            moveParticlesOnHover
-            particleHoverFactor={1.2}
-            alphaParticles={false}
-            sizeRandomness={1}
-            cameraDistance={22}
-            disableRotation={false}
-            pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-            className="opacity-80"
-          />
-        );
-      case 'terminal':
-        return (
-          <PixelBlast
-            variant="square"
-            pixelSize={4}
-            color={isDark ? '#22c55e' : '#059669'}
-            patternScale={2}
-            patternDensity={1}
-            pixelSizeJitter={0.15}
-            enableRipples
-            rippleSpeed={0.4}
-            rippleThickness={0.12}
-            rippleIntensityScale={1.6}
-            liquid={false}
-            speed={0.55}
-            edgeFade={0.3}
-            transparent
-          />
-        );
-      case 'ocean':
-        return (
-          <Silk
-            speed={4.2}
-            scale={1.2}
-            color={isDark ? '#0ea5e9' : '#22d3ee'}
-            noiseIntensity={1.0}
-            rotation={0.15}
-          />
-        );
-      case 'sunset':
-        return (
-          <LightRays
-            raysOrigin="top-center"
-            raysColor={isDark ? '#fed7aa' : '#fed7aa'}
-            raysSpeed={0.85}
-            lightSpread={0.7}
-            rayLength={3.2}
-            followMouse
-            mouseInfluence={0.1}
-            noiseAmount={0.04}
-            distortion={0.08}
-            fadeDistance={1}
-            saturation={1.05}
-            pulsating
-            className="opacity-95"
-          />
-        );
-      case 'paper':
-        return (
-          <Beams
-            beamWidth={2}
-            beamHeight={18}
-            beamNumber={16}
-            lightColor={isDark ? '#fed7aa' : '#f97316'}
-            speed={2}
-            noiseIntensity={1.5}
-            scale={0.22}
-            rotation={20}
-          />
-        );
-      default:
-        return null;
-    }
-  };
-
   return (
     <main className="h-full overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
-      {/* Theme overlay: visible, animated, smooth when switching */}
+      {/* Optional soft overlay tint; for shader themes this is very subtle */}
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-0 transition-all duration-700 ease-out ${themeFx.className} ${themeFx.animationClass}`}
       />
-      {/* Full-page per-theme shader background behind all landing content */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-        {renderHeroBackground()}
-      </div>
       {user && (
         <div className="w-full flex justify-center py-4 px-4 z-[100] opacity-0 animate-slide-in-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
           <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-105 transition-transform tap-target">

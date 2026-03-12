@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
 import LandingPage from './components/LandingPage';
+import DarkVeil from './components/backgrounds/DarkVeil';
+import PixelBlast from './components/backgrounds/PixelBlast';
+import Particles from './components/backgrounds/Particles';
+import LightRays from './components/backgrounds/LightRays';
+import Silk from './components/backgrounds/Silk.tsx';
+import Beams from './components/backgrounds/Beams.tsx';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
@@ -554,8 +560,110 @@ const App: React.FC = () => {
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
+  const renderLandingBackground = () => {
+    switch (userTheme) {
+      case 'aurora':
+        return (
+          <DarkVeil
+            hueShift={135}
+            noiseIntensity={0.012}
+            scanlineIntensity={0}
+            scanlineFrequency={0}
+            speed={0.45}
+            warpAmount={0.06}
+            resolutionScale={0.9}
+          />
+        );
+      case 'midnight':
+        return (
+          <Particles
+            particleColors={['#e5e7eb', '#a5b4fc', '#38bdf8']}
+            particleCount={220}
+            particleSpread={10}
+            speed={0.12}
+            particleBaseSize={105}
+            moveParticlesOnHover
+            particleHoverFactor={1.2}
+            alphaParticles={false}
+            sizeRandomness={1}
+            cameraDistance={22}
+            disableRotation={false}
+            pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
+            className="opacity-80"
+          />
+        );
+      case 'terminal':
+        return (
+          <PixelBlast
+            variant="square"
+            pixelSize={4}
+            color={effectiveDark ? '#22c55e' : '#059669'}
+            patternScale={2}
+            patternDensity={1}
+            pixelSizeJitter={0.15}
+            enableRipples
+            rippleSpeed={0.4}
+            rippleThickness={0.12}
+            rippleIntensityScale={1.6}
+            liquid={false}
+            speed={0.55}
+            edgeFade={0.3}
+            transparent
+          />
+        );
+      case 'ocean':
+        return (
+          <Silk
+            speed={4.2}
+            scale={1.2}
+            color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
+            noiseIntensity={1.0}
+            rotation={0.15}
+          />
+        );
+      case 'sunset':
+        return (
+          <LightRays
+            raysOrigin="top-center"
+            raysColor="#fed7aa"
+            raysSpeed={0.85}
+            lightSpread={0.7}
+            rayLength={3.2}
+            followMouse
+            mouseInfluence={0.1}
+            noiseAmount={0.04}
+            distortion={0.08}
+            fadeDistance={1}
+            saturation={1.05}
+            pulsating
+            className="opacity-95"
+          />
+        );
+      case 'paper':
+        return (
+          <Beams
+            beamWidth={2}
+            beamHeight={18}
+            beamNumber={16}
+            lightColor={effectiveDark ? '#fed7aa' : '#f97316'}
+            speed={2}
+            noiseIntensity={1.5}
+            scale={0.22}
+            rotation={20}
+          />
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div className={`w-screen h-[100dvh] flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+      {view === 'landing' && (
+        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+          {renderLandingBackground()}
+        </div>
+      )}
       {view !== 'admin-portal' && (
         <header className="h-14 md:h-16 shrink-0 glass-panel flex items-center justify-between px-4 z-[100] border-b border-black/5 dark:border-white/5 safe-pt relative">
           <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>
