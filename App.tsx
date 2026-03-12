@@ -524,15 +524,33 @@ const App: React.FC = () => {
     }
   };
 
-  // Each theme has light and dark variants so it looks good in both modes.
+  // Refined base backgrounds: smooth gradients, cohesive palettes per theme.
   const themeBgByMode: Record<UserThemeId, { light: string; dark: string }> = {
     classic: { light: 'bg-slate-50', dark: 'bg-slate-950' },
-    midnight: { light: 'bg-gradient-to-br from-slate-200 via-slate-100 to-slate-200', dark: 'bg-[#0f172a]' },
-    aurora: { light: 'bg-gradient-to-br from-emerald-50 via-slate-50 to-cyan-50', dark: 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-900' },
-    terminal: { light: 'bg-gradient-to-b from-slate-100 to-emerald-50', dark: 'bg-gradient-to-b from-[#0a0e14] to-[#0d1810]' },
-    paper: { light: 'bg-gradient-to-br from-zinc-50 to-amber-50', dark: 'bg-gradient-to-br from-stone-900 via-amber-950/30 to-zinc-900' },
-    ocean: { light: 'bg-gradient-to-br from-sky-50 via-blue-50 to-indigo-50', dark: 'bg-gradient-to-br from-[#0c1929] via-[#0f2744] to-[#0d2137]' },
-    sunset: { light: 'bg-gradient-to-br from-amber-50 via-orange-50 to-rose-100', dark: 'bg-gradient-to-br from-amber-950 via-orange-900 to-rose-950' },
+    midnight: {
+      light: 'bg-gradient-to-br from-indigo-50/80 via-slate-100 to-violet-100/90',
+      dark: 'bg-gradient-to-b from-[#0c0a1a] via-[#12102a] to-[#0f0d1f]',
+    },
+    aurora: {
+      light: 'bg-gradient-to-br from-emerald-50/90 via-teal-50/70 to-cyan-50/90',
+      dark: 'bg-gradient-to-b from-slate-950 via-emerald-950/40 to-slate-950',
+    },
+    terminal: {
+      light: 'bg-gradient-to-b from-slate-100 via-emerald-50/60 to-slate-50',
+      dark: 'bg-gradient-to-b from-[#0d1117] via-[#0a1410] to-[#0d1117]',
+    },
+    paper: {
+      light: 'bg-gradient-to-br from-stone-50 via-amber-50/80 to-stone-100',
+      dark: 'bg-gradient-to-br from-stone-950 via-amber-950/20 to-stone-900',
+    },
+    ocean: {
+      light: 'bg-gradient-to-br from-sky-50 via-blue-50/90 to-indigo-50/80',
+      dark: 'bg-gradient-to-b from-[#0a1628] via-[#0e2847] to-[#0a1a2e]',
+    },
+    sunset: {
+      light: 'bg-gradient-to-br from-amber-50/90 via-orange-50/70 to-rose-50/90',
+      dark: 'bg-gradient-to-b from-rose-950/80 via-amber-950/50 to-stone-950',
+    },
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 

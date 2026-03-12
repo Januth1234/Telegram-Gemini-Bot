@@ -42,35 +42,35 @@ function resolveLandingTheme(theme: UserThemeId | undefined | string | null): Us
   return 'classic'; // new users, "standard", or any invalid value → classic (animation always works)
 }
 
-/* Single soft overlay – low opacity so it blends with base, no visible second band */
+/* Refined overlay: soft tint per theme, blends with base */
 const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: string }> = {
-  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/20 to-blue-500/22 dark:from-cyan-400/14 dark:to-blue-600/16' },
-  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/18 to-violet-600/20 dark:from-indigo-400/20 dark:to-slate-900/30' },
-  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.16),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.12),transparent_40%)]' },
-  terminal: { animationClass: 'animate-theme-terminal-soft', className: 'bg-gradient-to-b from-emerald-500/16 to-green-600/18 dark:from-emerald-500/18 dark:to-emerald-700/20' },
-  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-400/20 to-orange-400/22 dark:from-amber-600/16 dark:to-stone-700/20' },
-  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/18 via-blue-400/14 to-indigo-500/20 dark:from-sky-500/18 dark:to-indigo-600/20' },
-  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/18,via-orange-400/14,to-rose-400/20 dark:from-amber-500/18 dark:to-rose-600/22' },
+  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/18 to-blue-500/20 dark:from-cyan-400/12 dark:to-blue-600/14' },
+  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-400/14 to-violet-500/16 dark:from-violet-400/12 dark:to-indigo-900/18' },
+  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_75%_75%_at_50%_40%,rgba(52,211,153,0.14),transparent_55%),radial-gradient(ellipse_55%_55%_at_75%_25%,rgba(34,211,238,0.1),transparent_45%)]' },
+  terminal: { animationClass: 'animate-theme-terminal-soft', className: 'bg-gradient-to-b from-emerald-400/14 via-green-500/12 to-emerald-600/14 dark:from-emerald-500/10 dark:to-emerald-800/14' },
+  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-300/16 to-amber-600/14 dark:from-amber-600/10 dark:to-stone-600/14' },
+  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/14 via-blue-400/12 to-indigo-400/16 dark:from-sky-500/10 dark:via-blue-600/8 dark:to-indigo-600/12' },
+  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/14 via-orange-400/12 to-rose-400/16 dark:from-amber-500/10 dark:to-rose-600/12' },
 };
 
-/** Hero: one unified gradient (glow + fade) so no separate colour layers or bands */
+/** Hero: refined unified gradient per theme – smooth stops, no bands */
 const THEME_HERO_GRADIENT: Record<UserThemeId, string> = {
-  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.12) 25%, rgba(34,211,238,0.22) 45%, rgba(34,211,238,0.08) 60%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.5) 100%)',
-  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.1) 25%, rgba(139,92,246,0.2) 45%, rgba(139,92,246,0.06) 60%, rgba(15,23,42,0.4) 80%, rgba(15,23,42,0.7) 100%)',
-  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.1) 25%, rgba(34,211,238,0.18) 45%, rgba(34,211,238,0.06) 60%, rgba(255,255,255,0.2) 80%, rgba(255,255,255,0.45) 100%)',
-  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.1) 25%, rgba(16,185,129,0.2) 45%, rgba(16,185,129,0.06) 60%, rgba(255,255,255,0.22) 80%, rgba(255,255,255,0.48) 100%)',
-  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.12) 25%, rgba(251,191,36,0.22) 45%, rgba(251,191,36,0.06) 60%, rgba(255,255,255,0.28) 80%, rgba(255,255,255,0.52) 100%)',
-  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.1) 25%, rgba(99,102,241,0.18) 45%, rgba(99,102,241,0.06) 60%, rgba(255,255,255,0.22) 80%, rgba(255,255,255,0.48) 100%)',
-  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.1) 25%, rgba(251,113,133,0.18) 45%, rgba(251,113,133,0.06) 60%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.5) 100%)',
+  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.08) 20%, rgba(34,211,238,0.2) 42%, rgba(34,211,238,0.06) 58%, rgba(248,250,252,0.3) 78%, rgba(241,245,249,0.7) 100%)',
+  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(129,140,248,0.06) 22%, rgba(139,92,246,0.18) 44%, rgba(99,102,241,0.05) 58%, rgba(30,27,75,0.35) 78%, rgba(15,23,42,0.85) 100%)',
+  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.06) 20%, rgba(34,211,238,0.16) 42%, rgba(20,184,166,0.05) 58%, rgba(248,250,252,0.25) 78%, rgba(226,232,240,0.65) 100%)',
+  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.06) 22%, rgba(5,150,105,0.18) 44%, rgba(16,185,129,0.04) 58%, rgba(240,253,244,0.28) 78%, rgba(236,253,245,0.7) 100%)',
+  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.08) 22%, rgba(245,158,11,0.18) 44%, rgba(251,191,36,0.04) 58%, rgba(255,251,235,0.32) 78%, rgba(254,243,199,0.75) 100%)',
+  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.06) 20%, rgba(99,102,241,0.16) 42%, rgba(59,130,246,0.05) 58%, rgba(239,246,255,0.28) 78%, rgba(224,242,254,0.72) 100%)',
+  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.07) 20%, rgba(251,113,133,0.16) 42%, rgba(244,63,94,0.05) 58%, rgba(255,247,237,0.3) 78%, rgba(255,241,242,0.72) 100%)',
 };
 const THEME_HERO_GRADIENT_DARK: Record<UserThemeId, string> = {
-  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.08) 25%, rgba(34,211,238,0.18) 45%, rgba(34,211,238,0.05) 60%, rgba(2,6,23,0.5) 80%, rgba(2,6,23,0.85) 100%)',
-  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.08) 25%, rgba(139,92,246,0.16) 45%, rgba(139,92,246,0.04) 60%, rgba(15,23,42,0.6) 80%, rgba(15,23,42,0.95) 100%)',
-  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.06) 25%, rgba(34,211,238,0.12) 45%, transparent 60%, rgba(2,6,23,0.5) 80%, rgba(2,6,23,0.9) 100%)',
-  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.08) 25%, rgba(16,185,129,0.16) 45%, rgba(16,185,129,0.04) 60%, rgba(13,24,16,0.55) 80%, rgba(10,14,20,0.92) 100%)',
-  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.08) 25%, rgba(251,191,36,0.14) 45%, rgba(251,191,36,0.04) 60%, rgba(28,25,23,0.5) 80%, rgba(28,25,23,0.88) 100%)',
-  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.06) 25%, rgba(99,102,241,0.14) 45%, rgba(99,102,241,0.04) 60%, rgba(12,25,41,0.55) 80%, rgba(12,25,41,0.92) 100%)',
-  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.08) 25%, rgba(251,113,133,0.14) 45%, rgba(251,113,133,0.04) 60%, rgba(67,20,7,0.5) 80%, rgba(67,20,7,0.9) 100%)',
+  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.06) 22%, rgba(34,211,238,0.14) 44%, rgba(34,211,238,0.04) 58%, rgba(2,6,23,0.45) 78%, rgba(2,6,23,0.92) 100%)',
+  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(129,140,248,0.05) 22%, rgba(139,92,246,0.12) 44%, rgba(99,102,241,0.03) 58%, rgba(15,23,42,0.5) 78%, rgba(12,10,30,0.95) 100%)',
+  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.04) 22%, rgba(34,211,238,0.1) 44%, transparent 58%, rgba(2,6,23,0.45) 78%, rgba(2,6,23,0.92) 100%)',
+  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.05) 22%, rgba(5,150,105,0.12) 44%, rgba(16,185,129,0.03) 58%, rgba(13,17,23,0.5) 78%, rgba(8,12,16,0.95) 100%)',
+  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.05) 22%, rgba(245,158,11,0.1) 44%, rgba(251,191,36,0.02) 58%, rgba(28,25,23,0.45) 78%, rgba(24,24,27,0.92) 100%)',
+  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.04) 22%, rgba(99,102,241,0.1) 44%, rgba(59,130,246,0.03) 58%, rgba(12,25,41,0.5) 78%, rgba(8,18,32,0.94) 100%)',
+  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.05) 22%, rgba(251,113,133,0.1) 44%, rgba(244,63,94,0.02) 58%, rgba(48,20,18,0.45) 78%, rgba(38,15,12,0.92) 100%)',
 };
 
 /** Hero glow animation style per theme – each theme feels different */
