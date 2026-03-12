@@ -131,7 +131,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const themeFx = THEME_ANIMATION[landingTheme];
 
   return (
-    <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
+    <main className="h-full overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
       {/* Theme overlay: visible, animated, smooth when switching */}
       <div
         aria-hidden
@@ -155,12 +155,13 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
           <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
-            {/* Glow: full-bleed radial gradient – no vertical/horizontal edges, very smooth */}
-            <div
-              aria-hidden
-              className={`pointer-events-none absolute inset-0 z-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
-              style={{ background: THEME_HERO_GLOW_RADIAL[landingTheme] ?? THEME_HERO_GLOW_RADIAL.classic }}
-            />
+            {/* Glow: full viewport width so it escapes max-w-6xl – no vertical seam at content edge */}
+            <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0">
+              <div
+                className={`absolute inset-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
+                style={{ background: THEME_HERO_GLOW_RADIAL[landingTheme] ?? THEME_HERO_GLOW_RADIAL.classic }}
+              />
+            </div>
             {/* Very smooth fade into input area – tall, gradual gradient */}
             <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-32 md:h-40 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-slate-950/95 dark:via-slate-950/50 z-[1]" />
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
