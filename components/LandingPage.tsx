@@ -42,24 +42,24 @@ function resolveLandingTheme(theme: UserThemeId | undefined | string | null): Us
 }
 
 const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: string }> = {
-  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-500/20 to-blue-600/20 dark:from-cyan-500/10 dark:to-blue-600/10' },
-  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/15 to-slate-900/30 dark:from-indigo-400/10 dark:to-slate-950/40' },
-  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.15),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.12),transparent_40%)]' },
-  terminal: { animationClass: '', className: 'bg-emerald-500/5 dark:bg-emerald-400/10' },
-  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-500/15 to-orange-500/10 dark:from-amber-500/10 dark:to-stone-600/15' },
-  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/10 via-transparent to-indigo-400/15 dark:from-sky-500/10 dark:to-indigo-500/10' },
-  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/15,via-orange-400/10,to-rose-400/15 dark:from-amber-500/10 dark:to-rose-500/10' },
+  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/35 to-blue-500/40 dark:from-cyan-400/25 dark:to-blue-600/30' },
+  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/30 to-violet-600/35 dark:from-indigo-400/35 dark:to-slate-900/50' },
+  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.28),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.22),transparent_40%)]' },
+  terminal: { animationClass: 'animate-theme-terminal-soft', className: 'bg-gradient-to-b from-emerald-500/25 to-green-600/30 dark:from-emerald-500/30 dark:to-emerald-700/35' },
+  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-400/35 to-orange-400/40 dark:from-amber-600/30 dark:to-stone-700/35' },
+  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/30 via-blue-400/25 to-indigo-500/35 dark:from-sky-500/30 dark:to-indigo-600/35' },
+  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/35,via-orange-400/30,to-rose-400/35 dark:from-amber-500/35 dark:to-rose-600/40' },
 };
 
-/** Hero glow behind logo + greeting: unique gradient per theme, faded at top/bottom for smooth blend */
+/** Hero glow behind logo + greeting: rich per-theme gradient, faded at top/bottom */
 const THEME_HERO_GLOW: Record<UserThemeId, string> = {
-  classic: 'bg-gradient-to-b from-transparent via-cyan-500/25 to-transparent dark:via-cyan-500/20',
-  midnight: 'bg-gradient-to-b from-transparent via-violet-500/25 to-transparent dark:via-violet-500/20',
-  aurora: 'bg-gradient-to-b from-transparent via-cyan-400/25 to-transparent dark:via-emerald-500/20',
-  terminal: 'bg-gradient-to-b from-transparent via-emerald-500/25 to-transparent dark:via-emerald-500/20',
-  paper: 'bg-gradient-to-b from-transparent via-amber-400/30 to-transparent dark:via-amber-600/22',
-  ocean: 'bg-gradient-to-b from-transparent via-blue-400/25 to-transparent dark:via-sky-500/22',
-  sunset: 'bg-gradient-to-b from-transparent via-orange-400/28 to-transparent dark:via-amber-500/22',
+  classic: 'bg-gradient-to-b from-transparent via-cyan-500/40 to-transparent dark:via-cyan-500/35',
+  midnight: 'bg-gradient-to-b from-transparent via-violet-500/45 to-transparent dark:via-indigo-500/40',
+  aurora: 'bg-gradient-to-b from-transparent via-emerald-400/40 to-transparent dark:via-cyan-500/35',
+  terminal: 'bg-gradient-to-b from-transparent via-emerald-500/42 to-transparent dark:via-emerald-500/38',
+  paper: 'bg-gradient-to-b from-transparent via-amber-400/45 to-transparent dark:via-amber-600/38',
+  ocean: 'bg-gradient-to-b from-transparent via-sky-400/40 to-transparent dark:via-blue-500/35',
+  sunset: 'bg-gradient-to-b from-transparent via-orange-400/42 to-transparent dark:via-amber-500/38',
 };
 
 /** Hero glow animation style per theme – each theme feels different */
@@ -132,10 +132,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
   return (
     <main className="h-full overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
-      {/* Theme-based minimal animation overlay (behind content) */}
+      {/* Theme overlay: visible, animated, smooth when switching */}
       <div
         aria-hidden
-        className={`pointer-events-none absolute inset-0 z-0 ${themeFx.className} ${themeFx.animationClass}`}
+        className={`pointer-events-none absolute inset-0 z-0 transition-all duration-700 ease-out ${themeFx.className} ${themeFx.animationClass}`}
       />
       {landingTheme === 'terminal' && (
         <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -152,15 +152,15 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
       )}
       <article className="w-full max-w-6xl px-4 md:px-6 py-8 md:py-24 flex flex-col items-center gap-10 md:gap-24 text-center">
         
-        {/* Hero Section - animations only on landing */}
-        <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative">
-          <div className="relative">
-            {/* Slow glowing background behind logo + greeting – fades at edges for smooth transition */}
-            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0 overflow-hidden">
-              <div className={`w-[min(100%,32rem)] h-[24rem] md:h-[28rem] rounded-full blur-[80px] ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
+        {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
+        <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
+          <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
+            {/* Glow: no overflow-hidden so blur softens naturally, no cutout */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
+              <div className={`w-[min(100%,32rem)] h-[26rem] md:h-[30rem] rounded-full blur-[80px] ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
             </div>
-            {/* Soft fade at bottom of hero so transition to input area is smooth */}
-            <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-24 md:h-28 bg-gradient-to-t from-white/80 to-transparent dark:from-slate-950/80 z-[1]" />
+            {/* Very smooth fade into input area – tall, gradual gradient */}
+            <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-32 md:h-40 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-slate-950/95 dark:via-slate-950/50 z-[1]" />
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
