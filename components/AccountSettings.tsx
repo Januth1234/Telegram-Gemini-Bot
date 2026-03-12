@@ -5,6 +5,8 @@ import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language, UserThemeId } from '../types';
 import { translations } from '../translations';
 
+export type ThemeMode = 'light' | 'dark' | 'auto';
+
 interface AccountSettingsProps {
   onClose: () => void;
   lang: Language;
@@ -16,9 +18,11 @@ interface AccountSettingsProps {
   onSignInWithUser?: (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => Promise<void>;
   userTheme?: UserThemeId;
   onThemeChange?: (theme: UserThemeId) => void;
+  themeMode?: ThemeMode;
+  onThemeModeChange?: (mode: ThemeMode) => void;
 }
 
-const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange }) => {
+const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange, themeMode, onThemeModeChange }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
   const [loading, setLoading] = useState(false);
@@ -162,12 +166,58 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                   </label>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Classic first, then Auto (mode) next to it */}
                   {[
                     { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
+                  ].map((tDef) => {
+                    const active = userTheme === (tDef.id as UserThemeId);
+                    return (
+                      <button
+                        key={tDef.id}
+                        type="button"
+                        onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
+                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
+                          active
+                            ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                            : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                            {tDef.label}
+                          </span>
+                          {active && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                        </div>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{tDef.desc}</p>
+                      </button>
+                    );
+                  })}
+                  {onThemeModeChange && (
+                    <button
+                      type="button"
+                      onClick={() => onThemeModeChange('auto')}
+                      className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
+                        themeMode === 'auto'
+                          ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                          : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                          Auto
+                        </span>
+                        {themeMode === 'auto' && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Light/dark by your time.</p>
+                    </button>
+                  )}
+                  {[
                     { id: 'midnight', label: 'Midnight', desc: 'Pure dark studio look.' },
                     { id: 'aurora', label: 'Aurora', desc: 'Gradient, glowing backdrop.' },
                     { id: 'terminal', label: 'Terminal', desc: 'Deep navy hacker vibe.' },
                     { id: 'paper', label: 'Paper', desc: 'Soft, warm document feel.' },
+                    { id: 'ocean', label: 'Ocean', desc: 'Deep blue, calm focus.' },
+                    { id: 'sunset', label: 'Sunset', desc: 'Warm amber and rose glow.' },
                   ].map((tDef) => {
                     const active = userTheme === (tDef.id as UserThemeId);
                     return (

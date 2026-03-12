@@ -27,11 +27,21 @@ const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 const RECENT_LOCAL_MS = 5 * 60 * 1000;
 
+type ThemeMode = 'light' | 'dark' | 'auto';
+
+const getIsNightByLocalTime = (): boolean => {
+  const hour = new Date().getHours();
+  return hour < 6 || hour >= 18; // 6am–6pm = day (light), else night (dark)
+};
+
 const App: React.FC = () => {
   const [lang, setLang] = useState<Language>(() => cacheService.get<Language>(CacheKey.LANG, 'en'));
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => (cacheService.get<string | null>(CacheKey.THEME, null) as 'dark' | 'light' | null) || 'light');
+  const [theme, setTheme] = useState<ThemeMode>(() => (cacheService.get<string | null>(CacheKey.THEME, null) as ThemeMode | null) || 'light');
+  const [autoDark, setAutoDark] = useState(() => getIsNightByLocalTime()); // when theme === 'auto', true = dark
   const [userTheme, setUserTheme] = useState<UserThemeId>(() => cacheService.get<UserThemeId>(CacheKey.USER_THEME, 'classic'));
   const t = translations[lang];
+
+  const effectiveDark = theme === 'auto' ? autoDark : theme === 'dark';
 
   // Global Auth State
   const [user, setUser] = useState<UserAccount | null>(null);
@@ -87,10 +97,19 @@ const App: React.FC = () => {
     document.documentElement.lang = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
   }, [lang]);
 
-  // Keep HTML dark class in sync with theme state at all times
+  // When theme is 'auto', update autoDark from local time every minute
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
+    if (theme !== 'auto') return;
+    const update = () => setAutoDark(getIsNightByLocalTime());
+    update();
+    const id = setInterval(update, 60 * 1000);
+    return () => clearInterval(id);
   }, [theme]);
+
+  // Keep HTML dark class in sync with effective mode (light/dark/auto by time)
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', effectiveDark);
+  }, [effectiveDark]);
 
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
@@ -389,10 +408,10 @@ const App: React.FC = () => {
 
   const handleThemeChange = async (nextTheme: UserThemeId) => {
     // Some themes are fundamentally dark / light – snap system mode accordingly so it never looks "broken".
-    if (nextTheme === 'midnight' || nextTheme === 'terminal' || nextTheme === 'aurora') {
+    if (nextTheme === 'midnight' || nextTheme === 'terminal' || nextTheme === 'aurora' || nextTheme === 'ocean') {
       setTheme('dark');
       cacheService.set(CacheKey.THEME, 'dark');
-    } else if (nextTheme === 'paper') {
+    } else if (nextTheme === 'paper' || nextTheme === 'sunset') {
       setTheme('light');
       cacheService.set(CacheKey.THEME, 'light');
     }
@@ -470,7 +489,7 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -500,12 +519,16 @@ const App: React.FC = () => {
     userTheme === 'classic'
       ? 'bg-slate-50 dark:bg-slate-950'
       : userTheme === 'midnight'
-        ? 'bg-slate-950'
+        ? 'bg-[#0f172a]'
         : userTheme === 'aurora'
           ? 'bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-900'
           : userTheme === 'terminal'
-            ? 'bg-[#050816]'
-            : 'bg-gradient-to-br from-zinc-50 to-amber-50';
+            ? 'bg-gradient-to-b from-[#0a0e14] to-[#0d1810]'
+            : userTheme === 'ocean'
+              ? 'bg-gradient-to-br from-[#0c1929] via-[#0f2744] to-[#0d2137]'
+              : userTheme === 'sunset'
+                ? 'bg-gradient-to-br from-amber-50 via-orange-50 to-rose-100'
+                : 'bg-gradient-to-br from-zinc-50 to-amber-50';
 
   return (
     <div className={`w-screen h-[100dvh] flex flex-col ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${themeBg} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
@@ -525,7 +548,18 @@ const App: React.FC = () => {
             </div>
           )}
           <div className="flex items-center gap-2">
-            <button onClick={() => { const next = theme === 'dark' ? 'light' : 'dark'; setTheme(next); cacheService.set(CacheKey.THEME, next); document.documentElement.classList.toggle('dark', next === 'dark'); }} className="w-9 h-9 flex items-center justify-center text-slate-500" aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'}><i className={`fa-solid ${theme === 'dark' ? 'fa-sun' : 'fa-moon'}`} /></button>
+            <button
+              onClick={() => {
+                const next: ThemeMode = theme === 'light' ? 'dark' : theme === 'dark' ? 'auto' : 'light';
+                setTheme(next);
+                cacheService.set(CacheKey.THEME, next);
+              }}
+              className="w-9 h-9 flex items-center justify-center text-slate-500"
+              aria-label={theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'Auto (by time)'}
+              title={theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'Auto'}
+            >
+              <i className={`fa-solid ${theme === 'light' ? 'fa-sun' : theme === 'dark' ? 'fa-moon' : 'fa-circle-half-stroke'}`} />
+            </button>
             <button onClick={() => setLang(l => l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en')} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
             {user ? (
               <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border-2 border-emerald-500/30 shadow-sm tap-target ring-2 ring-emerald-400/20" title="Signed in">
