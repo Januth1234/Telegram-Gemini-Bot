@@ -204,7 +204,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-black/5 dark:bg-black/40 pb-40 md:pb-48">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-white/30 dark:bg-slate-950/60 backdrop-blur-xl border-t border-white/10 dark:border-white/5 pb-40 md:pb-48">
         <div className="max-w-3xl mx-auto space-y-6 md:space-y-10">
           {currentMessages.length === 0 ? (
             <div className="py-24 text-center space-y-6 min-h-[400px] flex flex-col justify-center">
