@@ -17,6 +17,7 @@ interface LandingPageProps {
   descriptiveMode: boolean;
   onReasoningModeChange: (opts: { thinking?: boolean; descriptive?: boolean }) => void;
   userTheme?: UserThemeId;
+  isDark?: boolean;
 }
 
 // Client-side text generator for "Loading" states and non-critical content
@@ -41,25 +42,35 @@ function resolveLandingTheme(theme: UserThemeId | undefined | string | null): Us
   return 'classic'; // new users, "standard", or any invalid value → classic (animation always works)
 }
 
+/* Single soft overlay – low opacity so it blends with base, no visible second band */
 const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: string }> = {
-  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/35 to-blue-500/40 dark:from-cyan-400/25 dark:to-blue-600/30' },
-  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/30 to-violet-600/35 dark:from-indigo-400/35 dark:to-slate-900/50' },
-  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.28),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.22),transparent_40%)]' },
-  terminal: { animationClass: 'animate-theme-terminal-soft', className: 'bg-gradient-to-b from-emerald-500/25 to-green-600/30 dark:from-emerald-500/30 dark:to-emerald-700/35' },
-  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-400/35 to-orange-400/40 dark:from-amber-600/30 dark:to-stone-700/35' },
-  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/30 via-blue-400/25 to-indigo-500/35 dark:from-sky-500/30 dark:to-indigo-600/35' },
-  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/35,via-orange-400/30,to-rose-400/35 dark:from-amber-500/35 dark:to-rose-600/40' },
+  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/20 to-blue-500/22 dark:from-cyan-400/14 dark:to-blue-600/16' },
+  midnight: { animationClass: 'animate-theme-midnight', className: 'bg-gradient-to-br from-indigo-500/18 to-violet-600/20 dark:from-indigo-400/20 dark:to-slate-900/30' },
+  aurora: { animationClass: 'animate-theme-aurora', className: 'bg-[length:200%_200%] bg-[radial-gradient(ellipse_80%_80%_at_50%_50%,rgba(34,197,94,0.16),transparent_50%),radial-gradient(ellipse_60%_60%_at_80%_20%,rgba(6,182,212,0.12),transparent_40%)]' },
+  terminal: { animationClass: 'animate-theme-terminal-soft', className: 'bg-gradient-to-b from-emerald-500/16 to-green-600/18 dark:from-emerald-500/18 dark:to-emerald-700/20' },
+  paper: { animationClass: 'animate-theme-paper', className: 'bg-gradient-to-br from-amber-400/20 to-orange-400/22 dark:from-amber-600/16 dark:to-stone-700/20' },
+  ocean: { animationClass: 'animate-theme-ocean', className: 'bg-[length:200%_100%] bg-gradient-to-r from-sky-400/18 via-blue-400/14 to-indigo-500/20 dark:from-sky-500/18 dark:to-indigo-600/20' },
+  sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/18,via-orange-400/14,to-rose-400/20 dark:from-amber-500/18 dark:to-rose-600/22' },
 };
 
-/** Hero glow: full-bleed radial gradient so no vertical/horizontal cutouts – smooth in all directions */
-const THEME_HERO_GLOW_RADIAL: Record<UserThemeId, string> = {
-  classic: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(34,211,238,0.38), rgba(34,211,238,0.12) 45%, transparent 65%)',
-  midnight: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(139,92,246,0.4), rgba(139,92,246,0.12) 45%, transparent 65%)',
-  aurora: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(52,211,153,0.36), rgba(34,211,238,0.1) 45%, transparent 65%)',
-  terminal: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(16,185,129,0.4), rgba(16,185,129,0.1) 45%, transparent 65%)',
-  paper: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(251,191,36,0.42), rgba(251,191,36,0.12) 45%, transparent 65%)',
-  ocean: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(56,189,248,0.38), rgba(99,102,241,0.1) 45%, transparent 65%)',
-  sunset: 'radial-gradient(ellipse 120% 100% at 50% 42%, rgba(251,146,60,0.4), rgba(251,113,133,0.12) 45%, transparent 65%)',
+/** Hero: one unified gradient (glow + fade) so no separate colour layers or bands */
+const THEME_HERO_GRADIENT: Record<UserThemeId, string> = {
+  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.12) 25%, rgba(34,211,238,0.22) 45%, rgba(34,211,238,0.08) 60%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.5) 100%)',
+  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.1) 25%, rgba(139,92,246,0.2) 45%, rgba(139,92,246,0.06) 60%, rgba(15,23,42,0.4) 80%, rgba(15,23,42,0.7) 100%)',
+  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.1) 25%, rgba(34,211,238,0.18) 45%, rgba(34,211,238,0.06) 60%, rgba(255,255,255,0.2) 80%, rgba(255,255,255,0.45) 100%)',
+  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.1) 25%, rgba(16,185,129,0.2) 45%, rgba(16,185,129,0.06) 60%, rgba(255,255,255,0.22) 80%, rgba(255,255,255,0.48) 100%)',
+  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.12) 25%, rgba(251,191,36,0.22) 45%, rgba(251,191,36,0.06) 60%, rgba(255,255,255,0.28) 80%, rgba(255,255,255,0.52) 100%)',
+  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.1) 25%, rgba(99,102,241,0.18) 45%, rgba(99,102,241,0.06) 60%, rgba(255,255,255,0.22) 80%, rgba(255,255,255,0.48) 100%)',
+  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.1) 25%, rgba(251,113,133,0.18) 45%, rgba(251,113,133,0.06) 60%, rgba(255,255,255,0.25) 80%, rgba(255,255,255,0.5) 100%)',
+};
+const THEME_HERO_GRADIENT_DARK: Record<UserThemeId, string> = {
+  classic: 'linear-gradient(to bottom, transparent 0%, rgba(34,211,238,0.08) 25%, rgba(34,211,238,0.18) 45%, rgba(34,211,238,0.05) 60%, rgba(2,6,23,0.5) 80%, rgba(2,6,23,0.85) 100%)',
+  midnight: 'linear-gradient(to bottom, transparent 0%, rgba(139,92,246,0.08) 25%, rgba(139,92,246,0.16) 45%, rgba(139,92,246,0.04) 60%, rgba(15,23,42,0.6) 80%, rgba(15,23,42,0.95) 100%)',
+  aurora: 'linear-gradient(to bottom, transparent 0%, rgba(52,211,153,0.06) 25%, rgba(34,211,238,0.12) 45%, transparent 60%, rgba(2,6,23,0.5) 80%, rgba(2,6,23,0.9) 100%)',
+  terminal: 'linear-gradient(to bottom, transparent 0%, rgba(16,185,129,0.08) 25%, rgba(16,185,129,0.16) 45%, rgba(16,185,129,0.04) 60%, rgba(13,24,16,0.55) 80%, rgba(10,14,20,0.92) 100%)',
+  paper: 'linear-gradient(to bottom, transparent 0%, rgba(251,191,36,0.08) 25%, rgba(251,191,36,0.14) 45%, rgba(251,191,36,0.04) 60%, rgba(28,25,23,0.5) 80%, rgba(28,25,23,0.88) 100%)',
+  ocean: 'linear-gradient(to bottom, transparent 0%, rgba(56,189,248,0.06) 25%, rgba(99,102,241,0.14) 45%, rgba(99,102,241,0.04) 60%, rgba(12,25,41,0.55) 80%, rgba(12,25,41,0.92) 100%)',
+  sunset: 'linear-gradient(to bottom, transparent 0%, rgba(251,146,60,0.08) 25%, rgba(251,113,133,0.14) 45%, rgba(251,113,133,0.04) 60%, rgba(67,20,7,0.5) 80%, rgba(67,20,7,0.9) 100%)',
 };
 
 /** Hero glow animation style per theme – each theme feels different */
@@ -73,7 +84,7 @@ const THEME_HERO_GLOW_ANIMATION: Record<UserThemeId, string> = {
   sunset: 'animate-hero-glow-warm',
 };
 
-const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme, isDark }) => {
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
@@ -155,17 +166,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
           <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
-            {/* Glow: full viewport width so it escapes max-w-6xl – no vertical seam at content edge */}
-            <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0">
-              <div
-                className={`absolute inset-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
-                style={{ background: THEME_HERO_GLOW_RADIAL[landingTheme] ?? THEME_HERO_GLOW_RADIAL.classic }}
-              />
-            </div>
-            {/* Soft fade into input: full viewport width so no white box cutout, very gradual */}
-            <div aria-hidden className="pointer-events-none absolute left-1/2 -translate-x-1/2 w-screen bottom-0 h-40 md:h-52 z-[1]">
-              <div className="absolute inset-0 bg-gradient-to-t from-white/50 via-white/15 to-transparent dark:from-slate-950/60 dark:via-slate-950/15 dark:to-transparent" />
-            </div>
+            {/* Single hero layer: one gradient (glow + fade) full viewport width – no 3 separate colour bands */}
+            <div
+              aria-hidden
+              className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
+              style={{ background: (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT)[landingTheme] ?? (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT).classic }}
+            />
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">

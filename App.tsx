@@ -518,6 +518,7 @@ const App: React.FC = () => {
           descriptiveMode={descriptiveMode}
           onReasoningModeChange={updateReasoningModes}
           userTheme={userTheme}
+          isDark={effectiveDark}
         />
       );
     }
