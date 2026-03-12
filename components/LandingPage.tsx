@@ -162,8 +162,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                 style={{ background: THEME_HERO_GLOW_RADIAL[landingTheme] ?? THEME_HERO_GLOW_RADIAL.classic }}
               />
             </div>
-            {/* Very smooth fade into input area – tall, gradual gradient */}
-            <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-32 md:h-40 bg-gradient-to-t from-white/90 via-white/50 to-transparent dark:from-slate-950/95 dark:via-slate-950/50 z-[1]" />
+            {/* Soft fade into input: full viewport width so no white box cutout, very gradual */}
+            <div aria-hidden className="pointer-events-none absolute left-1/2 -translate-x-1/2 w-screen bottom-0 h-40 md:h-52 z-[1]">
+              <div className="absolute inset-0 bg-gradient-to-t from-white/50 via-white/15 to-transparent dark:from-slate-950/60 dark:via-slate-950/15 dark:to-transparent" />
+            </div>
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
@@ -188,72 +190,66 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           <div className="h-4 md:h-6 shrink-0" />
 
           <div className="w-full max-w-2xl px-2 relative z-10 opacity-0 animate-slide-in-up" style={{ animationDelay: '350ms', animationFillMode: 'forwards' }}>
-            {/* Guest Chat / Input Area */}
-            <div className="relative group w-full focus-glow rounded-[24px] transition-all duration-300 hover:shadow-xl">
-              <div className="absolute -inset-px rounded-[24px] bg-gradient-to-r from-cyan-500/25 to-blue-600/25 group-hover:from-cyan-500/40 group-hover:to-blue-600/40 transition-colors duration-300" />
-              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-lg backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/70 dark:border-white/10 overflow-hidden transition-shadow duration-300">
-                
-                {/* Result Area (Guest Only) */}
-                {(guestResult || isGuestLoading) && (
-                   <div className="p-4 md:p-6 border-b border-black/5 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 text-left animate-reveal max-h-60 overflow-y-auto custom-scrollbar">
-                      <div className="flex items-center gap-2 mb-2">
-                         <i className="fa-solid fa-robot text-cyan-600"></i>
-                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">{t.guestModeLabel}</span>
-                      </div>
-                      <div className="text-xs md:text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-                         {isGuestLoading ? <MarkovLoader /> : guestResult}
-                      </div>
-                      {guestResult && guestResult.includes("limit") && (
-                         <button onClick={handleSignIn} disabled={isLoggingIn} className="mt-4 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-xl disabled:opacity-50">
-                            {isLoggingIn ? t.signingIn : t.signInFree}
-                         </button>
-                      )}
-                   </div>
-                )}
-
-                <div className="flex items-center pl-2 pr-2 gap-2">
-                    {/* Send leftmost, then Thinking & Descriptive, then input */}
-                    <button
-                      onClick={handleGuestSubmit}
-                      disabled={isGuestLoading || !prompt.trim()}
-                      className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] tap-target flex items-center gap-2 disabled:opacity-50 transition-transform duration-200"
-                    >
-                      <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
-                      {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
-                    </button>
-                    <div className="hidden md:flex items-center gap-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
-                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                          thinkingMode
-                            ? 'bg-slate-900 text-white border-slate-900'
-                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
-                        }`}
-                      >
-                        Thinking
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
-                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                          descriptiveMode
-                            ? 'bg-slate-900 text-white border-slate-900'
-                            : 'bg-white dark:bg-slate-900 text-slate-500 border-slate-200 dark:border-white/10'
-                        }`}
-                      >
-                        Descriptive
-                      </button>
+            {/* Guest Chat / Input Area – minimal search bar: input first, then send */}
+            <div className="w-full flex flex-col gap-3">
+              {/* Result Area (Guest Only) – above the bar when present */}
+              {(guestResult || isGuestLoading) && (
+                 <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm text-left animate-reveal max-h-56 overflow-y-auto custom-scrollbar shadow-sm">
+                    <div className="flex items-center gap-2 mb-2">
+                       <i className="fa-solid fa-robot text-cyan-600" />
+                       <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{t.guestModeLabel}</span>
                     </div>
-                    <input
-                      type="text"
-                      value={prompt}
-                      onChange={(e) => onPromptChange(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
-                      placeholder={user ? t.howHelp : t.tryDemoPlaceholder}
-                      className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
-                    />
-                </div>
+                    <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
+                       {isGuestLoading ? <MarkovLoader /> : guestResult}
+                    </div>
+                    {guestResult && guestResult.includes("limit") && (
+                       <button onClick={handleSignIn} disabled={isLoggingIn} className="mt-4 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-bold uppercase tracking-wider rounded-xl disabled:opacity-50">
+                          {isLoggingIn ? t.signingIn : t.signInFree}
+                       </button>
+                    )}
+                 </div>
+              )}
+
+              {/* Single search-style row: input + send */}
+              <div className="flex items-center gap-2 w-full rounded-2xl border border-slate-200/80 dark:border-white/15 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm focus-within:border-cyan-400/50 dark:focus-within:border-cyan-400/40 focus-within:shadow-md transition-all duration-200 overflow-hidden">
+                <input
+                  type="text"
+                  value={prompt}
+                  onChange={(e) => onPromptChange(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
+                  placeholder={user ? t.howHelp : t.tryDemoPlaceholder}
+                  className="flex-1 min-w-0 px-4 py-3 md:py-3.5 text-sm md:text-base bg-transparent border-none outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-400 font-medium"
+                />
+                <button
+                  onClick={handleGuestSubmit}
+                  disabled={isGuestLoading || !prompt.trim()}
+                  className="shrink-0 m-1.5 w-10 h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center hover:opacity-90 active:scale-95 disabled:opacity-40 transition-all tap-target"
+                  aria-label={user ? t.go : t.demo}
+                >
+                  {isGuestLoading ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-arrow-right text-sm" />}
+                </button>
+              </div>
+
+              {/* Thinking & Descriptive – small toggles below the bar */}
+              <div className="flex items-center justify-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+                    thinkingMode ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  Thinking
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
+                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors ${
+                    descriptiveMode ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  }`}
+                >
+                  Descriptive
+                </button>
               </div>
             </div>
             
