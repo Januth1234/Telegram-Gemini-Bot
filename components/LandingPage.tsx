@@ -3,6 +3,10 @@ import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { translations } from '../translations';
 import { Language, WorkspaceMode, UserAccount, UserThemeId } from '../types';
+import DarkVeil from './backgrounds/DarkVeil';
+import PixelBlast from './backgrounds/PixelBlast';
+import Particles from './backgrounds/Particles';
+import LightRays from './backgrounds/LightRays.tsx';
 
 interface LandingPageProps {
   prompt: string;
@@ -148,11 +152,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-0 transition-all duration-700 ease-out ${themeFx.className} ${themeFx.animationClass}`}
       />
-      {landingTheme === 'terminal' && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
-          <div className="absolute left-0 right-0 h-px bg-emerald-400/30 dark:bg-emerald-400/20 animate-theme-terminal" />
-        </div>
-      )}
       {user && (
         <div className="w-full flex justify-center py-4 px-4 z-[100] opacity-0 animate-slide-in-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
           <button type="button" onClick={() => { window.location.hash = 'chat'; }} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-105 transition-transform tap-target">
@@ -166,12 +165,85 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Hero Section – no clipping: extra padding so logo + glow have room, smooth fade to input */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative overflow-visible">
           <div className="relative pt-12 md:pt-16 pb-8 md:pb-10">
-            {/* Single hero layer: one gradient (glow + fade) full viewport width – no 3 separate colour bands */}
-            <div
-              aria-hidden
-              className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
-              style={{ background: (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT)[landingTheme] ?? (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT).classic }}
-            />
+            {/* Aurora uses DarkVeil shader; Midnight uses Particles; Terminal uses PixelBlast; Sunset uses LightRays; others use CSS gradient hero layer */}
+            {landingTheme === 'aurora' && (
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
+                <DarkVeil
+                  hueShift={-35}
+                  noiseIntensity={0.02}
+                  scanlineIntensity={0}
+                  scanlineFrequency={0}
+                  speed={0.5}
+                  warpAmount={0.08}
+                  resolutionScale={0.9}
+                />
+              </div>
+            )}
+            {landingTheme === 'midnight' && (
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
+                <Particles
+                  particleColors={['#e5e7eb', '#a5b4fc', '#38bdf8']}
+                  particleCount={220}
+                  particleSpread={10}
+                  speed={0.12}
+                  particleBaseSize={105}
+                  moveParticlesOnHover
+                  particleHoverFactor={1.2}
+                  alphaParticles={false}
+                  sizeRandomness={1}
+                  cameraDistance={22}
+                  disableRotation={false}
+                  pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
+                  className="opacity-80"
+                />
+              </div>
+            )}
+            {landingTheme === 'terminal' && (
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
+                <PixelBlast
+                  variant="square"
+                  pixelSize={4}
+                  color={isDark ? '#22c55e' : '#059669'}
+                  patternScale={2}
+                  patternDensity={1}
+                  pixelSizeJitter={0.15}
+                  enableRipples
+                  rippleSpeed={0.4}
+                  rippleThickness={0.12}
+                  rippleIntensityScale={1.6}
+                  liquid={false}
+                  speed={0.55}
+                  edgeFade={0.3}
+                  transparent
+                />
+              </div>
+            )}
+            {landingTheme === 'sunset' && (
+              <div aria-hidden className="pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 overflow-hidden">
+                <LightRays
+                  raysOrigin="top-center"
+                  raysColor={isDark ? '#fed7aa' : '#fed7aa'}
+                  raysSpeed={0.85}
+                  lightSpread={0.7}
+                  rayLength={3.2}
+                  followMouse
+                  mouseInfluence={0.1}
+                  noiseAmount={0.04}
+                  distortion={0.08}
+                  fadeDistance={1}
+                  saturation={1.05}
+                  pulsating
+                  className="opacity-95"
+                />
+              </div>
+            )}
+            {landingTheme !== 'aurora' && landingTheme !== 'midnight' && landingTheme !== 'terminal' && landingTheme !== 'sunset' && (
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-y-0 left-1/2 -translate-x-1/2 w-screen max-w-none z-0 ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'}`}
+                style={{ background: (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT)[landingTheme] ?? (isDark ? THEME_HERO_GRADIENT_DARK : THEME_HERO_GRADIENT).classic }}
+              />
+            )}
             <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
