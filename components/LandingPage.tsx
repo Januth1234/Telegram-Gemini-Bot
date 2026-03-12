@@ -51,15 +51,15 @@ const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: 
   sunset: { animationClass: 'animate-theme-sunset', className: 'bg-[length:200%_100%] bg-gradient-to-r from-amber-400/15,via-orange-400/10,to-rose-400/15 dark:from-amber-500/10 dark:to-rose-500/10' },
 };
 
-/** Hero glow behind logo + greeting: unique gradient per theme */
+/** Hero glow behind logo + greeting: unique gradient per theme, faded at top/bottom for smooth blend */
 const THEME_HERO_GLOW: Record<UserThemeId, string> = {
-  classic: 'bg-gradient-to-b from-cyan-400/25 via-cyan-500/20 to-blue-500/25 dark:from-cyan-400/20 dark:via-cyan-500/15 dark:to-blue-500/20',
-  midnight: 'bg-gradient-to-b from-indigo-400/30 via-violet-500/20 to-slate-700/25 dark:from-indigo-500/25 dark:via-violet-500/20 dark:to-slate-800/30',
-  aurora: 'bg-gradient-to-b from-emerald-400/20 via-cyan-400/25 to-teal-500/20 dark:from-emerald-500/20 dark:via-cyan-500/20 dark:to-teal-600/25',
-  terminal: 'bg-gradient-to-b from-emerald-400/25 via-green-500/20 to-emerald-600/20 dark:from-emerald-500/25 dark:via-green-600/20 dark:to-emerald-700/25',
-  paper: 'bg-gradient-to-b from-amber-300/30 via-orange-300/25 to-amber-400/20 dark:from-amber-600/25 dark:via-orange-600/20 dark:to-amber-700/20',
-  ocean: 'bg-gradient-to-b from-sky-400/25 via-blue-400/25 to-indigo-500/20 dark:from-sky-500/25 dark:via-blue-500/20 dark:to-indigo-600/25',
-  sunset: 'bg-gradient-to-b from-amber-400/25 via-orange-400/25 to-rose-400/25 dark:from-amber-500/25 dark:via-orange-500/20 dark:to-rose-500/25',
+  classic: 'bg-gradient-to-b from-transparent via-cyan-500/25 to-transparent dark:via-cyan-500/20',
+  midnight: 'bg-gradient-to-b from-transparent via-violet-500/25 to-transparent dark:via-violet-500/20',
+  aurora: 'bg-gradient-to-b from-transparent via-cyan-400/25 to-transparent dark:via-emerald-500/20',
+  terminal: 'bg-gradient-to-b from-transparent via-emerald-500/25 to-transparent dark:via-emerald-500/20',
+  paper: 'bg-gradient-to-b from-transparent via-amber-400/30 to-transparent dark:via-amber-600/22',
+  ocean: 'bg-gradient-to-b from-transparent via-blue-400/25 to-transparent dark:via-sky-500/22',
+  sunset: 'bg-gradient-to-b from-transparent via-orange-400/28 to-transparent dark:via-amber-500/22',
 };
 
 /** Hero glow animation style per theme – each theme feels different */
@@ -154,11 +154,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         
         {/* Hero Section - animations only on landing */}
         <section className="w-full flex flex-col items-center gap-8 md:gap-12 relative">
-          {/* Slow glowing background behind logo + greeting – unique gradient + motion per theme */}
-          <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0">
-            <div className={`w-[min(100%,28rem)] h-[18rem] md:h-[22rem] rounded-full blur-3xl ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
-          </div>
-          <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
+          <div className="relative">
+            {/* Slow glowing background behind logo + greeting – fades at edges for smooth transition */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center z-0 overflow-hidden">
+              <div className={`w-[min(100%,32rem)] h-[24rem] md:h-[28rem] rounded-full blur-[80px] ${THEME_HERO_GLOW_ANIMATION[landingTheme] ?? 'animate-hero-glow'} ${THEME_HERO_GLOW[landingTheme] ?? THEME_HERO_GLOW.classic}`} />
+            </div>
+            {/* Soft fade at bottom of hero so transition to input area is smooth */}
+            <div aria-hidden className="pointer-events-none absolute left-0 right-0 bottom-0 h-24 md:h-28 bg-gradient-to-t from-white/80 to-transparent dark:from-slate-950/80 z-[1]" />
+            <div className="flex flex-col items-center gap-6 md:gap-8 relative z-10">
             <div className="w-20 h-20 md:w-32 md:h-32 rounded-[28px] md:rounded-[32px] flex items-center justify-center shadow-xl relative opacity-0 animate-reveal hover:shadow-2xl transition-shadow duration-300" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>
               <div className="w-full h-full rounded-[28px] md:rounded-[32px] animate-hero-float">
                 <img src="/favicon.svg" className="w-full h-full object-cover rounded-[28px] md:rounded-[32px]" alt="Orin AI" />
@@ -176,12 +179,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               </div>
             </div>
           </div>
+          </div>
+
+          {/* Spacer so input bar doesn’t sit right under hero */}
+          <div className="h-4 md:h-6 shrink-0" />
 
           <div className="w-full max-w-2xl px-2 relative z-10 opacity-0 animate-slide-in-up" style={{ animationDelay: '350ms', animationFillMode: 'forwards' }}>
             {/* Guest Chat / Input Area */}
-            <div className="relative group w-full focus-glow rounded-[24px] transition-shadow duration-300 hover:shadow-xl">
-              <div className="absolute -inset-px rounded-[24px] bg-gradient-to-r from-cyan-500/30 to-blue-600/30 group-hover:from-cyan-500/50 group-hover:to-blue-600/50 transition-colors duration-200" />
-              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-xl bg-white/95 dark:bg-slate-900/95 border border-slate-200 dark:border-white/10 overflow-hidden">
+            <div className="relative group w-full focus-glow rounded-[24px] transition-all duration-300 hover:shadow-xl">
+              <div className="absolute -inset-px rounded-[24px] bg-gradient-to-r from-cyan-500/25 to-blue-600/25 group-hover:from-cyan-500/40 group-hover:to-blue-600/40 transition-colors duration-300" />
+              <div className="relative glass-panel p-2 rounded-[24px] flex flex-col shadow-lg backdrop-blur-xl bg-white/70 dark:bg-slate-900/70 border border-slate-200/70 dark:border-white/10 overflow-hidden transition-shadow duration-300">
                 
                 {/* Result Area (Guest Only) */}
                 {(guestResult || isGuestLoading) && (
@@ -201,25 +208,17 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                    </div>
                 )}
 
-                <div className="flex items-center pl-2 gap-2">
-                    <input 
-                    type="text" 
-                    value={prompt} 
-                    onChange={(e) => onPromptChange(e.target.value)} 
-                    onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
-                    placeholder={user ? t.howHelp : t.tryDemoPlaceholder} 
-                    className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
-                    />
-                    <button 
-                    onClick={handleGuestSubmit} 
-                    disabled={isGuestLoading || !prompt.trim()}
-                    className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] tap-target flex items-center gap-2 disabled:opacity-50 m-1 transition-transform duration-200"
+                <div className="flex items-center pl-2 pr-2 gap-2">
+                    {/* Send leftmost, then Thinking & Descriptive, then input */}
+                    <button
+                      onClick={handleGuestSubmit}
+                      disabled={isGuestLoading || !prompt.trim()}
+                      className="shrink-0 bg-slate-900 dark:bg-white text-white dark:text-slate-950 h-10 md:h-16 px-4 md:px-10 rounded-[18px] md:rounded-[20px] font-black text-[10px] md:text-sm uppercase tracking-widest shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-[0.98] tap-target flex items-center gap-2 disabled:opacity-50 transition-transform duration-200"
                     >
-                    <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
-                    {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
+                      <span>{user ? t.go : (isGuestLoading ? "..." : t.demo)}</span>
+                      {!isGuestLoading && <i className="fa-solid fa-arrow-right"></i>}
                     </button>
-                    {/* Reasoning mode toggles (chat only) */}
-                    <div className="hidden md:flex items-center gap-2 mr-2">
+                    <div className="hidden md:flex items-center gap-2 shrink-0">
                       <button
                         type="button"
                         onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
@@ -243,6 +242,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                         Descriptive
                       </button>
                     </div>
+                    <input
+                      type="text"
+                      value={prompt}
+                      onChange={(e) => onPromptChange(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
+                      placeholder={user ? t.howHelp : t.tryDemoPlaceholder}
+                      className="flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-sm md:text-xl px-2 md:px-4 py-3 md:py-5 dark:text-white placeholder:text-slate-400 font-medium min-w-0"
+                    />
                 </div>
               </div>
             </div>
