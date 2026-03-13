@@ -579,7 +579,8 @@ const App: React.FC = () => {
       case 'midnight':
         return (
           <Particles
-            particleColors={effectiveDark ? ['#94a3b8', '#818cf8', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
+            key={`midnight-${effectiveDark}`}
+            particleColors={effectiveDark ? ['#c7d2fe', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
             particleCount={220}
             particleSpread={10}
             speed={0.12}
@@ -591,16 +592,17 @@ const App: React.FC = () => {
             cameraDistance={22}
             disableRotation={false}
             pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-            className={effectiveDark ? 'opacity-90' : 'opacity-95'}
+            className="w-full h-full"
           />
         );
       case 'terminal':
         return (
-          <div className={`w-full h-full [filter:blur(4px)] ${effectiveDark ? 'opacity-90' : ''}`} aria-hidden>
+          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
             <PixelBlast
+              key={`terminal-${effectiveDark}`}
               variant="square"
               pixelSize={4}
-              color={effectiveDark ? '#4ade80' : '#059669'}
+              color={effectiveDark ? '#22c55e' : '#059669'}
               patternScale={2}
               patternDensity={1}
               pixelSizeJitter={0.15}
@@ -617,12 +619,13 @@ const App: React.FC = () => {
         );
       case 'ocean':
         return (
-          <div className={`w-full h-full [filter:blur(4px)] ${effectiveDark ? 'opacity-90' : ''}`} aria-hidden>
+          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
             <Silk
+              key={`ocean-${effectiveDark}`}
               speed={2.8}
               scale={1}
-              color={effectiveDark ? '#38bdf8' : '#22d3ee'}
-              noiseIntensity={effectiveDark ? 0.6 : 0.7}
+              color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
+              noiseIntensity={0.7}
               rotation={0.1}
               dprMax={1}
             />
@@ -632,18 +635,18 @@ const App: React.FC = () => {
         return (
           <LightRays
             raysOrigin="top-center"
-            raysColor={effectiveDark ? '#fed7aa' : '#fb923c'}
+            raysColor={effectiveDark ? '#fed7aa' : '#ea580c'}
             raysSpeed={0.85}
-            lightSpread={0.7}
-            rayLength={3.2}
+            lightSpread={effectiveDark ? 0.7 : 0.8}
+            rayLength={effectiveDark ? 3.2 : 3.6}
             followMouse
             mouseInfluence={0.1}
             noiseAmount={0.04}
             distortion={0.08}
             fadeDistance={1}
-            saturation={effectiveDark ? 1.05 : 1.1}
+            saturation={effectiveDark ? 1.05 : 1.2}
             pulsating
-            className={effectiveDark ? 'opacity-95' : 'opacity-90'}
+            className={effectiveDark ? 'opacity-95' : 'opacity-100'}
           />
         );
       case 'paper':
