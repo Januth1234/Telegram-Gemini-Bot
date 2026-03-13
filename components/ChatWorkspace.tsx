@@ -346,9 +346,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                       placeholder={isPrivate ? "Private (not saved)..." : "Ask Orin AI..."}
                       className={`flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-base py-2.5 px-2 font-medium min-w-0 ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                      />
-                     {/* Thinking & Descriptive in input bar (chat only), Claude-style */}
+                     {/* Thinking & Descriptive in input bar (chat only), visible on all screen sizes */}
                      {activeTab === 'chat' && (
-                       <div className="hidden sm:flex items-center gap-1.5 shrink-0">
+                       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
                          <button
                            type="button"
                            onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}

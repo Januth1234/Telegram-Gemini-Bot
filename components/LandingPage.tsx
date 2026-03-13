@@ -42,16 +42,16 @@ function resolveLandingTheme(theme: UserThemeId | undefined | string | null): Us
   return 'classic'; // new users, "standard", or any invalid value → classic (animation always works)
 }
 
-/* Refined overlay: soft tint per theme, blends with base.
- * For shader-driven themes we keep this extremely subtle so the shader is what you see. */
+/* No hero gradients: shaders (from App) are the only hero backgrounds.
+ * Overlay is minimal/none for shader themes; classic uses base themeBg only. */
 const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: string }> = {
-  classic: { animationClass: 'animate-theme-classic', className: 'bg-gradient-to-br from-cyan-400/18 to-blue-500/20 dark:from-cyan-400/12 dark:to-blue-600/14' },
-  midnight: { animationClass: 'animate-theme-midnight', className: '' },
-  aurora: { animationClass: 'animate-theme-aurora', className: '' },
-  terminal: { animationClass: 'animate-theme-terminal-soft', className: '' },
-  paper: { animationClass: 'animate-theme-paper', className: '' },
-  ocean: { animationClass: 'animate-theme-ocean', className: '' },
-  sunset: { animationClass: 'animate-theme-sunset', className: '' },
+  classic: { animationClass: '', className: '' },
+  midnight: { animationClass: '', className: '' },
+  aurora: { animationClass: '', className: '' },
+  terminal: { animationClass: '', className: '' },
+  paper: { animationClass: '', className: '' },
+  ocean: { animationClass: '', className: '' },
+  sunset: { animationClass: '', className: '' },
 };
 
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme, isDark }) => {
@@ -117,6 +117,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
       <div
         aria-hidden
         className={`pointer-events-none absolute inset-0 z-0 transition-all duration-700 ease-out ${themeFx.className} ${themeFx.animationClass}`}
+      />
+      {/* Smooth fade from theme into next sections so scroll doesn’t feel like a jump */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed bottom-0 left-0 right-0 z-[1] h-[45vh] bg-gradient-to-t from-slate-50/95 to-transparent dark:from-slate-950/95 dark:to-transparent transition-colors duration-500"
       />
       {user && (
         <div className="w-full flex justify-center py-4 px-4 z-[100] opacity-0 animate-slide-in-up" style={{ animationDelay: '0ms', animationFillMode: 'forwards' }}>

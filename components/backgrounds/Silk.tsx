@@ -125,6 +125,8 @@ export interface SilkProps {
   color?: string;
   noiseIntensity?: number;
   rotation?: number;
+  /** Max device pixel ratio (default 1 = lower GPU load) */
+  dprMax?: number;
 }
 
 const Silk: React.FC<SilkProps> = ({
@@ -133,6 +135,7 @@ const Silk: React.FC<SilkProps> = ({
   color = '#0ea5e9',
   noiseIntensity = 1.5,
   rotation = 0,
+  dprMax = 1,
 }) => {
   const meshRef = useRef<Mesh | null>(null);
 
@@ -149,7 +152,7 @@ const Silk: React.FC<SilkProps> = ({
   );
 
   return (
-    <Canvas dpr={[1, 2]} frameloop="always" className="w-full h-full">
+    <Canvas dpr={[1, dprMax]} frameloop="always" className="w-full h-full">
       <SilkPlane ref={meshRef} uniforms={uniforms} />
     </Canvas>
   );
