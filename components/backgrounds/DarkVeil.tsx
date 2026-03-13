@@ -103,9 +103,10 @@ const DarkVeil: React.FC<DarkVeilProps> = ({
     const renderer = new Renderer({
       dpr: Math.min(window.devicePixelRatio, 2),
       canvas,
+      alpha: true,
     });
-
     const { gl } = renderer;
+    gl.clearColor(0, 0, 0, 0);
     const geometry = new Triangle(gl);
 
     const program = new Program(gl, {

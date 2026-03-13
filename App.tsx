@@ -564,20 +564,22 @@ const App: React.FC = () => {
     switch (userTheme) {
       case 'aurora':
         return (
-          <DarkVeil
-            hueShift={effectiveDark ? 135 : 160}
-            noiseIntensity={effectiveDark ? 0.012 : 0.008}
-            scanlineIntensity={0}
-            scanlineFrequency={0}
-            speed={0.45}
-            warpAmount={0.06}
-            resolutionScale={0.9}
-          />
+          <div className={effectiveDark ? 'w-full h-full opacity-[0.92]' : 'w-full h-full'}>
+            <DarkVeil
+              hueShift={effectiveDark ? 135 : 160}
+              noiseIntensity={effectiveDark ? 0.012 : 0.008}
+              scanlineIntensity={0}
+              scanlineFrequency={0}
+              speed={0.45}
+              warpAmount={0.06}
+              resolutionScale={0.9}
+            />
+          </div>
         );
       case 'midnight':
         return (
           <Particles
-            particleColors={effectiveDark ? ['#e5e7eb', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
+            particleColors={effectiveDark ? ['#94a3b8', '#818cf8', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
             particleCount={220}
             particleSpread={10}
             speed={0.12}
@@ -589,16 +591,16 @@ const App: React.FC = () => {
             cameraDistance={22}
             disableRotation={false}
             pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-            className={effectiveDark ? 'opacity-80' : 'opacity-90'}
+            className={effectiveDark ? 'opacity-90' : 'opacity-95'}
           />
         );
       case 'terminal':
         return (
-          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+          <div className={`w-full h-full [filter:blur(4px)] ${effectiveDark ? 'opacity-90' : ''}`} aria-hidden>
             <PixelBlast
               variant="square"
               pixelSize={4}
-              color={effectiveDark ? '#22c55e' : '#059669'}
+              color={effectiveDark ? '#4ade80' : '#059669'}
               patternScale={2}
               patternDensity={1}
               pixelSizeJitter={0.15}
@@ -615,12 +617,12 @@ const App: React.FC = () => {
         );
       case 'ocean':
         return (
-          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+          <div className={`w-full h-full [filter:blur(4px)] ${effectiveDark ? 'opacity-90' : ''}`} aria-hidden>
             <Silk
               speed={2.8}
               scale={1}
-              color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
-              noiseIntensity={0.7}
+              color={effectiveDark ? '#38bdf8' : '#22d3ee'}
+              noiseIntensity={effectiveDark ? 0.6 : 0.7}
               rotation={0.1}
               dprMax={1}
             />
@@ -646,16 +648,18 @@ const App: React.FC = () => {
         );
       case 'paper':
         return (
-          <Beams
-            beamWidth={2}
-            beamHeight={18}
-            beamNumber={16}
-            lightColor={effectiveDark ? '#fed7aa' : '#f97316'}
-            speed={2}
-            noiseIntensity={1.5}
-            scale={0.22}
-            rotation={20}
-          />
+          <div className={effectiveDark ? 'w-full h-full opacity-90' : 'w-full h-full'}>
+            <Beams
+              beamWidth={2}
+              beamHeight={18}
+              beamNumber={16}
+              lightColor={effectiveDark ? '#fdba74' : '#f97316'}
+              speed={2}
+              noiseIntensity={1.5}
+              scale={0.22}
+              rotation={20}
+            />
+          </div>
         );
       default:
         return null;
@@ -665,9 +669,16 @@ const App: React.FC = () => {
   const rootBgClass = themeBg;
 
   return (
-    <div className={`w-screen h-[100dvh] flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${rootBgClass} overflow-hidden`} style={{ height: 'calc(var(--vh, 1vh) * 100)' }}>
+    <div
+      className={`flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${rootBgClass} overflow-hidden`}
+      style={{ minWidth: '100vw', width: '100%', height: 'calc(var(--vh, 1vh) * 100)' }}
+    >
       {view !== 'admin-portal' && (
-        <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
+          style={{ minWidth: '100%', minHeight: '100%' }}
+        >
           {view === 'landing' ? (
             renderLandingBackground()
           ) : (
