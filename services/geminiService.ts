@@ -308,7 +308,7 @@ EXPLANATION STYLE:
     screenshotBase64?: string;
     mimeType?: string;
     /** Full conversation history for multi-turn (user + model + function_response). */
-    contents?: Array<{ role: 'user' | 'model'; parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string }; functionResponse?: { name: string; response: Record<string, unknown>; parts?: Array<{ inlineData?: { data: string; mimeType: string } }> } }> };
+    contents?: Array<{ role: 'user' | 'model'; parts: any[] }>;
   }): Promise<{ text: string; functionCalls: Array<{ name: string; args: Record<string, unknown> }>; safetyDecisions: Array<{ explanation?: string; decision?: string }> }> {
     const plan = this.currentUser?.plan?.toLowerCase() ?? '';
     if (plan !== 'pro' && plan !== 'pro_yearly') {
