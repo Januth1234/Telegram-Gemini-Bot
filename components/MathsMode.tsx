@@ -966,39 +966,43 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                 )}
 
                 {/* Multi-line equation fields - only mount after script has loaded to avoid "Params are not set" */}
-                {inputMode === 'math' && activeCat !== 'Matrix' && (mathLiveReady ? (
-                  <div className="w-full space-y-2">
-                    {Array.from({ length: equationCount }, (_, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <MathFieldTag
-                          ref={(el: any) => { equationRefs.current[i] = el; }}
-                          onFocus={() => { focusedMathFieldRef.current = equationRefs.current[i]; }}
-                          className="flex-1 text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none min-h-[56px] rounded-lg border border-slate-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-400"
-                          style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' } as React.CSSProperties}
-                        />
-                        {equationCount > 1 && i === equationCount - 1 ? (
-                          <button
-                            type="button"
-                            onClick={() => setEquationCount(c => Math.max(1, c - 1))}
-                            className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center"
-                            title="Remove equation"
-                          >
-                            <i className="fa-solid fa-minus text-[10px]" />
-                          </button>
-                        ) : null}
-                      </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setEquationCount(c => c + 1)}
-                      className="w-full py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
-                    >
-                      <i className="fa-solid fa-plus" /> Add equation
-                    </button>
-                  </div>
-                ) : inputMode === 'math' && activeCat !== 'Matrix' ? (
-                  <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm">Loading math input…</div>
-                ) : null}
+                {inputMode === 'math' && activeCat !== 'Matrix' && (
+                  mathLiveReady ? (
+                    <div className="w-full space-y-2">
+                      {Array.from({ length: equationCount }, (_, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <MathFieldTag
+                            ref={(el: any) => { equationRefs.current[i] = el; }}
+                            onFocus={() => { focusedMathFieldRef.current = equationRefs.current[i]; }}
+                            className="flex-1 text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none min-h-[56px] rounded-lg border border-slate-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-400"
+                            style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' } as React.CSSProperties}
+                          />
+                          {equationCount > 1 && i === equationCount - 1 ? (
+                            <button
+                              type="button"
+                              onClick={() => setEquationCount(c => Math.max(1, c - 1))}
+                              className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center"
+                              title="Remove equation"
+                            >
+                              <i className="fa-solid fa-minus text-[10px]" />
+                            </button>
+                          ) : null}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => setEquationCount(c => c + 1)}
+                        className="w-full py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
+                      >
+                        <i className="fa-solid fa-plus" /> Add equation
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm">
+                      Loading math input…
+                    </div>
+                  )
+                )}
 
                 {inputMode === 'text' && (
                   <textarea
