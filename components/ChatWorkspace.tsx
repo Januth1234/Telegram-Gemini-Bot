@@ -1,13 +1,34 @@
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { geminiService } from '../services/geminiService';
-import { getMarkovSuggestions } from '../services/markovService';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { geminiService, AppError } from '../services/geminiService';
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  const norm = Math.sqrt(na) * Math.sqrt(nb);
+  return norm === 0 ? 0 : dot / norm;
+}
+import {
+  buildMarkovModel,
+  generateSuggestions,
+  serializeMarkovModel,
+  deserializeMarkovModel,
+  isMarkovCacheValid,
+  type MarkovModel,
+} from '../services/markovService';
+import { cacheService, CacheKey } from '../services/cacheService';
 import { ChatMessage, Language, WorkspaceMode, Conversation } from '../types';
 import { translations } from '../translations';
 import MathsMode from './MathsMode';
 import VoiceAssistant from './VoiceAssistant';
 import LiveVisionMode from './LiveVisionMode';
 import FeatureCreate from './FeatureCreate';
+import { detectGraphIntent } from '../services/graphIntentService';
 
 interface ChatWorkspaceProps {
   onClose: () => void;
@@ -51,6 +72,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [localInput, setLocalInput] = useState(initialPrompt);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [semanticOrder, setSemanticOrder] = useState<string[] | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchDebounceRef = useRef<number | null>(null);
   const [contextTime, setContextTime] = useState(() =>
     new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'full', timeStyle: 'short' })
   );
@@ -64,22 +91,116 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   // Active messages based on mode
   const currentMessages = isPrivate ? privateMessages : messages;
 
-  // Collect all user message texts from conversations for Markov suggestions
-  const userMessageTexts = useMemo(() => {
-    const out: string[] = [];
-    for (const c of conversations) {
-      for (const m of c.messages || []) {
-        if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) out.push(m.content.trim());
-      }
-    }
-    return out;
-  }, [conversations]);
+  // Markov: ref-based model, rebuild only when user message count changes; cache in localStorage for instant load
+  const MARKOV_MAX_MESSAGES = 150;
+  const markovModelRef = useRef<MarkovModel | null>(null);
+  const prevMarkovMessageCountRef = useRef(0);
+  const recentSuggestionsRef = useRef<Set<string>>(new Set());
+  const RECENT_SUGGESTIONS_MAX = 12;
 
-  // Markov chain suggestions (blends your past messages with seed phrases for quick one-tap messages)
   useEffect(() => {
     if (activeTab !== 'chat' && activeTab !== 'translator') return;
-    setSuggestions(getMarkovSuggestions(userMessageTexts, 3));
-  }, [activeTab, userMessageTexts]);
+
+    const byTime = [...conversations].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    const texts: string[] = [];
+    const timestamps: number[] = [];
+    for (const c of byTime) {
+      if (texts.length >= MARKOV_MAX_MESSAGES) break;
+      for (const m of c.messages || []) {
+        if (texts.length >= MARKOV_MAX_MESSAGES) break;
+        if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
+          texts.push(m.content.trim());
+          timestamps.push(new Date(m.timestamp).getTime());
+        }
+      }
+    }
+    const currentCount = texts.length;
+
+    if (currentCount !== prevMarkovMessageCountRef.current) {
+      prevMarkovMessageCountRef.current = currentCount;
+      const useCache = currentCount > 0;
+      let loaded = false;
+      if (useCache) {
+        const cached = cacheService.get<unknown>(CacheKey.USER_MARKOV, null);
+        const parsed = cached ? deserializeMarkovModel(cached) : null;
+        const withBuiltAt = cached && typeof cached === 'object' && 'builtAt' in cached ? (cached as { builtAt: number }) : null;
+        if (parsed && withBuiltAt && isMarkovCacheValid(withBuiltAt)) {
+          markovModelRef.current = parsed;
+          loaded = true;
+        }
+      }
+      if (!loaded) {
+        const model = buildMarkovModel(texts, { timestamps, mode: activeTab });
+        markovModelRef.current = model;
+        if (currentCount > 0) {
+          try {
+            cacheService.set(CacheKey.USER_MARKOV, serializeMarkovModel(model));
+          } catch {
+            // quota or private mode
+          }
+        }
+      }
+    }
+
+    const model = markovModelRef.current;
+    if (model) {
+      const exclude = recentSuggestionsRef.current;
+      const next = generateSuggestions(model, 3, exclude);
+      setSuggestions(next);
+      next.forEach(s => exclude.add(s));
+      const arr = [...exclude];
+      if (arr.length > RECENT_SUGGESTIONS_MAX) {
+        recentSuggestionsRef.current = new Set(arr.slice(-RECENT_SUGGESTIONS_MAX));
+      }
+    } else {
+      setSuggestions([]);
+    }
+  }, [activeTab, conversations]);
+
+  // Semantic search: embed query and sort conversations by similarity.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSemanticOrder(null);
+      return;
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const [queryVec] = await geminiService.embedText([q]);
+        if (!queryVec?.length) {
+          setSemanticOrder(null);
+          return;
+        }
+        const withEmbedding = conversations.filter((c): c is Conversation & { embedding: number[] } => Array.isArray(c.embedding) && c.embedding.length > 0);
+        const scored = withEmbedding.map((c) => ({ id: c.id, score: cosineSimilarity(queryVec, c.embedding) }));
+        scored.sort((a, b) => b.score - a.score);
+        const order = scored.map((x) => x.id);
+        const withoutEmbedding = conversations.filter((c) => !order.includes(c.id));
+        setSemanticOrder([...order, ...withoutEmbedding.map((c) => c.id)]);
+      } catch {
+        setSemanticOrder(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery, conversations]);
+
+  // One-shot auto-submit when landing transitions into a workspace with an initial prompt.
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!autoSubmit || autoSubmittedRef.current) return;
+    if (!localInput.trim()) return;
+    autoSubmittedRef.current = true;
+    // Fire and forget; handleSend will clear input and propagate change upward.
+    void handleSend(localInput);
+  }, [autoSubmit, localInput, handleSend]);
 
   useEffect(() => {
     setActiveTab(initialMode);
@@ -127,6 +248,21 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     const fileToUse = overrideFile || selectedFile;
 
     if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
+
+    // Detect graph intent from any mode and route into Maths when needed.
+    if (text.trim()) {
+      const graphDef = detectGraphIntent(text, activeTab);
+      if (graphDef) {
+        try {
+          if (typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.setItem('pendingGraphExpression', graphDef.expressionLatex || '');
+          }
+        } catch {
+          // Ignore storage errors; graphing is a best-effort enhancement.
+        }
+        onModeSwitch?.('maths');
+      }
+    }
     
     abortControllerRef.current = new AbortController();
     setChatError(null);
@@ -182,15 +318,24 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') return;
-      const msg = e instanceof Error ? e.message : String(e);
-      setChatError(msg || 'Something went wrong. Try again.');
-      alert(msg || 'Something went wrong. Try again.');
+      const appErr = e as AppError;
+      if (appErr?.type === 'plan_required' || appErr?.type === 'limit_reached') {
+        setChatError(null);
+        setUpgradeModalMessage(appErr.type === 'plan_required'
+          ? 'This feature requires a Basic or Pro plan.'
+          : "You've reached your plan limit. Upgrade for more.");
+        setShowUpgradeModal(true);
+      } else {
+        const msg = e instanceof Error ? e.message : String(e);
+        setChatError(msg || 'Something went wrong. Try again.');
+        alert(msg || 'Something went wrong. Try again.');
+      }
     } finally { 
        setIsTyping(false); 
        stopProgress(); 
        setSelectedFile(null);
     }
-  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, thinkingMode, descriptiveMode]);
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, thinkingMode, descriptiveMode, onModeSwitch, lang, onUpdateTitle, setMessages]);
 
   const togglePrivate = () => {
     setIsPrivate(prev => !prev);
@@ -249,6 +394,28 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   };
 
   return (
+    <>
+    {showUpgradeModal && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 animate-fade" onClick={() => setShowUpgradeModal(false)}>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-white/10" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+              <i className="fa-solid fa-crown text-cyan-500 text-xl" aria-hidden />
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Upgrade to continue</h3>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
+          <div className="flex gap-3">
+            <a href="#pricing" onClick={(e) => { e.preventDefault(); setShowUpgradeModal(false); window.location.hash = '#pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-cyan-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-cyan-500 transition-colors">
+              View plans
+            </a>
+            <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="flex h-full w-full bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden relative font-sans">
       
       {/* Sidebar Overlay */}
@@ -265,8 +432,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                {isPrivate ? 'Turn Off Private' : 'Private Mode'}
             </button>
         </div>
+        <div className="px-2 pb-2 shrink-0">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by meaning..."
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 outline-none"
+              aria-label="Semantic search conversations"
+            />
+            {isSearching && <p className="text-[9px] text-slate-400 mt-1">Searching...</p>}
+            {searchQuery.trim() && semanticOrder && !isSearching && <p className="text-[9px] text-cyan-600 dark:text-cyan-400 mt-1">Sorted by relevance</p>}
+        </div>
         <div className="overflow-y-auto flex-1 min-h-0 p-2">
-            {conversations.map(c => (
+            {(semanticOrder ? semanticOrder.map((id) => conversations.find((c) => c.id === id)).filter(Boolean) as Conversation[] : [...conversations].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())).map(c => (
                 <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-cyan-50 dark:bg-cyan-900/20' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                     <button 
                         onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 
@@ -298,12 +477,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={togglePrivate}
-              title={isPrivate ? 'Private (tap off)' : 'Public (tap for Private)'}
+              title={isPrivate ? 'Private — messages not saved (tap to turn off)' : 'Public (tap for Private)'}
               aria-label={isPrivate ? 'Turn off private' : 'Private mode'}
-              className={`p-2 md:px-3 md:py-2 rounded-xl border flex items-center gap-2 ${isPrivate ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
+              className={`p-2 md:px-3 md:py-2 rounded-xl border flex items-center gap-2 transition-all ${isPrivate ? 'bg-amber-600 text-white border-amber-600 ring-2 ring-amber-400/60 shadow-md' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}
             >
               <i className={`fa-solid ${isPrivate ? 'fa-user-secret' : 'fa-eye'}`} />
-              <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private' : 'Public'}</span>
+              <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private · Not saved' : 'Public'}</span>
             </button>
           </div>
         </header>
@@ -314,8 +493,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         {activeTab !== 'studio' && activeTab !== 'vision' && activeTab !== 'voice' && activeTab !== 'maths' && (
           <div className="fixed bottom-0 left-0 right-0 w-full p-2 md:p-8 pointer-events-none z-[100] safe-pb mb-0">
                <div className="max-w-3xl mx-auto pointer-events-auto relative">
+                  {isPrivate && (
+                    <div className="absolute -top-12 left-0 right-0 flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500/15 dark:bg-amber-500/20 border border-amber-500/40 text-amber-800 dark:text-amber-200 text-[10px] font-bold uppercase tracking-wider">
+                      <i className="fa-solid fa-lock" aria-hidden />
+                      <span>Private chat — messages are not saved</span>
+                    </div>
+                  )}
                   {chatError && (
-                    <div className="absolute -top-14 left-0 right-0 flex items-center justify-between gap-2 px-4 py-2 rounded-xl bg-red-500/15 dark:bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-300 text-xs font-medium animate-reveal">
+                    <div className={`absolute left-0 right-0 flex items-center justify-between gap-2 px-4 py-2 rounded-xl bg-red-500/15 dark:bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-300 text-xs font-medium animate-reveal ${isPrivate ? '-top-24' : '-top-14'}`}>
                       <span>{chatError}</span>
                       <button type="button" onClick={() => setChatError(null)} className="shrink-0 p-1 rounded hover:bg-red-500/20" aria-label="Dismiss"><i className="fa-solid fa-xmark" /></button>
                     </div>
@@ -336,15 +521,38 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      </div>
                   )}
 
-                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex items-center gap-2 backdrop-blur-xl ${isPrivate ? 'bg-slate-900/70 border-slate-600/50' : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/10'}`}>
-                     <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach"><i className="fa-solid fa-paperclip" /></button>
+                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 backdrop-blur-xl ${isPrivate ? 'bg-slate-900/70 border-slate-600/50' : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/10'}`}>
+                     <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach file or image"><i className="fa-solid fa-paperclip" /></button>
+                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf,.txt,application/pdf,text/plain" onChange={(e) => {
+                       const file = e.target.files?.[0];
+                       if (!file) return;
+                       const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20MB for PDFs/documents
+                       const isDoc = file.type === 'application/pdf' || file.type === 'text/plain' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.txt');
+                       if (isDoc && file.size > MAX_DOCUMENT_BYTES) {
+                         setChatError('File too large. PDFs and documents must be under 20MB.');
+                         e.target.value = '';
+                         return;
+                       }
+                       setChatError(null);
+                       const r = new FileReader();
+                       r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'text/plain'), name: file.name });
+                       r.readAsDataURL(file);
+                       e.target.value = '';
+                     }} />
+                     {selectedFile && (
+                       <span className="flex items-center gap-1.5 shrink-0 max-w-[140px] md:max-w-[200px] px-2 py-1 rounded-lg bg-slate-200/80 dark:bg-slate-700/80 text-slate-700 dark:text-slate-200 text-[10px] font-bold truncate" title={selectedFile.name}>
+                         <i className="fa-solid fa-file-lines text-cyan-500 shrink-0" />
+                         <span className="truncate">{selectedFile.name}</span>
+                         <button type="button" onClick={() => setSelectedFile(null)} className="shrink-0 p-0.5 rounded hover:bg-slate-300 dark:hover:bg-slate-600" aria-label="Remove file"><i className="fa-solid fa-xmark text-[8px]" /></button>
+                       </span>
+                     )}
                      <input 
                       ref={inputRef} 
                       value={localInput} 
                       onChange={e => { setLocalInput(e.target.value); onInputChange(e.target.value); }} 
                       onKeyDown={e => e.key === 'Enter' && !isTyping && handleSend()}
                       placeholder={isPrivate ? "Private (not saved)..." : "Ask Orin AI..."}
-                      className={`flex-1 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-base py-2.5 px-2 font-medium min-w-0 ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
+                      className={`flex-1 min-w-0 bg-transparent border-none outline-none focus:ring-0 focus:outline-none text-base py-2.5 px-2 font-medium ${isPrivate ? 'text-white placeholder:text-slate-500' : 'text-slate-900 dark:text-white placeholder:text-slate-400'}`} 
                      />
                      {/* Thinking & Descriptive in input bar (chat only), visible on all screen sizes */}
                      {activeTab === 'chat' && (
@@ -383,14 +591,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      >
                        {isTyping ? <i className="fa-solid fa-circle-notch fa-spin text-sm" /> : <i className="fa-solid fa-arrow-up text-sm" />}
                      </button>
-                     <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const r = new FileReader();
-                          r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
-                          r.readAsDataURL(file);
-                        }
-                     }} />
                   </div>
                   <p className="text-[10px] text-slate-400 dark:text-slate-500 text-center mt-2 select-none" aria-hidden>{contextTime} Sri Lanka · Orin AI</p>
                </div>
@@ -398,6 +598,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         )}
       </div>
     </div>
+    </>
   );
 };
 

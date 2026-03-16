@@ -1,6 +1,5 @@
-
 import { geminiService } from './geminiService';
-import { APP_CONFIG } from '../config';
+import { githubReleasesService } from './githubReleasesService';
 
 export interface CodeSnapshot {
   version: string;
@@ -11,50 +10,14 @@ export interface CodeSnapshot {
 }
 
 export class CodeTrackerService {
-  private cache: CodeSnapshot[] | null = null;
-
+  /** Get release history from GitHub. Use githubReleasesService for cache control (e.g. refresh). */
   async getHistory(): Promise<CodeSnapshot[]> {
-    if (this.cache) return this.cache;
-
-    try {
-      const response = await fetch(`https://api.github.com/repos/${APP_CONFIG.githubRepo}/releases`);
-      if (!response.ok) throw new Error("GitHub API Protocol Unreachable");
-      
-      const data = await response.json();
-      
-      if (!Array.isArray(data)) return [];
-
-      const history = data.map((rel: any) => ({
-        version: rel.tag_name.replace('v', ''),
-        date: new Date(rel.published_at).toLocaleDateString('en-US', {
-          month: 'long',
-          day: 'numeric',
-          year: 'numeric'
-        }),
-        features: this.extractFeatures(rel.body),
-        body: rel.body || "No technical documentation found for this build.",
-        htmlUrl: rel.html_url
-      }));
-
-      this.cache = history;
-      return history;
-    } catch {
-      return [];
-    }
+    return githubReleasesService.getReleases(false);
   }
 
-  private extractFeatures(body: string): string[] {
-    if (!body) return ["System stability synchronization", "Neural protocol refinement"];
-    
-    // Improved regex to capture technical bullet points and highlights
-    const lines = body.split('\n');
-    const features = lines
-      .filter(line => /^\s*[-*+]\s+/.test(line) || /^\s*[0-9]+\.\s+/.test(line) || /^\*\*[^*]+\*\*/.test(line))
-      .map(line => line.replace(/^\s*[-*+]\s+/, '').replace(/^\s*[0-9]+\.\s+/, '').replace(/\*\*/g, '').trim())
-      .filter(line => line.length > 3 && line.length < 100)
-      .slice(0, 6);
-    
-    return features.length > 0 ? features : ["Verified production artifact", "Architecture synchronization"];
+  /** Clear cached GitHub releases so next getHistory() fetches fresh data. */
+  invalidateCache(): void {
+    githubReleasesService.invalidateCache();
   }
 
   async generateReleaseNotes(version: string): Promise<string> {
@@ -66,7 +29,8 @@ export class CodeTrackerService {
     Log: ${snapshot.body}`;
 
     try {
-      const { text } = await geminiService.chat(prompt);
+      // Internal summary generation should not consume the user's daily quota.
+      const { text } = await geminiService.chat(prompt, { internal: true });
       return text || "Summary generation protocol failed.";
     } catch {
       return `Build ${version} focuses on critical path stability and synchronized neural workspace logic.`;

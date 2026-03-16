@@ -1,11 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
 import LandingPage from './components/LandingPage';
-import DarkVeil from './components/backgrounds/DarkVeil';
-import PixelBlast from './components/backgrounds/PixelBlast';
-import Particles from './components/backgrounds/Particles';
-import LightRays from './components/backgrounds/LightRays';
-import Silk from './components/backgrounds/Silk.tsx';
-import Beams from './components/backgrounds/Beams.tsx';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
@@ -24,8 +18,17 @@ const CreatorPage = lazy(() => import('./components/CreatorPage').then(m => ({ d
 const PricingPage = lazy(() => import('./components/PricingPage').then(m => ({ default: m.default })));
 const DownloadsPage = lazy(() => import('./components/DownloadsPage').then(m => ({ default: m.default })));
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m => ({ default: m.default })));
+const AgentWorkspace = lazy(() => import('./components/AgentWorkspace').then(m => ({ default: m.default })));
 const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
 const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
+
+// Lazy-load heavy WebGL/Three.js background shaders so only the active theme's canvas loads
+const DarkVeil = lazy(() => import('./components/backgrounds/DarkVeil').then(m => ({ default: m.default })));
+const PixelBlast = lazy(() => import('./components/backgrounds/PixelBlast').then(m => ({ default: m.default })));
+const Particles = lazy(() => import('./components/backgrounds/Particles').then(m => ({ default: m.default })));
+const LightRays = lazy(() => import('./components/backgrounds/LightRays').then(m => ({ default: m.default })));
+const Silk = lazy(() => import('./components/backgrounds/Silk').then(m => ({ default: m.default })));
+const Beams = lazy(() => import('./components/backgrounds/Beams').then(m => ({ default: m.default })));
 
 const PageFallback = () => (
   <div className="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 dark:bg-slate-950">
@@ -34,10 +37,39 @@ const PageFallback = () => (
   </div>
 );
 
-const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat' };
-const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = { art: 'studio', camera: 'vision', math: 'maths', chat: 'chat', landing: 'chat', voice: 'voice', account: 'chat', privacy: 'chat', terms: 'chat', releases: 'chat', logic: 'chat', creator: 'chat', pricing: 'chat', downloads: 'chat', 'admin-portal': 'chat', 'telegram-bot': 'chat' };
-const WORKSPACE_VIEWS: AppView[] = ['chat', 'art', 'camera', 'voice', 'math'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
+/** Build searchable text for a conversation (title + user messages) for embedding. Max ~4k chars for context. */
+function conversationToSearchText(c: Conversation): string {
+  const parts = [c.title ?? 'Chat'];
+  for (const m of (c.messages ?? [])) {
+    if (m.role === 'user' && typeof m.content === 'string') parts.push(m.content);
+  }
+  const text = parts.join('\n');
+  return text.length > 4000 ? text.slice(0, 4000) : text;
+}
+
+const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat', agent: 'agent' };
+// Only workspace views map to workspace modes; static pages shouldn't force-chat.
+const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
+  art: 'studio',
+  camera: 'vision',
+  math: 'maths',
+  chat: 'chat',
+  voice: 'voice',
+  agent: 'agent',
+  landing: 'chat', // landing CTA opens chat by default
+  account: 'chat',
+  privacy: 'chat',
+  terms: 'chat',
+  releases: 'chat',
+  logic: 'chat',
+  creator: 'chat',
+  pricing: 'chat',
+  downloads: 'chat',
+  'admin-portal': 'chat',
+  'telegram-bot': 'chat',
+};
+const WORKSPACE_VIEWS: AppView[] = ['chat', 'art', 'camera', 'voice', 'math', 'agent'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 const RECENT_LOCAL_MS = 5 * 60 * 1000;
@@ -163,12 +195,16 @@ const App: React.FC = () => {
         }
         setSyncStatus('syncing');
         const cloudHistory = await firebaseService.getHistory(authUser.uid);
-        if (cloudHistory) mergeHistory(cloudHistory);
+        if (cloudHistory) {
+          lastCloudRef.current = cloudHistory;
+          mergeHistory(cloudHistory);
+        }
         setSyncStatus('success');
         notificationService.setupForUser().catch(() => {});
       } catch {
+        // If Firestore is unavailable, fall back to a local-only user
+        // but do NOT attach it to geminiService so usage stays on guest limits.
         setUser(fallbackUser);
-        geminiService.setSessionUser(fallbackUser);
         setSyncStatus('error');
       }
       setAuthInitialized(true);
@@ -235,6 +271,31 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHash);
   }, [user, authInitialized]);
 
+  // Re-verify user plan after Stripe success (webhook has updated Firestore)
+  useEffect(() => {
+    if (view !== 'pricing') return;
+    const hashPart = window.location.hash;
+    const qs = hashPart.split('?')[1] || '';
+    const params = new URLSearchParams(qs);
+    if (params.get('success') !== 'true') return;
+    const authUser = firebaseService.currentUser();
+    if (!authUser) return;
+    (async () => {
+      try {
+        const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
+        geminiService.setSessionUser(syncedUser);
+        setUser(syncedUser);
+        if (syncedUser.theme) {
+          setUserTheme(normalizeUserTheme(syncedUser.theme));
+          cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
+        }
+        window.history.replaceState(null, '', window.location.pathname + '#pricing');
+      } catch {
+        // keep current user state on sync failure
+      }
+    })();
+  }, [view]);
+
   // --- 3. CONVERSATION STATE (only load conversations that have at least one message) ---
   const [conversations, setConversations] = useState<Conversation[]>(() => {
     try {
@@ -258,6 +319,7 @@ const App: React.FC = () => {
   });
 
   const saveTimeoutRef = useRef<number | null>(null);
+  const bootstrappedConvRef = useRef(false);
 
   // Drop conversations with no user messages when switching away (AI-only welcome is not kept)
   useEffect(() => {
@@ -273,9 +335,20 @@ const App: React.FC = () => {
     if (activeConversationId) cacheService.set(CacheKey.ACTIVE_CONV, activeConversationId);
     if (user?.id) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = window.setTimeout(() => {
+      saveTimeoutRef.current = window.setTimeout(async () => {
         setSyncStatus('syncing');
-        firebaseService.saveHistory(user.id, meaningfulConversations).then(() => {
+        let embeddingsByConvId: Record<string, number[]> | undefined;
+        if (meaningfulConversations.length > 0) {
+          const texts = meaningfulConversations.map(conversationToSearchText);
+          const vectors = await geminiService.embedText(texts).catch(() => []);
+          if (vectors.length === meaningfulConversations.length) {
+            embeddingsByConvId = {};
+            meaningfulConversations.forEach((c, i) => {
+              if (vectors[i]?.length) embeddingsByConvId![c.id] = vectors[i];
+            });
+          }
+        }
+        firebaseService.saveHistory(user.id, meaningfulConversations, [], lastCloudRef.current, embeddingsByConvId).then(() => {
           setSyncStatus('success');
           setTimeout(() => setSyncStatus('idle'), 2000);
         }).catch(() => setSyncStatus('error'));
@@ -295,11 +368,12 @@ const App: React.FC = () => {
   // When on chat (or workspace) with no active conversation, create one so the first message isn't dropped
   useEffect(() => {
     if (view !== 'chat' && !WORKSPACE_VIEWS.includes(view)) return;
-    if (activeConversationId != null) return;
+    if (activeConversationId != null || bootstrappedConvRef.current) return;
     const newId = Date.now().toString();
     const mode = VIEW_TO_MODE[view];
     setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
     setActiveConversationId(newId);
+    bootstrappedConvRef.current = true;
   }, [view, activeConversationId]);
 
   const mergeHistory = useCallback((cloudHistory: Conversation[]) => {
@@ -328,14 +402,23 @@ const App: React.FC = () => {
     });
   }, []);
 
-  const SYNC_PULL_INTERVAL_MS = 60_000;
+  const SYNC_PULL_INTERVAL_MS = 5 * 60 * 1000; // 5 min to avoid burning Firestore read quota
+  const MIN_PULL_GAP_MS = 2 * 60 * 1000; // don't pull on every tab focus; at least 2 min since last pull
+  const lastPullTimeRef = useRef<number>(0);
+  const lastCloudRef = useRef<Conversation[] | null>(null);
   useEffect(() => {
     const uid = user?.id;
     if (!uid) return;
     const pull = async () => {
+      const now = Date.now();
+      if (now - lastPullTimeRef.current < MIN_PULL_GAP_MS) return;
+      lastPullTimeRef.current = now;
       try {
         const cloud = await firebaseService.getHistory(uid);
-        if (cloud?.length !== undefined) mergeHistory(cloud);
+        if (cloud?.length !== undefined) {
+          lastCloudRef.current = cloud;
+          mergeHistory(cloud);
+        }
       } catch {
         // ignore; will retry on next focus or interval
       }
@@ -344,6 +427,7 @@ const App: React.FC = () => {
       if (document.visibilityState === 'visible') pull();
     };
     document.addEventListener('visibilitychange', onVisibility);
+    pull(); // initial pull
     const intervalId = window.setInterval(pull, SYNC_PULL_INTERVAL_MS);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
@@ -373,12 +457,15 @@ const App: React.FC = () => {
       }
       setSyncStatus('syncing');
       const cloudHistory = await firebaseService.getHistory(authUser.uid);
-      if (cloudHistory) mergeHistory(cloudHistory);
+      if (cloudHistory) {
+        lastCloudRef.current = cloudHistory;
+        mergeHistory(cloudHistory);
+      }
       setSyncStatus('success');
       notificationService.setupForUser().catch(() => {});
     } catch {
+      // Same as initial auth: degrade gracefully but keep Gemini in guest mode.
       setUser(fallbackUser);
-      geminiService.setSessionUser(fallbackUser);
       setSyncStatus('error');
     }
     setAuthError(null);
@@ -391,22 +478,39 @@ const App: React.FC = () => {
     }
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
-    const activeConv = conversations.find(c => c.id === activeConversationId);
-    const canReuseActive = activeConv && !conversationHasUserMessage(activeConv) && activeConv.mode === mode;
-    if (!canReuseActive) {
-       const newId = Date.now().toString();
-       setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
-       setActiveConversationId(newId);
+    if (mode !== 'agent') {
+      const activeConv = conversations.find(c => c.id === activeConversationId);
+      const canReuseActive = activeConv && !conversationHasUserMessage(activeConv) && activeConv.mode === mode;
+      if (!canReuseActive) {
+         const newId = Date.now().toString();
+         setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+         setActiveConversationId(newId);
+      }
     }
     window.location.hash = WORKSPACE_TO_VIEW[mode];
   };
 
-  const handleDeleteConversation = (id: string) => {
-     const next = conversations.filter(c => c.id !== id);
-     setConversations(next);
-     if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
-     const meaningful = next.filter(conversationHasUserMessage);
-     if (user?.id) firebaseService.saveHistory(user.id, meaningful, [id]).catch(() => {});
+  const handleDeleteConversation = async (id: string) => {
+    const prevConversations = conversations;
+    const prevActiveId = activeConversationId;
+    const next = conversations.filter(c => c.id !== id);
+    setConversations(next);
+    if (activeConversationId === id) setActiveConversationId(next[0]?.id || null);
+    const meaningful = next.filter(conversationHasUserMessage);
+    if (user?.id) {
+      try {
+        setSyncStatus('syncing');
+        await firebaseService.saveHistory(user.id, meaningful, [id], lastCloudRef.current);
+        setSyncStatus('success');
+        setTimeout(() => setSyncStatus('idle'), 2000);
+      } catch {
+        alert('Failed to delete conversation. Your history was not updated in the cloud.');
+        setSyncStatus('error');
+        // revert UI so next sync does not resurrect the conversation unexpectedly
+        setConversations(prevConversations);
+        setActiveConversationId(prevActiveId);
+      }
+    }
   };
 
   const handleClearHistory = async () => {
@@ -415,7 +519,7 @@ const App: React.FC = () => {
        setActiveConversationId(null);
        cacheService.remove(CacheKey.HISTORY);
        cacheService.remove(CacheKey.ACTIVE_CONV);
-       if (user?.id) await firebaseService.saveHistory(user.id, []);
+       if (user?.id) await firebaseService.saveHistory(user.id, [], [], lastCloudRef.current);
        window.location.hash = 'chat';
     }
   };
@@ -463,6 +567,8 @@ const App: React.FC = () => {
     if (view === 'telegram-bot') return <TelegramBotPage onClose={() => window.location.hash = 'home'} lang={lang} />;
 
     switch (view) {
+      case 'agent':
+        return <AgentWorkspace user={user} onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'chat': case 'art': case 'camera': case 'math':
         return (
           <ChatWorkspace 
@@ -561,11 +667,12 @@ const App: React.FC = () => {
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
   const renderLandingBackground = () => {
-    switch (userTheme) {
-      case 'aurora':
-        return (
-          <div className={effectiveDark ? 'w-full h-full opacity-[0.92]' : 'w-full h-full'}>
-            <DarkVeil
+    const content = (() => {
+      switch (userTheme) {
+        case 'aurora':
+          return (
+            <div className={effectiveDark ? 'w-full h-full opacity-[0.92]' : 'w-full h-full'}>
+              <DarkVeil
               hueShift={effectiveDark ? 135 : 160}
               noiseIntensity={effectiveDark ? 0.012 : 0.008}
               scanlineIntensity={0}
@@ -573,12 +680,12 @@ const App: React.FC = () => {
               speed={0.45}
               warpAmount={0.06}
               resolutionScale={0.9}
-            />
-          </div>
-        );
-      case 'midnight':
-        return (
-          <Particles
+              />
+            </div>
+          );
+        case 'midnight':
+          return (
+            <Particles
             key={`midnight-${effectiveDark}`}
             particleColors={effectiveDark ? ['#c7d2fe', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
             particleCount={220}
@@ -592,13 +699,13 @@ const App: React.FC = () => {
             cameraDistance={22}
             disableRotation={false}
             pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2)}
-            className="w-full h-full"
-          />
-        );
-      case 'terminal':
-        return (
-          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
-            <PixelBlast
+              className="w-full h-full"
+            />
+          );
+        case 'terminal':
+          return (
+            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+              <PixelBlast
               key={`terminal-${effectiveDark}`}
               variant="square"
               pixelSize={4}
@@ -614,13 +721,13 @@ const App: React.FC = () => {
               speed={0.55}
               edgeFade={0.3}
               transparent
-            />
-          </div>
-        );
-      case 'ocean':
-        return (
-          <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
-            <Silk
+              />
+            </div>
+          );
+        case 'ocean':
+          return (
+            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+              <Silk
               key={`ocean-${effectiveDark}`}
               speed={2.8}
               scale={1}
@@ -628,12 +735,12 @@ const App: React.FC = () => {
               noiseIntensity={0.7}
               rotation={0.1}
               dprMax={1}
-            />
-          </div>
-        );
-      case 'sunset':
-        return (
-          <LightRays
+              />
+            </div>
+          );
+        case 'sunset':
+          return (
+            <LightRays
             raysOrigin="top-center"
             raysColor={effectiveDark ? '#fed7aa' : '#ea580c'}
             raysSpeed={0.85}
@@ -646,13 +753,13 @@ const App: React.FC = () => {
             fadeDistance={1}
             saturation={effectiveDark ? 1.05 : 1.2}
             pulsating
-            className={effectiveDark ? 'opacity-95' : 'opacity-100'}
-          />
-        );
-      case 'paper':
-        return (
-          <div className={effectiveDark ? 'w-full h-full opacity-90' : 'w-full h-full'}>
-            <Beams
+              className={effectiveDark ? 'opacity-95' : 'opacity-100'}
+            />
+          );
+        case 'paper':
+          return (
+            <div className={effectiveDark ? 'w-full h-full opacity-90' : 'w-full h-full'}>
+              <Beams
               beamWidth={2}
               beamHeight={18}
               beamNumber={16}
@@ -661,12 +768,14 @@ const App: React.FC = () => {
               noiseIntensity={1.5}
               scale={0.22}
               rotation={20}
-            />
-          </div>
-        );
-      default:
-        return null;
-    }
+              />
+            </div>
+          );
+        default:
+          return null;
+      }
+    })();
+    return <Suspense fallback={null}>{content}</Suspense>;
   };
 
   const rootBgClass = themeBg;
@@ -706,7 +815,18 @@ const App: React.FC = () => {
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
               <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />
               <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => handleStartWorkspace('', 'voice')} />
-              <NavTab active={view === 'math'} icon="fa-calculator" label={t.maths} onClick={() => handleStartWorkspace('', 'maths')} />
+              <NavTab
+                active={view === 'math'}
+                icon="fa-calculator"
+                label={`${t.maths} (Beta)`}
+                onClick={() => handleStartWorkspace('', 'maths')}
+              />
+              <NavTab
+                active={view === 'agent'}
+                icon="fa-robot"
+                label="Agent"
+                onClick={() => handleStartWorkspace('', 'agent')}
+              />
             </div>
           )}
           <div className="flex items-center gap-2">

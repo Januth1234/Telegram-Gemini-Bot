@@ -10,7 +10,14 @@ export enum CacheKey {
   ACTIVE_CONV = 'orin_active_conv_id',
   LANG = 'orin_lang',
   THEME = 'orin_theme',          // system dark/light
-  USER_THEME = 'orin_user_theme' // Orin workspace visual theme
+  USER_THEME = 'orin_user_theme', // Orin workspace visual theme
+  VOICE_NAME = 'orin_voice_name',
+  VOICE_TONE = 'orin_voice_tone',
+  VOICE_PROACTIVE_AUDIO = 'orin_voice_proactive_audio',
+  VOICE_AFFECTIVE_DIALOG = 'orin_voice_affective_dialog',
+  USER_MARKOV = 'orin_markov_v1',
+  STUDIO_HISTORY = 'orin_studio_history_v1',
+  MATH_HISTORY = 'orin_math_history_v1',
 }
 
 export class CacheService {

@@ -22,6 +22,8 @@ interface AccountSettingsProps {
   onThemeModeChange?: (mode: ThemeMode) => void;
 }
 
+const MEMORY_MAX_LENGTH = 2000; // Keeps system instructions in chat() from bloating
+
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange, themeMode, onThemeModeChange }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
@@ -30,7 +32,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
 
   useEffect(() => {
      if (user) {
-        firebaseService.getUserMemory(user.id).then(setMemory);
+        firebaseService.getUserMemory(user.id).then(m => setMemory(m.slice(0, MEMORY_MAX_LENGTH)));
         firebaseService.getUsage(user.id).then(setUsage);
      } else {
         setUsage(null);
@@ -40,7 +42,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   const handleSaveMemory = async () => {
      if (user) {
         setLoading(true);
-        await firebaseService.updateUserMemory(user.id, memory);
+        const toSave = memory.slice(0, MEMORY_MAX_LENGTH);
+        await firebaseService.updateUserMemory(user.id, toSave);
+        if (memory.length > MEMORY_MAX_LENGTH) setMemory(toSave);
         setLoading(false);
      }
   };
@@ -147,14 +151,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                        <i className="fa-solid fa-memory text-cyan-500/80" />
                        Neural Memory
                     </label>
-                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
+                    <div className="flex items-center gap-3">
+                       <span className={`text-[10px] font-mono ${memory.length > MEMORY_MAX_LENGTH ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} aria-live="polite">
+                          {memory.length} / {MEMORY_MAX_LENGTH}
+                       </span>
+                       <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
+                    </div>
                  </div>
                  <textarea 
                     value={memory} 
                     onChange={e => setMemory(e.target.value)} 
+                    maxLength={MEMORY_MAX_LENGTH}
                     className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
+                    aria-describedby="memory-count"
                  />
+                 <p id="memory-count" className="sr-only">Neural memory is limited to {MEMORY_MAX_LENGTH} characters so it can be used in every chat.</p>
               </div>
 
               {/* Theme Picker */}

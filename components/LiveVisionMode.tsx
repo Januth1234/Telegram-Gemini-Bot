@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
+import { cacheService, CacheKey } from '../services/cacheService';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { LiveServerMessage } from '@google/genai';
@@ -39,10 +40,24 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   const [activeCameraId, setActiveCameraId] = useState<string>('');
   const [aiSpeaking, setAiSpeaking] = useState(false);
   
-  // Settings
+  // Settings (persisted via cacheService so they survive tab switch / unmount)
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState('Zephyr');
-  const [selectedTone, setSelectedTone] = useState('neutral');
+  const [selectedVoice, setSelectedVoice] = useState(() => cacheService.get(CacheKey.VOICE_NAME, 'Zephyr'));
+  const [selectedTone, setSelectedTone] = useState(() => cacheService.get(CacheKey.VOICE_TONE, 'neutral'));
+
+  useEffect(() => {
+    setSelectedVoice(cacheService.get(CacheKey.VOICE_NAME, 'Zephyr'));
+    setSelectedTone(cacheService.get(CacheKey.VOICE_TONE, 'neutral'));
+  }, []);
+
+  const handleVoiceChange = useCallback((voice: string) => {
+    setSelectedVoice(voice);
+    cacheService.set(CacheKey.VOICE_NAME, voice);
+  }, []);
+  const handleToneChange = useCallback((tone: string) => {
+    setSelectedTone(tone);
+    cacheService.set(CacheKey.VOICE_TONE, tone);
+  }, []);
 
   // Transcripts
   const [latestUser, setLatestUser] = useState("");
@@ -54,7 +69,11 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   const sessionRef = useRef<any>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
-  
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioInputNodeRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  const inputBufferRef = useRef<Float32Array[]>([]);
+  const INPUT_BATCH_SAMPLES = 4096;
+
   // Stream & Intervals
   const streamRef = useRef<MediaStream | null>(null);
   const videoIntervalRef = useRef<number | null>(null);
@@ -123,6 +142,32 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
     }
   }
 
+  // Resample audio input to 16kHz mono PCM16 for Gemini Live.
+  function toPcm16At16k(source: Float32Array, sourceSampleRate: number): Int16Array {
+    const targetRate = 16000;
+    if (!sourceSampleRate || sourceSampleRate === targetRate) {
+      const out = new Int16Array(source.length);
+      for (let i = 0; i < source.length; i++) {
+        const s = Math.max(-1, Math.min(1, source[i] || 0));
+        out[i] = s * 32767;
+      }
+      return out;
+    }
+    const ratio = sourceSampleRate / targetRate;
+    const targetLength = Math.floor(source.length / ratio);
+    const out = new Int16Array(targetLength);
+    for (let i = 0; i < targetLength; i++) {
+      const srcIndex = i * ratio;
+      const i0 = Math.floor(srcIndex);
+      const i1 = Math.min(i0 + 1, source.length - 1);
+      const frac = srcIndex - i0;
+      const s0 = source[i0] || 0;
+      const s1 = source[i1] || 0;
+      const s = Math.max(-1, Math.min(1, s0 + (s1 - s0) * frac));
+      out[i] = s * 32767;
+    }
+    return out;
+  }
   // --- Main Logic ---
 
   const startSession = async () => {
@@ -136,10 +181,10 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
     try {
       // 1. Setup Audio Contexts
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      // FIX: Use default sample rates for compatibility
+      // Use system defaults; resample microphone audio to 16kHz before sending to Gemini.
       audioContextRef.current = new AudioCtx(); 
       inputAudioContextRef.current = new AudioCtx(); 
-      const inputSampleRate = inputAudioContextRef.current.sampleRate;
+      const inputSampleRate = inputAudioContextRef.current.sampleRate || 44100;
 
       // 2. Setup Media Stream (Video + Audio)
       if (!navigator.mediaDevices?.getUserMedia) {
@@ -166,31 +211,56 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
 
       // 5. Connect to Gemini Live
       const sessionPromise = geminiService.connectMultimodal({
-        onopen: () => {
+        onopen: async () => {
           setIsConnecting(false);
           setIsActive(true);
-          
-          // --- Input Audio Pipeline ---
-          const src = inputAudioContextRef.current!.createMediaStreamSource(stream);
-          const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
-          
-          src.connect(proc);
-          proc.connect(inputAudioContextRef.current!.destination);
-          
-          proc.onaudioprocess = (e) => {
-            if (isMuted) return;
-            const data = e.inputBuffer.getChannelData(0);
-            const int16 = new Int16Array(data.length);
-            for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
+
+          const ctx = inputAudioContextRef.current!;
+          const src = ctx.createMediaStreamSource(stream);
+          audioSourceRef.current = src;
+
+          const sampleRate = inputSampleRate;
+          const flushBuffer = () => {
+            const chunks = inputBufferRef.current;
+            if (chunks.length === 0) return;
+            const total = chunks.reduce((n, c) => n + c.length, 0);
+            const merged = new Float32Array(total);
+            let offset = 0;
+            for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+            inputBufferRef.current = [];
             sessionPromise.then(session => {
-              session.sendRealtimeInput({ 
-                  media: { 
-                      data: encodeBase64(new Uint8Array(int16.buffer)), 
-                      mimeType: `audio/pcm;rate=${inputSampleRate}`
-                  } 
-               });
+              const pcm16 = toPcm16At16k(merged, sampleRate);
+              session.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
             }).catch(() => {});
           };
+
+          try {
+            await ctx.audioWorklet.addModule('/voice-input-processor.js');
+            const workletNode = new AudioWorkletNode(ctx, 'voice-input-processor', { processorOptions: { sampleRate } });
+            audioInputNodeRef.current = workletNode;
+            workletNode.port.onmessage = (e: MessageEvent<{ samples: ArrayBuffer; sampleRate: number }>) => {
+              if (isMuted) return;
+              const { samples } = e.data;
+              inputBufferRef.current.push(new Float32Array(samples));
+              let total = 0;
+              for (const c of inputBufferRef.current) total += c.length;
+              if (total >= INPUT_BATCH_SAMPLES) flushBuffer();
+            };
+            src.connect(workletNode);
+          } catch {
+            const proc = ctx.createScriptProcessor(4096, 1, 1);
+            audioInputNodeRef.current = proc;
+            proc.onaudioprocess = (e) => {
+              if (isMuted) return;
+              const data = e.inputBuffer.getChannelData(0);
+              const pcm16 = toPcm16At16k(data, sampleRate);
+              sessionPromise.then(session => {
+                session.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+              }).catch(() => {});
+            };
+            src.connect(proc);
+            proc.connect(ctx.destination);
+          }
 
           // --- Input Video Pipeline (1 FPS) ---
           videoIntervalRef.current = window.setInterval(() => {
@@ -276,15 +346,26 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
     setLatestAI("");
     setLatestUser("");
 
-    if (videoIntervalRef.current) clearInterval(videoIntervalRef.current);
+    if (videoIntervalRef.current !== null) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
     if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
-    
+
     if (sessionRef.current) { try { sessionRef.current.close(); } catch {} sessionRef.current = null; }
-    
     sourcesRef.current.forEach(s => s.stop());
     sourcesRef.current.clear();
 
-    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
+    audioSourceRef.current?.disconnect();
+    audioInputNodeRef.current?.disconnect();
+    audioInputNodeRef.current = null;
+    audioSourceRef.current = null;
+    inputBufferRef.current = [];
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') audioContextRef.current.close();
     if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') inputAudioContextRef.current.close();
   };
@@ -352,7 +433,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
                     {VOICES.map(v => (
                        <button 
                          key={v.id}
-                         onClick={() => setSelectedVoice(v.id)}
+                         onClick={() => handleVoiceChange(v.id)}
                          className={`p-3 rounded-xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
                        >
                           <span className="text-xs font-bold">{v.label}</span>
@@ -368,7 +449,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
                     {TONES.map(t => (
                        <button 
                          key={t.id}
-                         onClick={() => setSelectedTone(t.id)}
+                         onClick={() => handleToneChange(t.id)}
                          className={`p-3 rounded-xl text-xs font-bold text-center transition-all ${selectedTone === t.id ? 'bg-indigo-600 text-white' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
                        >
                           {t.label}

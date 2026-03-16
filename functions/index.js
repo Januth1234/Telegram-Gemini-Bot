@@ -22,9 +22,16 @@ async function logAudit(action, actorUid, details) {
 
 // --- 1. Auth & Roles ---
 
+function requireAppCheck(context) {
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "App Check failed.");
+  }
+}
+
 exports.createPendingSignup = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-  
+
   const { email, reason } = data;
   const uid = context.auth.uid;
   const codeDetected = reason.includes(SECRET_CODE);
@@ -44,6 +51,7 @@ exports.createPendingSignup = functions.https.onCall(async (data, context) => {
 });
 
 exports.approveUser = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
   const isOwnerUid = context.auth.uid === OWNER_UID;
   if (!isOwnerUid) {
@@ -101,7 +109,8 @@ exports.generateApiKey = functions.https.onCall(async (data, context) => {
 // --- 3. Training: OCR Process ---
 
 exports.ocrProcess = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
-  const role = context.auth.token.role;
+  requireAppCheck(context);
+  const role = context.auth?.token?.role;
   if (!["training", "devops", "owner"].includes(role)) {
     throw new functions.https.HttpsError("permission-denied", "Training role required.");
   }

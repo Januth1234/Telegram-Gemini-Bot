@@ -49,6 +49,8 @@ export interface Conversation {
   timestamp: Date;
   mode: WorkspaceMode;
   modesUsed?: WorkspaceMode[];
+  /** Embedding vector for semantic search (Gemini Embedding 2). */
+  embedding?: number[];
 }
 
 /** True if the conversation has at least one user message (used for persist/sync; AI-only welcome does not count). */
@@ -64,8 +66,44 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
-export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths';
+export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
+export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent';
+
+// Graphing types for Maths / Graphs workspace
+export type GraphType = 'function' | 'parametric' | 'polar' | 'data';
+
+export interface GraphDomain {
+  min: number;
+  max: number;
+}
+
+export interface GraphDataSeries {
+  id: string;
+  label: string;
+  x: number[];
+  y: number[];
+}
+
+export interface GraphDefinition {
+  id: string;
+  type: GraphType;
+  expressionLatex?: string; // for function/parametric/polar
+  xDomain?: GraphDomain;
+  yDomain?: GraphDomain;
+  dataSeries?: GraphDataSeries[]; // for data / statistics plots
+}
+
+// Maths-only history items (separate from chat history)
+export type MathHistoryKind = 'expression' | 'graph';
+
+export interface MathHistoryItem {
+  id: string;
+  kind: MathHistoryKind;
+  inputLatex: string;
+  result?: string;
+  graph?: GraphDefinition | null;
+  createdAt: string; // ISO string
+}
 
 export interface SiteMetrics {
   totalUsers: number;

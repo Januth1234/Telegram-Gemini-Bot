@@ -10,20 +10,43 @@ service cloud.firestore {
     function isDevOps() { return hasRole('devops') || isOwner(); }
     function isTrainer() { return hasRole('training') || isDevOps(); }
 
-    // Users: each user can read/write only their own document (sync, history, usage, plan, memory)
+    // Users: each user can read their own document, but only update
+    // non-privileged fields. Privileged fields like plan/role/approved
+    // are managed server-side (e.g. via Stripe webhook with Admin SDK).
     match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // Allow create own doc with restricted defaults (plan/role/approved must be safe)
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && (!('plan' in request.resource.data) || request.resource.data.plan == 'free')
+                    && (!('role' in request.resource.data) || request.resource.data.role == 'visitor')
+                    && (!('approved' in request.resource.data) || request.resource.data.approved == false);
+
+      // Allow update only if privileged fields are unchanged.
+      allow update: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.plan == resource.data.plan
+                    && request.resource.data.role == resource.data.role
+                    && request.resource.data.approved == resource.data.approved;
+    }
+
+    // Conversation history subcollection (avoids 1MB document limit).
+    match /users/{userId}/conversations/{convId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Pending Signups: Create own, Owner manage
+    // Pending Signups: Create own (only if none exists — prevents spam), Owner manage
     match /pending_signups/{uid} {
-      allow create: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && !exists(/databases/$(database)/documents/pending_signups/$(uid));
       allow read, write: if isOwner();
     }
 
-    // Metrics: All auth users read
+    // Metrics: Restrict metrics to DevOps/Owner; not general users.
     match /site_metrics/{doc} {
-      allow read: if request.auth != null;
+      allow read: if isDevOps();
     }
 
     // API Keys: DevOps/Owner only

@@ -10,5 +10,5 @@ export const APP_CONFIG = {
   owner: "JN Productions",
   legalEntity: "JN Productions Global",
   deploymentLink: "https://www.orinai.org",
-  githubRepo: "nimnal-januth/aura-neural-workspace"
+  githubRepo: "Januth1234/Telegram-Gemini-Bot"  // Used by releases page & download links
 };

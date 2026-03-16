@@ -1,6 +1,6 @@
-
-import React, { useEffect, useState } from 'react';
-import { codeTrackerService as tracker, CodeSnapshot } from '../services/codeTrackerService';
+import React, { useCallback, useEffect, useState } from 'react';
+import { githubReleasesService } from '../services/githubReleasesService';
+import type { GitHubReleaseItem } from '../services/githubReleasesService';
 import { Language } from '../types';
 import { translations } from '../translations';
 
@@ -9,7 +9,7 @@ interface ReleasesPageProps {
   lang: Language;
 }
 
-interface LocalCodeSnapshot extends CodeSnapshot {
+interface LocalCodeSnapshot extends GitHubReleaseItem {
   bodySi?: string;
 }
 
@@ -74,20 +74,27 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
     }
   ];
 
-  useEffect(() => {
-    const fetchUpdates = async () => {
-      setLoading(true);
-      try {
-        const data = await tracker.getHistory();
-        setUpdates(data.length > 0 ? data : officialUpdates);
-      } catch (e) {
-        setUpdates(officialUpdates);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUpdates();
+  const fetchUpdates = useCallback(async (forceRefresh = false) => {
+    setLoading(true);
+    try {
+      const data = await githubReleasesService.getReleases(forceRefresh);
+      const merged = data.length > 0
+        ? data.map((r) => {
+            const local = officialUpdates.find((o) => o.version === r.version);
+            return { ...r, bodySi: local?.bodySi } as LocalCodeSnapshot;
+          })
+        : officialUpdates;
+      setUpdates(merged);
+    } catch {
+      setUpdates(officialUpdates);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchUpdates(false);
+  }, [fetchUpdates]);
 
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-transparent animate-reveal">
@@ -98,12 +105,23 @@ const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {
             <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Official Releases</h2>
             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.4em]">{lang === 'si' ? 'අලුත් දේවල්' : 'What\'s New'}</p>
           </div>
-          <button 
-            onClick={onClose} 
-            className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm"
-          >
-            <i className="fa-solid fa-xmark text-lg"></i>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fetchUpdates(true)}
+              disabled={loading}
+              className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-cyan-600 dark:hover:text-cyan-400 transition-all shadow-sm disabled:opacity-50"
+              title={lang === 'si' ? 'GitHub ගෙන් යාවත්කාලීන කරන්න' : 'Refresh from GitHub'}
+            >
+              <i className={`fa-solid fa-arrows-rotate text-lg ${loading ? 'animate-spin' : ''}`}></i>
+            </button>
+            <button 
+              onClick={onClose} 
+              className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all shadow-sm"
+            >
+              <i className="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
         </header>
 
         <div className="space-y-16">

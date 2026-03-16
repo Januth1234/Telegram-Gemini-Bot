@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
+import { cacheService, CacheKey } from '../services/cacheService';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { LiveServerMessage } from '@google/genai';
@@ -44,11 +45,39 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Settings
+  // Settings (persisted via cacheService so they survive tab switch / unmount)
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState('Zephyr');
-  const [selectedTone, setSelectedTone] = useState('neutral');
-  
+  const [selectedVoice, setSelectedVoice] = useState(() => cacheService.get(CacheKey.VOICE_NAME, 'Zephyr'));
+  const [selectedTone, setSelectedTone] = useState(() => cacheService.get(CacheKey.VOICE_TONE, 'neutral'));
+  const [proactiveAudio, setProactiveAudio] = useState(() => cacheService.get(CacheKey.VOICE_PROACTIVE_AUDIO, true));
+  const [affectiveDialog, setAffectiveDialog] = useState(() => cacheService.get(CacheKey.VOICE_AFFECTIVE_DIALOG, true));
+
+  useEffect(() => {
+    const voice = cacheService.get(CacheKey.VOICE_NAME, 'Zephyr');
+    const tone = cacheService.get(CacheKey.VOICE_TONE, 'neutral');
+    setSelectedVoice(voice);
+    setSelectedTone(tone);
+    setProactiveAudio(cacheService.get(CacheKey.VOICE_PROACTIVE_AUDIO, true));
+    setAffectiveDialog(cacheService.get(CacheKey.VOICE_AFFECTIVE_DIALOG, true));
+  }, []);
+
+  const handleVoiceChange = useCallback((voice: string) => {
+    setSelectedVoice(voice);
+    cacheService.set(CacheKey.VOICE_NAME, voice);
+  }, []);
+  const handleToneChange = useCallback((tone: string) => {
+    setSelectedTone(tone);
+    cacheService.set(CacheKey.VOICE_TONE, tone);
+  }, []);
+  const handleProactiveAudioChange = useCallback((v: boolean) => {
+    setProactiveAudio(v);
+    cacheService.set(CacheKey.VOICE_PROACTIVE_AUDIO, v);
+  }, []);
+  const handleAffectiveDialogChange = useCallback((v: boolean) => {
+    setAffectiveDialog(v);
+    cacheService.set(CacheKey.VOICE_AFFECTIVE_DIALOG, v);
+  }, []);
+
   const [langA, setLangA] = useState(LANGUAGES.find(l => l.code === 'en') || LANGUAGES[0]);
   const [langB, setLangB] = useState(LANGUAGES.find(l => l.code === 'si') || LANGUAGES[1]);
 
@@ -66,6 +95,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioInputNodeRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  const inputBufferRef = useRef<Float32Array[]>([]);
+  const INPUT_BATCH_SAMPLES = 4096;
 
   const updateVisualizer = useCallback(() => {
     if (!isActive) return;
@@ -125,6 +159,33 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     return btoa(b);
   }
 
+  // Resample arbitrary input sample rate down to 16kHz mono PCM16.
+  function toPcm16At16k(source: Float32Array, sourceSampleRate: number): Int16Array {
+    const targetRate = 16000;
+    if (!sourceSampleRate || sourceSampleRate === targetRate) {
+      const out = new Int16Array(source.length);
+      for (let i = 0; i < source.length; i++) {
+        const s = Math.max(-1, Math.min(1, source[i] || 0));
+        out[i] = s * 32767;
+      }
+      return out;
+    }
+    const ratio = sourceSampleRate / targetRate;
+    const targetLength = Math.floor(source.length / ratio);
+    const out = new Int16Array(targetLength);
+    for (let i = 0; i < targetLength; i++) {
+      const srcIndex = i * ratio;
+      const i0 = Math.floor(srcIndex);
+      const i1 = Math.min(i0 + 1, source.length - 1);
+      const frac = srcIndex - i0;
+      const s0 = source[i0] || 0;
+      const s1 = source[i1] || 0;
+      const s = Math.max(-1, Math.min(1, s0 + (s1 - s0) * frac));
+      out[i] = s * 32767;
+    }
+    return out;
+  }
+
   const stopAiSpeaking = useCallback(() => {
     sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
     sourcesRef.current.clear();
@@ -135,6 +196,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const stopSession = useCallback(() => {
     stopAiSpeaking();
     if (sessionRef.current) { try { sessionRef.current.close(); } catch(e) {} sessionRef.current = null; }
+    audioSourceRef.current?.disconnect();
+    audioInputNodeRef.current?.disconnect();
+    audioInputNodeRef.current = null;
+    audioSourceRef.current = null;
+    inputBufferRef.current = [];
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') { try { audioContextRef.current.close(); } catch(e) {} }
     if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') { try { inputAudioContextRef.current.close(); } catch(e) {} }
     setIsActive(false);
@@ -169,15 +239,16 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      // FIX: Use system default sample rate to prevent crashes on incompatible hardware
+      // Use system default for output; input sample rate is read dynamically and resampled to 16kHz.
       audioContextRef.current = new AudioCtx(); 
       inputAudioContextRef.current = new AudioCtx(); 
-      const inputSampleRate = inputAudioContextRef.current.sampleRate;
+      const inputSampleRate = inputAudioContextRef.current.sampleRate || 44100;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
-      
+      streamRef.current = stream;
+
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 64; 
       analyserRef.current.connect(audioContextRef.current.destination);
@@ -186,27 +257,52 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       inputAnalyserRef.current.fftSize = 64;
 
       const callbacks = {
-        onopen: () => {
+        onopen: async () => {
           setIsConnecting(false);
           setIsActive(true);
-          const src = inputAudioContextRef.current!.createMediaStreamSource(stream);
-          const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
+          const ctx = inputAudioContextRef.current!;
+          const src = ctx.createMediaStreamSource(stream);
+          audioSourceRef.current = src;
           src.connect(inputAnalyserRef.current!);
-          proc.onaudioprocess = (e) => {
+
+          const sampleRate = inputSampleRate;
+          const flushBuffer = () => {
+            const chunks = inputBufferRef.current;
+            if (chunks.length === 0) return;
+            const total = chunks.reduce((n, c) => n + c.length, 0);
+            const merged = new Float32Array(total);
+            let offset = 0;
+            for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+            inputBufferRef.current = [];
             if (!sessionRef.current) return;
-            const data = e.inputBuffer.getChannelData(0);
-            const int16 = new Int16Array(data.length);
-            for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
-            
-            sessionRef.current.sendRealtimeInput({ 
-                media: { 
-                    data: encodeBase64(new Uint8Array(int16.buffer)), 
-                    mimeType: `audio/pcm;rate=${inputSampleRate}`
-                } 
-            });
+            const pcm16 = toPcm16At16k(merged, sampleRate);
+            sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
           };
-          src.connect(proc);
-          proc.connect(inputAudioContextRef.current!.destination);
+
+          try {
+            await ctx.audioWorklet.addModule('/voice-input-processor.js');
+            const workletNode = new AudioWorkletNode(ctx, 'voice-input-processor', { processorOptions: { sampleRate } });
+            audioInputNodeRef.current = workletNode;
+            workletNode.port.onmessage = (e: MessageEvent<{ samples: ArrayBuffer; sampleRate: number }>) => {
+              const { samples } = e.data;
+              inputBufferRef.current.push(new Float32Array(samples));
+              let total = 0;
+              for (const c of inputBufferRef.current) total += c.length;
+              if (total >= INPUT_BATCH_SAMPLES) flushBuffer();
+            };
+            src.connect(workletNode);
+          } catch {
+            const proc = ctx.createScriptProcessor(4096, 1, 1);
+            audioInputNodeRef.current = proc;
+            proc.onaudioprocess = (e) => {
+              if (!sessionRef.current) return;
+              const data = e.inputBuffer.getChannelData(0);
+              const pcm16 = toPcm16At16k(data, sampleRate);
+              sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+            };
+            src.connect(proc);
+            proc.connect(ctx.destination);
+          }
         },
         onmessage: async (msg: LiveServerMessage) => {
           if (msg.serverContent?.inputTranscription) {
@@ -214,7 +310,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             setTranscription(prev => [...prev, { role: 'user', text: txt }]);
           } else if (msg.serverContent?.outputTranscription) {
             const txt = msg.serverContent.outputTranscription.text;
-            setTranscription(prev => [...prev, { role: 'model', text: txt }]);
+            setTranscription(prev => {
+              const last = prev[prev.length - 1];
+              if (last?.role === 'model') {
+                return [...prev.slice(0, -1), { role: 'model', text: last.text + txt }];
+              }
+              return [...prev, { role: 'model', text: txt }];
+            });
           }
 
           const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
@@ -244,7 +346,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       const p = mode === 'translator' 
         ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
-        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext });
+        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext, proactiveAudio, enableAffectiveDialog: affectiveDialog });
 
       sessionRef.current = await p;
     } catch (e: unknown) {
@@ -291,7 +393,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                       {VOICES.map(v => (
                          <button 
                            key={v.id}
-                           onClick={() => setSelectedVoice(v.id)}
+                           onClick={() => { setSelectedVoice(v.id); cacheService.set(CacheKey.VOICE_NAME, v.id); }}
                            className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-cyan-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
                          >
                             <span className="text-xs font-bold">{v.label}</span>
@@ -307,12 +409,28 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                       {TONES.map(t => (
                          <button 
                            key={t.id}
-                           onClick={() => setSelectedTone(t.id)}
+                           onClick={() => handleToneChange(t.id)}
                            className={`p-3 rounded-xl text-xs font-bold text-center transition-all border ${selectedTone === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}`}
                          >
                             {t.label}
                          </button>
                       ))}
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Native audio</label>
+                   <div className="space-y-3">
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 cursor-pointer">
+                         <input type="checkbox" checked={proactiveAudio} onChange={(e) => handleProactiveAudioChange(e.target.checked)} className="rounded accent-cyan-500" />
+                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Proactive Audio</span>
+                         <span className="text-[10px] text-slate-500">Only respond when relevant; ignore background noise &amp; TV.</span>
+                      </label>
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 cursor-pointer">
+                         <input type="checkbox" checked={affectiveDialog} onChange={(e) => handleAffectiveDialogChange(e.target.checked)} className="rounded accent-cyan-500" />
+                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Affective Dialog</span>
+                         <span className="text-[10px] text-slate-500">Adapt tone to your emotion (e.g. frustration, excitement).</span>
+                      </label>
                    </div>
                 </div>
              </div>
