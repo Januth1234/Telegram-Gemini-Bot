@@ -159,6 +159,46 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     return btoa(b);
   }
 
+  // Preview a given voice without starting a full live session.
+  const previewVoice = useCallback(async (voiceId: string) => {
+    if (isActive || isConnecting) return; // avoid clashing with live session
+    try {
+      const base64 = await geminiService.generateTts({
+        text: `Hi, this is the ${voiceId} voice preview.`,
+        voiceName: voiceId,
+        model: 'flash',
+      });
+
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioCtx();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 64;
+        analyserRef.current.connect(audioContextRef.current.destination);
+        nextStartTimeRef.current = audioContextRef.current.currentTime;
+      }
+
+      const ctx = audioContextRef.current!;
+      const buf = await decodeAudioData(decodeBase64(base64), ctx);
+      const s = ctx.createBufferSource();
+      s.buffer = buf;
+      s.connect(analyserRef.current!);
+      const now = ctx.currentTime;
+      if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
+      s.start(nextStartTimeRef.current);
+      nextStartTimeRef.current += buf.duration;
+      sourcesRef.current.add(s);
+      setIsSpeaking(true);
+      s.onended = () => {
+        sourcesRef.current.delete(s);
+        if (sourcesRef.current.size === 0) setIsSpeaking(false);
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Voice preview failed';
+      setErrorMessage(msg);
+    }
+  }, [isActive, isConnecting]);
+
   // Resample arbitrary input sample rate down to 16kHz mono PCM16.
   function toPcm16At16k(source: Float32Array, sourceSampleRate: number): Int16Array {
     const targetRate = 16000;
@@ -388,7 +428,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
              
              <div className="flex-1 overflow-y-auto space-y-8">
                 <div className="space-y-4">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice Model</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice Model</label>
                    <div className="grid grid-cols-1 gap-2">
                       {VOICES.map(v => (
                          <button 
@@ -396,8 +436,20 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                            onClick={() => { setSelectedVoice(v.id); cacheService.set(CacheKey.VOICE_NAME, v.id); }}
                            className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-cyan-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
                          >
-                            <span className="text-xs font-bold">{v.label}</span>
-                            {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
+                            <div className="flex items-center justify-between w-full gap-3">
+                              <span className="text-xs font-bold">{v.label}</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); previewVoice(v.id); }}
+                                  className="w-7 h-7 rounded-full bg-white/20 text-white flex items-center justify-center text-[10px] hover:bg-white/30 transition-colors"
+                                  aria-label={`Preview ${v.label}`}
+                                >
+                                  <i className="fa-solid fa-play"></i>
+                                </button>
+                                {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
+                              </div>
+                            </div>
                          </button>
                       ))}
                    </div>
