@@ -205,8 +205,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         setShowUpgradeModal(true);
       } else {
         const msg = e instanceof Error ? e.message : String(e);
-        setChatError(msg || 'Something went wrong. Try again.');
-        alert(msg || 'Something went wrong. Try again.');
+        // Blind-fix: permission errors should not scream at the user
+        if (msg && msg.includes('Missing or insufficient permissions')) {
+          setChatError('Your account does not have access to this feature right now.');
+        } else {
+          setChatError(msg || 'Something went wrong. Try again.');
+          alert(msg || 'Something went wrong. Try again.');
+        }
       }
     } finally { 
        setIsTyping(false); 
