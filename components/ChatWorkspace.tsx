@@ -98,128 +98,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const recentSuggestionsRef = useRef<Set<string>>(new Set());
   const RECENT_SUGGESTIONS_MAX = 12;
 
-  useEffect(() => {
-    if (activeTab !== 'chat' && activeTab !== 'translator') return;
-
-    const byTime = [...conversations].sort(
-      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-    );
-    const texts: string[] = [];
-    const timestamps: number[] = [];
-    for (const c of byTime) {
-      if (texts.length >= MARKOV_MAX_MESSAGES) break;
-      for (const m of c.messages || []) {
-        if (texts.length >= MARKOV_MAX_MESSAGES) break;
-        if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
-          texts.push(m.content.trim());
-          timestamps.push(new Date(m.timestamp).getTime());
-        }
-      }
-    }
-    const currentCount = texts.length;
-
-    if (currentCount !== prevMarkovMessageCountRef.current) {
-      prevMarkovMessageCountRef.current = currentCount;
-      const useCache = currentCount > 0;
-      let loaded = false;
-      if (useCache) {
-        const cached = cacheService.get<unknown>(CacheKey.USER_MARKOV, null);
-        const parsed = cached ? deserializeMarkovModel(cached) : null;
-        const withBuiltAt = cached && typeof cached === 'object' && 'builtAt' in cached ? (cached as { builtAt: number }) : null;
-        if (parsed && withBuiltAt && isMarkovCacheValid(withBuiltAt)) {
-          markovModelRef.current = parsed;
-          loaded = true;
-        }
-      }
-      if (!loaded) {
-        const model = buildMarkovModel(texts, { timestamps, mode: activeTab });
-        markovModelRef.current = model;
-        if (currentCount > 0) {
-          try {
-            cacheService.set(CacheKey.USER_MARKOV, serializeMarkovModel(model));
-          } catch {
-            // quota or private mode
-          }
-        }
-      }
-    }
-
-    const model = markovModelRef.current;
-    if (model) {
-      const exclude = recentSuggestionsRef.current;
-      const next = generateSuggestions(model, 3, exclude);
-      setSuggestions(next);
-      next.forEach(s => exclude.add(s));
-      const arr = [...exclude];
-      if (arr.length > RECENT_SUGGESTIONS_MAX) {
-        recentSuggestionsRef.current = new Set(arr.slice(-RECENT_SUGGESTIONS_MAX));
-      }
-    } else {
-      setSuggestions([]);
-    }
-  }, [activeTab, conversations]);
-
-  // Semantic search: embed query and sort conversations by similarity.
-  useEffect(() => {
-    const q = searchQuery.trim();
-    if (!q) {
-      setSemanticOrder(null);
-      return;
-    }
-    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    searchDebounceRef.current = window.setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const [queryVec] = await geminiService.embedText([q]);
-        if (!queryVec?.length) {
-          setSemanticOrder(null);
-          return;
-        }
-        const withEmbedding = conversations.filter((c): c is Conversation & { embedding: number[] } => Array.isArray(c.embedding) && c.embedding.length > 0);
-        const scored = withEmbedding.map((c) => ({ id: c.id, score: cosineSimilarity(queryVec, c.embedding) }));
-        scored.sort((a, b) => b.score - a.score);
-        const order = scored.map((x) => x.id);
-        const withoutEmbedding = conversations.filter((c) => !order.includes(c.id));
-        setSemanticOrder([...order, ...withoutEmbedding.map((c) => c.id)]);
-      } catch {
-        setSemanticOrder(null);
-      } finally {
-        setIsSearching(false);
-      }
-    }, 400);
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-    };
-  }, [searchQuery, conversations]);
-
-  // One-shot auto-submit when landing transitions into a workspace with an initial prompt.
-  const autoSubmittedRef = useRef(false);
-  useEffect(() => {
-    if (!autoSubmit || autoSubmittedRef.current) return;
-    if (!localInput.trim()) return;
-    autoSubmittedRef.current = true;
-    // Fire and forget; handleSend will clear input and propagate change upward.
-    void handleSend(localInput);
-  }, [autoSubmit, localInput, handleSend]);
-
-  useEffect(() => {
-    setActiveTab(initialMode);
-  }, [initialMode]);
-
-  useEffect(() => {
-    if (initialPrompt !== undefined) setLocalInput(initialPrompt);
-  }, [initialPrompt]);
-
-  useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentMessages, isTyping]);
-
-  useEffect(() => {
-    const update = () => setContextTime(new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'full', timeStyle: 'short' }));
-    const t = setInterval(update, 60000);
-    return () => clearInterval(t);
-  }, []);
-
   const startProgress = (mode: WorkspaceMode) => {
     setProgress(0);
     const steps = [{ threshold: 30, label: "Reading..." }, { threshold: 60, label: "Thinking..." }, { threshold: 90, label: "Writing..." }];
@@ -335,7 +213,129 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
        stopProgress(); 
        setSelectedFile(null);
     }
-  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, thinkingMode, descriptiveMode, onModeSwitch, lang, onUpdateTitle, setMessages]);
+  }, [localInput, selectedFile, activeTab, isPrivate, messages, privateMessages, thinkingMode, descriptiveMode, onModeSwitch, lang, onUpdateTitle, setMessages, onInputChange]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat' && activeTab !== 'translator') return;
+
+    const byTime = [...conversations].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+    const texts: string[] = [];
+    const timestamps: number[] = [];
+    for (const c of byTime) {
+      if (texts.length >= MARKOV_MAX_MESSAGES) break;
+      for (const m of c.messages || []) {
+        if (texts.length >= MARKOV_MAX_MESSAGES) break;
+        if (m.role === 'user' && typeof m.content === 'string' && m.content.trim()) {
+          texts.push(m.content.trim());
+          timestamps.push(new Date(m.timestamp).getTime());
+        }
+      }
+    }
+    const currentCount = texts.length;
+
+    if (currentCount !== prevMarkovMessageCountRef.current) {
+      prevMarkovMessageCountRef.current = currentCount;
+      const useCache = currentCount > 0;
+      let loaded = false;
+      if (useCache) {
+        const cached = cacheService.get<unknown>(CacheKey.USER_MARKOV, null);
+        const parsed = cached ? deserializeMarkovModel(cached) : null;
+        const withBuiltAt = cached && typeof cached === 'object' && 'builtAt' in cached ? (cached as { builtAt: number }) : null;
+        if (parsed && withBuiltAt && isMarkovCacheValid(withBuiltAt)) {
+          markovModelRef.current = parsed;
+          loaded = true;
+        }
+      }
+      if (!loaded) {
+        const model = buildMarkovModel(texts, { timestamps, mode: activeTab });
+        markovModelRef.current = model;
+        if (currentCount > 0) {
+          try {
+            cacheService.set(CacheKey.USER_MARKOV, serializeMarkovModel(model));
+          } catch {
+            // quota or private mode
+          }
+        }
+      }
+    }
+
+    const model = markovModelRef.current;
+    if (model) {
+      const exclude = recentSuggestionsRef.current;
+      const next = generateSuggestions(model, 3, exclude);
+      setSuggestions(next);
+      next.forEach(s => exclude.add(s));
+      const arr = [...exclude];
+      if (arr.length > RECENT_SUGGESTIONS_MAX) {
+        recentSuggestionsRef.current = new Set(arr.slice(-RECENT_SUGGESTIONS_MAX));
+      }
+    } else {
+      setSuggestions([]);
+    }
+  }, [activeTab, conversations]);
+
+  // Semantic search: embed query and sort conversations by similarity.
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSemanticOrder(null);
+      return;
+    }
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = window.setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const [queryVec] = await geminiService.embedText([q]);
+        if (!queryVec?.length) {
+          setSemanticOrder(null);
+          return;
+        }
+        const withEmbedding = conversations.filter((c): c is Conversation & { embedding: number[] } => Array.isArray(c.embedding) && c.embedding.length > 0);
+        const scored = withEmbedding.map((c) => ({ id: c.id, score: cosineSimilarity(queryVec, c.embedding) }));
+        scored.sort((a, b) => b.score - a.score);
+        const order = scored.map((x) => x.id);
+        const withoutEmbedding = conversations.filter((c) => !order.includes(c.id));
+        setSemanticOrder([...order, ...withoutEmbedding.map((c) => c.id)]);
+      } catch {
+        setSemanticOrder(null);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchQuery, conversations]);
+
+  // One-shot auto-submit when landing transitions into a workspace with an initial prompt.
+  const autoSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (!autoSubmit || autoSubmittedRef.current) return;
+    if (!localInput.trim()) return;
+    autoSubmittedRef.current = true;
+    // Fire and forget; handleSend will clear input and propagate change upward.
+    void handleSend(localInput);
+  }, [autoSubmit, localInput, handleSend, activeTab]);
+
+  useEffect(() => {
+    setActiveTab(initialMode);
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (initialPrompt !== undefined) setLocalInput(initialPrompt);
+  }, [initialPrompt]);
+
+  useEffect(() => {
+    scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [currentMessages, isTyping]);
+
+  useEffect(() => {
+    const update = () => setContextTime(new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'full', timeStyle: 'short' }));
+    const t = setInterval(update, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const togglePrivate = () => {
     setIsPrivate(prev => !prev);

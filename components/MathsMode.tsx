@@ -15,7 +15,7 @@ import { cacheService, CacheKey } from '../services/cacheService';
 const MathFieldTag = 'math-field' as any;
 declare const Desmos: any;
 
-type MathCategory = 'General' | 'Algebra' | 'Geometry' | 'Calculus' | 'Stats' | 'Physics' | 'Matrix' | 'Number';
+type MathCategory = 'General' | 'Algebra' | 'Geometry' | 'Calculus' | 'Stats' | 'Physics' | 'Matrix' | 'Number' | 'Graphs';
 
 const CATEGORIES: Record<MathCategory, { icon: string; tools: { label: string, cmd: string, type: 'insert' | 'action' }[] }> = {
   'General': {
@@ -89,6 +89,12 @@ const CATEGORIES: Record<MathCategory, { icon: string; tools: { label: string, c
       { label: 'To hex', cmd: 'number to hex', type: 'action' },
       { label: 'To octal', cmd: 'number to octal', type: 'action' },
       { label: 'To decimal', cmd: 'number to decimal', type: 'action' },
+    ]
+  },
+  'Graphs': {
+    icon: 'fa-chart-line',
+    tools: [
+      { label: 'Open Graphs', cmd: 'open graphs', type: 'action' },
     ]
   }
 };
@@ -676,7 +682,14 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
           {(Object.keys(CATEGORIES) as MathCategory[]).map(cat => (
               <button
                 key={cat}
-                onClick={() => setActiveCat(cat)}
+                onClick={() => {
+                  if (cat === 'Graphs') {
+                    setGraphSource('manual');
+                    setShowGraphs(true);
+                  } else {
+                    setActiveCat(cat);
+                  }
+                }}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all min-w-max md:w-full border ${
                   activeCat === cat 
                   ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
@@ -701,25 +714,6 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                         {activeCat === 'Matrix' ? 'Matrix' : 'Equation Editor'}
                     </div>
                     <div className="flex gap-2 flex-wrap items-center">
-                        {activeCat === 'Physics' && (
-                          <label className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5">
-                            <input
-                              type="checkbox"
-                              checked={unitsMode}
-                              onChange={(e) => setUnitsMode(e.target.checked)}
-                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                            />
-                            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300">
-                              <i className="fa-solid fa-ruler-combined mr-1" />
-                              Units
-                            </span>
-                          </label>
-                        )}
-                        {activeCat === 'Physics' && unitsMode && (
-                          <span className="text-[8px] text-slate-400 dark:text-slate-500 italic max-w-[180px]">
-                            e.g. 9.8 m/s^2 * 70 kg or 100 km/h to m/s
-                          </span>
-                        )}
                         <button
                           onClick={() => {
                             setGraphSource('manual');
@@ -752,6 +746,25 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                             <i className="fa-solid fa-camera"></i>
                             {selectedFile ? 'Image Added' : 'Photo'}
                         </button>
+                        {activeCat === 'Physics' && (
+                          <label className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5 ml-auto">
+                            <input
+                              type="checkbox"
+                              checked={unitsMode}
+                              onChange={(e) => setUnitsMode(e.target.checked)}
+                              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                              <i className="fa-solid fa-ruler-combined mr-1" />
+                              Units
+                            </span>
+                          </label>
+                        )}
+                        {activeCat === 'Physics' && unitsMode && (
+                          <span className="text-[8px] text-slate-400 dark:text-slate-500 italic max-w-[180px]">
+                            e.g. 9.8 m/s^2 * 70 kg or 100 km/h to m/s
+                          </span>
+                        )}
                     </div>
                 </div>
                 
@@ -901,13 +914,13 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                       {tool.label}
                     </button>
                 ))}
-                {/* Global Solve Button */}
+                {/* Global Solve Button (local solve) */}
                 <button 
-                    onClick={() => handleAction('Solve and Explain')} 
+                    onClick={() => handleAction('solve for x')} 
                     disabled={isTyping}
                     className="flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-cyan-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-cyan-500 shadow-lg active:scale-95 transition-all"
                 >
-                    Solve With AI
+                    Solve
                 </button>
               </div>
           </div>
