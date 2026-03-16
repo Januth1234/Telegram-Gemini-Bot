@@ -285,7 +285,7 @@ class FirebaseService {
       const limits = FirebaseService.USAGE_LIMITS[planKey] ?? FirebaseService.USAGE_LIMITS['free'];
       const usage: Record<string, number> = { ...(data.usage ?? { text: 0, images: 0, videos: 0 }) };
       let lastReset: number = data.lastReset || 0;
-      let mediaWindowStart: number = usage.mediaWindowStart ?? lastReset || now;
+      let mediaWindowStart: number = (usage.mediaWindowStart ?? lastReset) || now;
 
       // Reset daily text if needed
       if (!lastReset || now - lastReset > FirebaseService.DAY_MS) {
