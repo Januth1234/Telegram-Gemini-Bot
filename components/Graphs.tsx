@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Language, GraphDefinition, GraphType, GraphDataSeries } from '../types';
 import { translations } from '../translations';
 import { casService } from '../services/casService';
-import Plotly from 'plotly.js';
+import Plotly from 'plotly.js-dist-min';
 
 declare const Desmos: any;
 
@@ -33,6 +33,35 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
   const desmosRef = useRef<HTMLDivElement | null>(null);
   const desmosCalcRef = useRef<any>(null);
   const plotlyRef = useRef<HTMLDivElement | null>(null);
+
+  // #region agent log
+  useEffect(() => {
+    try {
+      fetch('http://127.0.0.1:7634/ingest/da7930c5-8d1f-4e0b-902a-c200250e0368', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '80014a',
+        },
+        body: JSON.stringify({
+          sessionId: '80014a',
+          runId: 'pre-fix',
+          hypothesisId: 'H1',
+          location: 'components/Graphs.tsx:40',
+          message: 'Graphs mounted',
+          data: {
+            hasWindow: typeof window !== 'undefined',
+            hasPlotly: !!Plotly,
+            plotlyKeys: Plotly ? Object.keys(Plotly).slice(0, 10) : [],
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    } catch {
+      // ignore logging failure
+    }
+  }, []);
+  // #endregion
 
   // Initialise Desmos for analytic graphs
   useEffect(() => {
@@ -109,6 +138,36 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
   useEffect(() => {
     if (!plotlyRef.current) return;
     if (activeType !== 'data') return;
+
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7634/ingest/da7930c5-8d1f-4e0b-902a-c200250e0368', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '80014a',
+        },
+        body: JSON.stringify({
+          sessionId: '80014a',
+          runId: 'pre-fix',
+          hypothesisId: 'H1',
+          location: 'components/Graphs.tsx:108',
+          message: 'Plotly effect executing',
+          data: {
+            hasPlotlyRef: !!plotlyRef.current,
+            hasPlotly: !!Plotly,
+            plotlyHasNewPlot: !!(Plotly as any)?.newPlot,
+            activeType,
+            seriesCount: dataSeries.length,
+          },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+    } catch {
+      // ignore logging failure
+    }
+    // #endregion
+
     const traces = dataSeries.map(series => ({
       x: series.x,
       y: series.y,
