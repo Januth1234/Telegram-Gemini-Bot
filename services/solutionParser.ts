@@ -94,3 +94,48 @@ function splitByBoldHeaders(text: string): SolutionMethod[] {
   }
   return methods;
 }
+
+// ---------------------------------------------------------------------------
+// Structured math solution parsing (---METHOD: ... --- ... ---ENDMETHOD---)
+// ---------------------------------------------------------------------------
+
+export interface MathMethod {
+  name: string;
+  steps: string;
+}
+
+export interface ParsedMathResponse {
+  preamble: string;
+  methods: MathMethod[];
+  verification?: string;
+}
+
+export function isMathSolution(content: string): boolean {
+  if (!content) return false;
+  return content.includes('---METHOD:') || content.includes('---ENDMETHOD---');
+}
+
+export function parseMathResponse(content: string): ParsedMathResponse {
+  const text = content || '';
+  const methodRegex = /---METHOD:\s*(.+?)\s*---([\s\S]*?)---ENDMETHOD---/g;
+  const methods: MathMethod[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = methodRegex.exec(text)) !== null) {
+    methods.push({
+      name: match[1].trim(),
+      steps: match[2].trim(),
+    });
+  }
+
+  const firstMethodIndex = text.indexOf('---METHOD:');
+  const preamble =
+    firstMethodIndex > 0 ? text.slice(0, firstMethodIndex).trim() : '';
+
+  const verificationMatch = text.match(/VERIFICATION[:\s]+([\s\S]+?)$/i);
+  const verification = verificationMatch
+    ? verificationMatch[1].trim()
+    : undefined;
+
+  return { preamble, methods, verification };
+}

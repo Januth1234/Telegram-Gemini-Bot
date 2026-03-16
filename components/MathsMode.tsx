@@ -5,7 +5,7 @@ import { translations } from '../translations';
 import Graphs from './Graphs';
 import HandwritingCanvas from './HandwritingCanvas';
 import VoiceToMathModal from './VoiceToMathModal';
-import { parseSolutionMethods } from '../services/solutionParser';
+import { parseSolutionMethods, isMathSolution, parseMathResponse } from '../services/solutionParser';
 import { geminiService } from '../services/geminiService';
 import { casService, matrixToPmatrix } from '../services/casService';
 import KatexBlock from './KatexBlock';
@@ -111,8 +111,86 @@ interface MathsModeProps {
 const MATHLIVE_SCRIPT = 'https://unpkg.com/mathlive';
 const DESMOS_SCRIPT = 'https://www.desmos.com/api/v1.11/calculator.js?apiKey=b3a6bd693b2740f9a2fff51731e27d61';
 
+const MathSolutionCard: React.FC<{ content: string }> = ({ content }) => {
+  const parsed = parseMathResponse(content);
+  const [openMethod, setOpenMethod] = useState(0);
+
+  const hasMethods = parsed.methods && parsed.methods.length > 0;
+  const active = hasMethods ? parsed.methods[openMethod] : undefined;
+
+  return (
+    <div className="space-y-4 w-full">
+      {parsed.preamble && (
+        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+          {parsed.preamble}
+        </p>
+      )}
+
+      {parsed.methods.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {parsed.methods.map((m, i) => (
+            <button
+              key={i}
+              onClick={() => setOpenMethod(i)}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                openMethod === i
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-indigo-50'
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {active && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-500/20 p-5 space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600">
+            {active.name}
+          </h4>
+          {active.steps
+            .split('\n')
+            .filter(line => line.trim())
+            .map((step, i) => (
+              <div key={i} className="flex gap-3 items-start">
+                <span className="text-[9px] font-black text-indigo-400 mt-1 shrink-0 min-w-[20px]">
+                  {i + 1}.
+                </span>
+                <span className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed font-mono">
+                  {step.trim()}
+                </span>
+              </div>
+            ))}
+        </div>
+      )}
+
+      {parsed.verification && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-500/20 rounded-2xl p-4">
+          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-2">
+            Verification
+          </p>
+          <p className="text-sm text-slate-700 dark:text-slate-300 font-mono leading-relaxed whitespace-pre-wrap">
+            {parsed.verification}
+          </p>
+        </div>
+      )}
+
+      {parsed.methods.length > 1 && (
+        <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+          {parsed.methods.length} solution methods found
+        </p>
+      )}
+    </div>
+  );
+};
+
 /** Renders assistant solution: multiple methods as tabs with full steps, or single block. */
 const SolutionMessageContent: React.FC<{ content: string }> = ({ content }) => {
+  if (isMathSolution(content)) {
+    return <MathSolutionCard content={content} />;
+  }
+
   const methods = parseSolutionMethods(content);
   const [activeTab, setActiveTab] = useState(0);
 
@@ -134,16 +212,25 @@ const SolutionMessageContent: React.FC<{ content: string }> = ({ content }) => {
             </button>
           ))}
         </div>
-        <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(methods[activeTab].content) ? 'sinhala-text' : ''}`}>
+        <div
+          className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${
+            /[^\u0000-\u007F]/.test(methods[activeTab].content) ? 'sinhala-text' : ''
+          }`}
+        >
           {methods[activeTab].content}
         </div>
       </div>
     );
   }
 
-  const displayContent = methods && methods.length === 1 ? methods[0].content : content;
+  const displayContent =
+    methods && methods.length === 1 ? methods[0].content : content;
   return (
-    <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(displayContent) ? 'sinhala-text' : ''}`}>
+    <div
+      className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${
+        /[^\u0000-\u007F]/.test(displayContent) ? 'sinhala-text' : ''
+      }`}
+    >
       {displayContent}
     </div>
   );
@@ -182,6 +269,8 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     resultLatex?: string;
     input: string;
   } | null>(null);
+  const [inputMode, setInputMode] = useState<'math' | 'text'>('math');
+  const [textInput, setTextInput] = useState('');
   const [mathHistory, setMathHistory] = useState<MathHistoryItem[]>(
     () => cacheService.get<MathHistoryItem[]>(CacheKey.MATH_HISTORY, []),
   );
@@ -335,6 +424,10 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   }, [mathLiveReady, equationCount]);
 
   const getEquations = (): string[] => {
+    if (inputMode === 'text') {
+      const s = textInput.trim();
+      return s ? [s] : [];
+    }
     return equationRefs.current
       .slice(0, equationCount)
       .map(r => r?.value?.trim())
@@ -623,7 +716,11 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
   };
 
   const clearCanvas = () => {
-    equationRefs.current.slice(0, equationCount).forEach(mf => { if (mf) mf.value = ''; });
+    if (inputMode === 'text') {
+      setTextInput('');
+    } else {
+      equationRefs.current.slice(0, equationCount).forEach(mf => { if (mf) mf.value = ''; });
+    }
     setSelectedFile(null);
   };
 
@@ -765,6 +862,32 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                             e.g. 9.8 m/s^2 * 70 kg or 100 km/h to m/s
                           </span>
                         )}
+                        <div className="flex items-center gap-1 ml-auto">
+                          <button
+                            type="button"
+                            onClick={() => setInputMode('math')}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center border text-xs ${
+                              inputMode === 'math'
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'
+                            }`}
+                            title="Math input"
+                          >
+                            <i className="fa-solid fa-keyboard" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInputMode('text')}
+                            className={`w-8 h-8 rounded-lg flex items-center justify-center border text-xs ${
+                              inputMode === 'text'
+                                ? 'bg-indigo-600 text-white border-indigo-600'
+                                : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'
+                            }`}
+                            title="Text input"
+                          >
+                            <i className="fa-solid fa-align-left" />
+                          </button>
+                        </div>
                     </div>
                 </div>
                 
@@ -780,7 +903,7 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                 )}
 
                 {/* Matrix table input */}
-                {activeCat === 'Matrix' && (
+                {activeCat === 'Matrix' && inputMode === 'math' && (
                   <div className="p-4 space-y-4">
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Size</span>
@@ -843,39 +966,48 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                 )}
 
                 {/* Multi-line equation fields - only mount after script has loaded to avoid "Params are not set" */}
-                {activeCat !== 'Matrix' && (mathLiveReady ? (
-                <div className="w-full space-y-2">
-                  {Array.from({ length: equationCount }, (_, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <MathFieldTag
-                        ref={(el: any) => { equationRefs.current[i] = el; }}
-                        onFocus={() => { focusedMathFieldRef.current = equationRefs.current[i]; }}
-                        className="flex-1 text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none min-h-[56px] rounded-lg border border-slate-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-400"
-                        style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' } as React.CSSProperties}
-                      />
-                      {equationCount > 1 && i === equationCount - 1 ? (
-                        <button
-                          type="button"
-                          onClick={() => setEquationCount(c => Math.max(1, c - 1))}
-                          className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center"
-                          title="Remove equation"
-                        >
-                          <i className="fa-solid fa-minus text-[10px]" />
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setEquationCount(c => c + 1)}
-                    className="w-full py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
-                  >
-                    <i className="fa-solid fa-plus" /> Add equation
-                  </button>
-                </div>
-                ) : (
-                <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm">Loading math input…</div>
-                )) }
+                {inputMode === 'math' && activeCat !== 'Matrix' && (mathLiveReady ? (
+                  <div className="w-full space-y-2">
+                    {Array.from({ length: equationCount }, (_, i) => (
+                      <div key={i} className="flex items-center gap-2">
+                        <MathFieldTag
+                          ref={(el: any) => { equationRefs.current[i] = el; }}
+                          onFocus={() => { focusedMathFieldRef.current = equationRefs.current[i]; }}
+                          className="flex-1 text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none min-h-[56px] rounded-lg border border-slate-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-400"
+                          style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' } as React.CSSProperties}
+                        />
+                        {equationCount > 1 && i === equationCount - 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => setEquationCount(c => Math.max(1, c - 1))}
+                            className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center"
+                            title="Remove equation"
+                          >
+                            <i className="fa-solid fa-minus text-[10px]" />
+                          </button>
+                        ) : null}
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setEquationCount(c => c + 1)}
+                      className="w-full py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <i className="fa-solid fa-plus" /> Add equation
+                    </button>
+                  </div>
+                ) : inputMode === 'math' && activeCat !== 'Matrix' ? (
+                  <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm">Loading math input…</div>
+                ) : null}
+
+                {inputMode === 'text' && (
+                  <textarea
+                    value={textInput}
+                    onChange={e => setTextInput(e.target.value)}
+                    className="w-full min-h-[96px] text-sm md:text-base p-4 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white resize-y"
+                    placeholder="Type a math problem in normal words or notation..."
+                  />
+                )}
                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
               </div>
 
