@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Language, GraphDefinition, GraphType, GraphDataSeries } from '../types';
 import { translations } from '../translations';
 import { casService } from '../services/casService';
-import Plotly from 'plotly.js-dist-min';
+import Plotly from 'plotly.js';
 
 declare const Desmos: any;
 
