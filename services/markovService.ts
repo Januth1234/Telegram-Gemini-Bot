@@ -16,8 +16,9 @@ const SKIP_PATTERNS = /^(yes|no|ok|okay|thanks|lol|haha|sure|hi|hello|hey|bye|go
 const DAY_MS = 86400000;
 const WEEK_MS = 7 * DAY_MS;
 
-/** Mode-aware seed phrases so suggestions fit the current workspace. */
-export const SEED_PHRASES: Record<WorkspaceMode | 'default', string[]> = {
+/** Mode-aware seed phrases so suggestions fit the current workspace. Exhaustive over WorkspaceMode so missing keys are a type error. */
+type SeedPhrasesMap = { [K in WorkspaceMode]: string[] } & { default: string[] };
+export const SEED_PHRASES: SeedPhrasesMap = {
   chat: [
     "Explain in simple terms",
     "Summarize this for me",
@@ -66,6 +67,13 @@ export const SEED_PHRASES: Record<WorkspaceMode | 'default', string[]> = {
     "Translate to Tamil",
     "Translate to English",
     "How do you say in",
+  ],
+  agent: [
+    "Find information about",
+    "Summarize the key points",
+    "Break this down into steps",
+    "Research and compare",
+    "Draft a short outline for",
   ],
   default: [
     "Help me with",
@@ -201,6 +209,8 @@ export function generateSuggestions(
   const out: string[] = [];
   let attempts = 0;
   const maxAttempts = count * 15;
+  let consecutiveEmpty = 0;
+  const maxConsecutiveEmpty = 8;
 
   while (out.length < count && attempts < maxAttempts) {
     attempts++;
@@ -208,6 +218,10 @@ export function generateSuggestions(
     if (s && !seen.has(s) && !exclude.has(s)) {
       seen.add(s);
       out.push(s);
+      consecutiveEmpty = 0;
+    } else {
+      consecutiveEmpty++;
+      if (consecutiveEmpty >= maxConsecutiveEmpty) break;
     }
   }
 
@@ -240,6 +254,11 @@ export function serializeMarkovModel(model: MarkovModel): SerializedMarkovModel 
   };
 }
 
+/** A valid start is a string with at least two words (used as bigram key). */
+function isValidStart(s: unknown): s is string {
+  return typeof s === 'string' && s.trim().split(/\s+/).length >= 2;
+}
+
 /** Deserialize from cache; returns null if data missing or invalid. */
 export function deserializeMarkovModel(cached: unknown): MarkovModel | null {
   if (!cached || typeof cached !== 'object') return null;
@@ -247,13 +266,24 @@ export function deserializeMarkovModel(cached: unknown): MarkovModel | null {
   const starts = o.starts;
   const transitions = o.transitions;
   if (!Array.isArray(starts) || !Array.isArray(transitions)) return null;
+
+  const validStarts = starts.filter(isValidStart);
+  if (validStarts.length === 0) return null;
+
   const map = new Map<string, string[]>();
   for (const entry of transitions) {
-    if (Array.isArray(entry) && entry.length === 2 && typeof entry[0] === 'string' && Array.isArray(entry[1])) {
-      map.set(entry[0], entry[1]);
+    if (
+      Array.isArray(entry) &&
+      entry.length === 2 &&
+      typeof entry[0] === 'string' &&
+      Array.isArray(entry[1]) &&
+      (entry[1] as unknown[]).every((v): v is string => typeof v === 'string')
+    ) {
+      map.set(entry[0], entry[1] as string[]);
     }
   }
-  return { starts: starts as string[], transitions: map };
+
+  return { starts: validStarts, transitions: map };
 }
 
 const MARKOV_CACHE_MAX_AGE_MS = DAY_MS;

@@ -16,6 +16,14 @@ export interface GitHubReleaseItem {
 const GITHUB_RELEASES_URL = (repo: string) =>
   `https://api.github.com/repos/${repo}/releases`;
 
+/** Optional. When set (e.g. VITE_GITHUB_TOKEN), requests use auth and get 5000 req/h instead of 60/h per IP. */
+function getGitHubToken(): string | undefined {
+  const token =
+    (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_GITHUB_TOKEN) ||
+    (typeof process !== 'undefined' && process.env?.VITE_GITHUB_TOKEN);
+  return typeof token === 'string' && token.trim() ? token.trim() : undefined;
+}
+
 function extractFeatures(body: string | null): string[] {
   if (!body) return ["System stability synchronization", "Neural protocol refinement"];
 
@@ -74,9 +82,11 @@ class GitHubReleasesService {
     if (!repo) return [];
 
     try {
-      const response = await fetch(GITHUB_RELEASES_URL(repo), {
-        headers: { Accept: 'application/vnd.github.v3+json' },
-      });
+      const token = getGitHubToken();
+      const headers: Record<string, string> = { Accept: 'application/vnd.github.v3+json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
+      const response = await fetch(GITHUB_RELEASES_URL(repo), { headers });
 
       if (!response.ok) throw new Error(`GitHub API: ${response.status}`);
 

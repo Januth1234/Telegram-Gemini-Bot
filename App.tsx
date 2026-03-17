@@ -47,13 +47,14 @@ function conversationToSearchText(c: Conversation): string {
   return text.length > 4000 ? text.slice(0, 4000) : text;
 }
 
-const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'chat', agent: 'agent' };
+const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'translator', agent: 'agent' };
 // Only workspace views map to workspace modes; static pages shouldn't force-chat.
 const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   art: 'studio',
   camera: 'vision',
   math: 'maths',
   chat: 'chat',
+  translator: 'translator',
   voice: 'voice',
   agent: 'agent',
   landing: 'chat', // landing CTA opens chat by default
@@ -68,11 +69,12 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
 };
-const WORKSPACE_VIEWS: AppView[] = ['chat', 'art', 'camera', 'voice', 'math', 'agent'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
+const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
-const RECENT_LOCAL_MS = 5 * 60 * 1000;
+// Treat local conversations from the last 7 days as eligible to merge into cloud
+const RECENT_LOCAL_MS = 7 * 24 * 60 * 60 * 1000;
 
 type ThemeMode = 'light' | 'dark' | 'auto';
 
@@ -84,7 +86,7 @@ const getIsNightByLocalTime = (): boolean => {
 const VALID_USER_THEMES: UserThemeId[] = ['classic', 'midnight', 'aurora', 'terminal', 'paper', 'ocean', 'sunset'];
 const normalizeUserTheme = (value: unknown): UserThemeId => {
   if (value && typeof value === 'string' && VALID_USER_THEMES.includes(value as UserThemeId)) return value as UserThemeId;
-  return 'classic'; // new users, "standard", or invalid → classic so animations and theme always work
+  return 'classic'; // new users or invalid → classic so animations and theme always work
 };
 
 const App: React.FC = () => {
@@ -167,7 +169,12 @@ const App: React.FC = () => {
   // --- 1. AUTH INITIALIZATION & SYNC ---
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
-      if (!authInitialized) setAuthInitialized(true);
+      if (!authInitialized) {
+        // Allow the app to render as guest and surface a clear message instead of
+        // leaving the user on an endless spinner with no explanation.
+        setAuthError('Taking longer than usual to connect. Showing guest view while we finish signing you in.');
+        setAuthInitialized(true);
+      }
     }, AUTH_TIMEOUT_MS);
 
     let unsubscribe: (() => void) | undefined;
@@ -240,8 +247,11 @@ const App: React.FC = () => {
   // --- 2. ROUTING LOGIC ---
   useEffect(() => {
     const handleHash = () => {
-      const hash = window.location.hash.replace('#', '').split('?')[0];
-      
+      const hashPart = window.location.hash.replace(/^#+/, '');
+      const [path, qs] = hashPart.includes('?') ? hashPart.split('?', 2) : [hashPart, ''];
+      const hash = path;
+      const params = new URLSearchParams(qs);
+
       // ADMIN PORTAL DETECTION
       if (hash === 'admin-portal') {
           setView('admin-portal');
@@ -262,6 +272,12 @@ const App: React.FC = () => {
               return;
           }
           setView(hash as AppView);
+          if (hash === 'chat') {
+            const promptFromUrl = params.get('prompt');
+            if (promptFromUrl !== null) {
+              try { setGlobalPrompt(decodeURIComponent(promptFromUrl)); } catch { /* ignore malformed */ }
+            }
+          }
       } else {
           setView('landing');
       }
@@ -336,22 +352,33 @@ const App: React.FC = () => {
     if (user?.id) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = window.setTimeout(async () => {
-        setSyncStatus('syncing');
-        let embeddingsByConvId: Record<string, number[]> | undefined;
-        if (meaningfulConversations.length > 0) {
-          const texts = meaningfulConversations.map(conversationToSearchText);
-          const vectors = await geminiService.embedText(texts).catch(() => []);
-          if (vectors.length === meaningfulConversations.length) {
-            embeddingsByConvId = {};
-            meaningfulConversations.forEach((c, i) => {
-              if (vectors[i]?.length) embeddingsByConvId![c.id] = vectors[i];
-            });
+        try {
+          // Compute embeddings first when due (2–4s) so the sync spinner is only shown for the actual write.
+          let embeddingsByConvId: Record<string, number[]> | undefined;
+          const EMBEDDING_MIN_INTERVAL_MS = 2 * 60 * 1000;
+          if (meaningfulConversations.length > 0 && Date.now() - lastEmbeddingAtRef.current >= EMBEDDING_MIN_INTERVAL_MS) {
+            lastEmbeddingAtRef.current = Date.now();
+            try {
+              const texts = meaningfulConversations.map(conversationToSearchText);
+              const vectors = await geminiService.embedText(texts).catch(() => []);
+              if (vectors.length === meaningfulConversations.length) {
+                embeddingsByConvId = {};
+                meaningfulConversations.forEach((c, i) => {
+                  if (vectors[i]?.length) embeddingsByConvId![c.id] = vectors[i];
+                });
+                if (Object.keys(embeddingsByConvId).length === 0) embeddingsByConvId = undefined;
+              }
+            } catch {
+              // Ignore; search will fall back to recency.
+            }
           }
-        }
-        firebaseService.saveHistory(user.id, meaningfulConversations, [], lastCloudRef.current, embeddingsByConvId).then(() => {
+          setSyncStatus('syncing');
+          await firebaseService.saveHistory(user.id, meaningfulConversations, [], lastCloudRef.current, embeddingsByConvId);
           setSyncStatus('success');
           setTimeout(() => setSyncStatus('idle'), 2000);
-        }).catch(() => setSyncStatus('error'));
+        } catch {
+          setSyncStatus('error');
+        }
       }, SAVE_DEBOUNCE_MS);
     }
     return () => {
@@ -365,16 +392,26 @@ const App: React.FC = () => {
     if (!exists) setActiveConversationId(conversations[0]?.id ?? null);
   }, [conversations, activeConversationId]);
 
-  // When on chat (or workspace) with no active conversation, create one so the first message isn't dropped
+  // Sync global reasoning toggles from the active conversation so switching convs restores that conv's modes.
   useEffect(() => {
+    if (!activeConversationId) return;
+    const active = conversations.find(c => c.id === activeConversationId);
+    setThinkingMode(active?.thinkingMode ?? false);
+    setDescriptiveMode(active?.descriptiveMode ?? false);
+  }, [activeConversationId, conversations]);
+
+  // When on chat (or workspace) with no active conversation, create one so the first message isn't dropped.
+  // Agent view manages its own state and does not use conversations; skip to avoid zombie "New Chat" entries.
+  useEffect(() => {
+    if (view === 'agent') return;
     if (view !== 'chat' && !WORKSPACE_VIEWS.includes(view)) return;
     if (activeConversationId != null || bootstrappedConvRef.current) return;
     const newId = Date.now().toString();
     const mode = VIEW_TO_MODE[view];
-    setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
+    setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode, modesUsed: [mode], thinkingMode, descriptiveMode }, ...prev]);
     setActiveConversationId(newId);
     bootstrappedConvRef.current = true;
-  }, [view, activeConversationId]);
+  }, [view, activeConversationId, thinkingMode, descriptiveMode]);
 
   const mergeHistory = useCallback((cloudHistory: Conversation[]) => {
     const withUserMessages = (cloudHistory || []).filter(c => conversationHasUserMessage(c));
@@ -406,11 +443,15 @@ const App: React.FC = () => {
   const MIN_PULL_GAP_MS = 2 * 60 * 1000; // don't pull on every tab focus; at least 2 min since last pull
   const lastPullTimeRef = useRef<number>(0);
   const lastCloudRef = useRef<Conversation[] | null>(null);
+  // Throttle expensive embedding calls so we don't re-embed all conversations on every keystroke.
+  const lastEmbeddingAtRef = useRef<number>(0);
   useEffect(() => {
     const uid = user?.id;
     if (!uid) return;
     const pull = async () => {
       const now = Date.now();
+      // Skip background pulls when the tab isn't visible to reduce Firestore reads.
+      if (document.visibilityState !== 'visible') return;
       if (now - lastPullTimeRef.current < MIN_PULL_GAP_MS) return;
       lastPullTimeRef.current = now;
       try {
@@ -427,7 +468,7 @@ const App: React.FC = () => {
       if (document.visibilityState === 'visible') pull();
     };
     document.addEventListener('visibilitychange', onVisibility);
-    pull(); // initial pull
+    pull(); // initial pull (only if tab is visible)
     const intervalId = window.setInterval(pull, SYNC_PULL_INTERVAL_MS);
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
@@ -529,6 +570,9 @@ const App: React.FC = () => {
     const nextDescriptive = opts.descriptive ?? descriptiveMode;
     setThinkingMode(nextThinking);
     setDescriptiveMode(nextDescriptive);
+    if (activeConversationId) {
+      setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, thinkingMode: nextThinking, descriptiveMode: nextDescriptive } : c));
+    }
   };
 
   const handleThemeChange = async (nextTheme: UserThemeId) => {
@@ -568,8 +612,8 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'agent':
-        return <AgentWorkspace user={user} onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'chat': case 'art': case 'camera': case 'math':
+        return <AgentWorkspace user={user} onClose={() => window.location.hash = 'chat'} lang={lang} initialPrompt={globalPrompt} />;
+      case 'chat': case 'translator': case 'art': case 'camera': case 'math':
         return (
           <ChatWorkspace 
             onClose={() => window.location.hash = 'chat'}
@@ -586,7 +630,7 @@ const App: React.FC = () => {
                   const newMessages = typeof updater === 'function' ? updater(existing?.messages || []) : updater;
                   if (!existing) {
                       const newConv: Conversation = {
-                          id: activeConversationId, title: "New Chat", messages: newMessages, timestamp: new Date(), mode, modesUsed: [mode]
+                          id: activeConversationId, title: "New Chat", messages: newMessages, timestamp: new Date(), mode, modesUsed: [mode], thinkingMode, descriptiveMode
                       };
                       return [newConv, ...prev];
                   }
@@ -600,7 +644,10 @@ const App: React.FC = () => {
             onDeleteConv={handleDeleteConversation}
             activeConvId={activeConversationId || ""}
             onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
-            onModeSwitch={(m) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c))}
+            onModeSwitch={(m) => {
+              setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c));
+              window.location.hash = WORKSPACE_TO_VIEW[m];
+            }}
             isSyncing={syncStatus === 'syncing'}
             thinkingMode={thinkingMode}
             descriptiveMode={descriptiveMode}
@@ -811,7 +858,7 @@ const App: React.FC = () => {
           </div>
           {user && WORKSPACE_VIEWS.includes(view) && (
             <div className="flex items-center bg-slate-100/90 dark:bg-white/5 backdrop-blur-md p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-inner border border-black/5 dark:border-white/5 z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
-              <NavTab active={view === 'chat'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
+              <NavTab active={view === 'chat' || view === 'translator'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
               <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />
               <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => handleStartWorkspace('', 'voice')} />
@@ -825,7 +872,7 @@ const App: React.FC = () => {
                 active={view === 'agent'}
                 icon="fa-robot"
                 label="Agent"
-                onClick={() => handleStartWorkspace('', 'agent')}
+                onClick={() => handleStartWorkspace(globalPrompt, 'agent')}
               />
             </div>
           )}

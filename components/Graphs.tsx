@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Language, GraphDefinition, GraphType, GraphDataSeries } from '../types';
 import { translations } from '../translations';
 import { casService } from '../services/casService';
-import Plotly from 'plotly.js-dist-min';
+import * as PlotlyNS from 'plotly.js-dist-min';
+/** Resolve Plotly API for Vite/bundlers that expose it as default */
+const Plotly = (PlotlyNS as any).default ?? PlotlyNS;
 
 declare const Desmos: any;
 
@@ -33,6 +35,8 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
   const desmosRef = useRef<HTMLDivElement | null>(null);
   const desmosCalcRef = useRef<any>(null);
   const plotlyRef = useRef<HTMLDivElement | null>(null);
+  const onGraphsChangeRef = useRef(onGraphsChange);
+  onGraphsChangeRef.current = onGraphsChange;
 
   // Initialise Desmos for analytic graphs
   useEffect(() => {
@@ -125,7 +129,7 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
     Plotly.newPlot(plotlyRef.current, traces, layout, { displayModeBar: false });
   }, [dataSeries, activeType]);
 
-  // Sync outward GraphDefinition whenever core inputs change
+  // Sync outward GraphDefinition whenever core inputs change (use ref for callback to avoid infinite loop when parent passes inline fn)
   useEffect(() => {
     const def: GraphDefinition = {
       id: initialGraph?.id || 'graph-1',
@@ -134,8 +138,8 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
       xDomain,
       dataSeries: activeType === 'data' ? dataSeries : undefined,
     };
-    onGraphsChange(def);
-  }, [activeType, expression, xDomain, dataSeries, initialGraph?.id, onGraphsChange]);
+    onGraphsChangeRef.current(def);
+  }, [activeType, expression, xDomain, dataSeries, initialGraph?.id]);
 
   const handleDomainChange = (key: 'min' | 'max', value: string) => {
     const num = Number(value);

@@ -13,8 +13,7 @@ function shouldUpdateMemoryFromExchange(userPrompt: string): boolean {
   if (trimmed.length < 40) return false; // skip "ok", "thanks", "what's 2+2?"
   const lower = trimmed.toLowerCase();
   const looksPersonal =
-    /\b(i'?m|i am|my name|call me|i (like|love|prefer|want|need|have|live|work|study)|remember (that|this)|my (email|phone|address|job|school)|i'm from)\b/i.test(lower) ||
-    /^(my|i )/i.test(trimmed);
+    /\b(i'?m|i am|my name|call me|i (like|love|prefer|enjoy|hate|dislike|need|have|live|work|study)|remember (that|this)|my (email|phone|address|job|school|birthday|age)|i'm from)\b/i.test(lower);
   return looksPersonal;
 }
 
@@ -75,6 +74,22 @@ export class GeminiService {
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
+
+    // Hydrate guest usage from localStorage so limits survive page refresh.
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('orin-guest-usage');
+        if (raw) {
+          const parsed = JSON.parse(raw) as Partial<typeof this.guestUsage>;
+          this.guestUsage = {
+            ...this.guestUsage,
+            ...parsed,
+          };
+        }
+      } catch {
+        // Ignore storage errors; fall back to defaults.
+      }
+    }
   }
 
   setSessionUser(user: UserAccount) {
@@ -86,10 +101,10 @@ export class GeminiService {
     return this.currentUser;
   }
 
+  /** Clears local state only. Do not call firebaseService.logout() here — the UI calls it, then onAuthStateChanged runs and calls this. */
   async logout() {
     this.currentUser = null;
     cacheService.remove(CacheKey.USER);
-    try { await firebaseService.logout(); } catch(e) {}
   }
 
   private resetGuestWindows() {
@@ -101,6 +116,15 @@ export class GeminiService {
     if (!this.guestUsage.uploadResetAt || now - this.guestUsage.uploadResetAt > DAY_MS) {
       this.guestUsage.uploadCount = 0;
       this.guestUsage.uploadResetAt = now;
+    }
+
+    // Persist guest usage window to localStorage.
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
+      } catch {
+        // Best effort; ignore quota or privacy errors.
+      }
     }
   }
 
@@ -137,7 +161,8 @@ export class GeminiService {
     if (plan === 'basic' || plan === 'basic_yearly') {
       return ['gemini-2.5-flash', 'gemini-2.0-flash'];
     }
-    return ['gemini-2.0-flash', 'gemini-3.1-flash-lite'];
+    // Free: keep a single, valid model to avoid silent fallbacks to non-existent names.
+    return ['gemini-2.0-flash'];
   }
 
   /** Context window size by plan (last N messages). Matches pricing: Free=5, Basic=10, Pro=20. */
@@ -168,7 +193,7 @@ export class GeminiService {
         if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
       } else {
         this.resetGuestWindows();
-        if (this.guestUsage.textCount >= this.guestUsage.textMax) {
+      if (this.guestUsage.textCount >= this.guestUsage.textMax) {
           throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
         }
       }
@@ -219,18 +244,17 @@ EXPLANATION STYLE:
 
       const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
 
-      // Prefer explicit grounding if caller requested it
+      // Only attach tools when needed: maps by request, search only for time-sensitive or explicit search.
+      // Never enable search for private mode or file attachments (saves quota, keeps answers local).
+      const allowSearch =
+        !options.isPrivate &&
+        !options.fileData &&
+        (options.grounding === 'search' || looksTimeSensitive);
+
       if (options.grounding === 'maps') {
         config.tools = [{ googleMaps: {} }];
-      } else {
-        // Default: enable web search for general chat so answers can use real-time data
+      } else if (allowSearch) {
         config.tools = [{ googleSearch: {} }];
-
-        // If caller explicitly disabled grounding in the future we could respect that here.
-        // For now, we bias towards search for better, real-time answers—especially for time-sensitive queries.
-        if (options.grounding === 'search' || looksTimeSensitive) {
-          config.tools = [{ googleSearch: {} }];
-        }
       }
 
       const modelsToTry = this.getModelsToTry(this.currentUser);
@@ -265,8 +289,15 @@ EXPLANATION STYLE:
       }
 
       if (!this.currentUser) {
-         this.resetGuestWindows();
-         this.guestUsage.textCount++;
+        this.resetGuestWindows();
+        this.guestUsage.textCount++;
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
+          } catch {
+            // ignore
+          }
+        }
       }
 
       const links: GroundingLink[] = [];
@@ -290,7 +321,10 @@ EXPLANATION STYLE:
         const cooldownOk = now - last >= MEMORY_UPDATE_COOLDOWN_MS;
         if (shouldUpdateMemoryFromExchange(promptText) && cooldownOk) {
           this.lastMemoryUpdateByUser.set(uid, now);
-          this.updateMemoryFromExchange(uid, memory, promptText, text).catch(() => {});
+          this.updateMemoryFromExchange(uid, memory, promptText, text).catch((err) => {
+            // Surface memory update failures for observability without breaking chat.
+            console.error("Orin memory update failed:", err);
+          });
         }
       }
 
@@ -442,14 +476,37 @@ EXPLANATION STYLE:
 
       let operation = await ai.models.generateVideos(params);
 
+      // Poll for completion with timeout + max attempts to avoid infinite spinner.
+      const pollIntervalMs = 8000;
+      const maxPollMs = 5 * 60 * 1000; // 5 minutes
+      const startedAt = Date.now();
+      let attempts = 0;
+      const maxAttempts = Math.ceil(maxPollMs / pollIntervalMs);
+
       while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
+        if (Date.now() - startedAt > maxPollMs || attempts >= maxAttempts) {
+          throw new AppError("Video generation is taking longer than expected. Please try again.", "generic");
+        }
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         operation = await ai.operations.getVideosOperation({ operation });
+        // If the operation itself reports an error, surface it.
+        const opError = (operation as any)?.error;
+        if (opError?.message) {
+          throw new AppError("Video generation failed: " + opError.message, "generic");
+        }
       }
 
       if (!this.currentUser) {
         this.resetGuestWindows();
         this.guestUsage.uploadCount++;
+        if (typeof window !== 'undefined') {
+          try {
+            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
+          } catch {
+            // ignore
+          }
+        }
       }
 
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
@@ -541,7 +598,11 @@ EXPLANATION STYLE:
           .trim();
       }
       if (newMemory) await firebaseService.updateUserMemory(uid, newMemory);
-    } catch {}
+    } catch (err) {
+      // Log for diagnostics; chat flow should not break if memory sync fails.
+      console.error("Orin memory update pipeline failed:", err);
+      throw err;
+    }
   }
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
@@ -723,7 +784,10 @@ When the user asks about time, date, weather, or prices, use this context. For w
       };
       if (config.proactiveAudio) finalConfig.proactivity = { proactiveAudio: true };
       if (config.enableAffectiveDialog) finalConfig.enableAffectiveDialog = true;
-      return ai.live.connect({ model: GeminiService.LIVE_NATIVE_AUDIO_MODEL, callbacks, config: finalConfig });
+      const { __setSessionPromise, ...passThroughCallbacks } = callbacks as { __setSessionPromise?: (p: Promise<unknown>) => void; [k: string]: unknown };
+      const sessionPromise = ai.live.connect({ model: GeminiService.LIVE_NATIVE_AUDIO_MODEL, callbacks: passThroughCallbacks, config: finalConfig });
+      __setSessionPromise?.(sessionPromise);
+      return sessionPromise;
   }
 
   /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */
@@ -734,14 +798,16 @@ When the user asks about time, date, weather, or prices, use this context. For w
   }
 
   async connectTranslator(callbacks: any, options: any) {
-     return this.connectLive(callbacks, { 
+     return this.connectLive(callbacks, {
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
         systemInstruction: `You are a real-time interpreter. The user will speak in either ${options.source} or ${options.target}.
 Detect the language automatically. If they speak ${options.source}, output the translation in ${options.target}.
 If they speak ${options.target}, output in ${options.source}.
 Output ONLY the translation. Do not add commentary, greetings, or explanations.
-If the speech is unclear or too short to translate, output nothing.`
+If the speech is unclear or too short to translate, output nothing.`,
+        proactiveAudio: options.proactiveAudio,
+        enableAffectiveDialog: options.enableAffectiveDialog,
      });
   }
 

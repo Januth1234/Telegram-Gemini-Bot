@@ -34,15 +34,19 @@ export class CacheService {
 
   /**
    * Retrieves an item from local storage with safe deserialization.
+   * set() stores strings as-is and other types via JSON.stringify, so we try
+   * JSON.parse first to restore booleans, numbers, objects, arrays; plain
+   * strings (e.g. "hello") are returned as-is when parse fails.
    */
   get<T>(key: CacheKey, fallback: T): T {
     try {
       const data = localStorage.getItem(key);
       if (data === null) return fallback;
-      
-      // If it looks like JSON, try to parse it
-      if (data.startsWith('{') || data.startsWith('[')) return JSON.parse(data) as T;
-      return data as unknown as T;
+      try {
+        return JSON.parse(data) as T;
+      } catch {
+        return data as unknown as T;
+      }
     } catch {
       return fallback;
     }

@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
 
@@ -8,10 +7,30 @@ interface LogicFlowPageProps {
   lang: Language;
 }
 
+const LOGIC_FLOW_KEYFRAMES = `
+  @keyframes flowLine { 0% { left: -10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { left: 110%; opacity: 0; } }
+  @keyframes flowLineVertical { 0% { top: -10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 110%; opacity: 0; } }
+`;
+
 const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
   const t = translations[lang];
   const [activeFlow, setActiveFlow] = useState<'si' | 'en'>(lang === 'si' ? 'si' : 'en');
   const isSinhalaFlow = activeFlow === 'si';
+
+  useEffect(() => {
+    const id = 'logic-flow-keyframes';
+    let style = document.getElementById(id) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement('style');
+      style.id = id;
+      style.textContent = LOGIC_FLOW_KEYFRAMES;
+      document.head.appendChild(style);
+    }
+    return () => {
+      const el = document.getElementById(id);
+      if (el?.parentNode) el.parentNode.removeChild(el);
+    };
+  }, []);
 
   const FlowStep = ({ icon, title, label, color, isLast = false }: any) => {
     const colorMap: Record<string, string> = {
@@ -62,11 +81,6 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
 
   return (
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal safe-pb">
-      <style>{`
-        @keyframes flowLine { 0% { left: -10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { left: 110%; opacity: 0; } }
-        @keyframes flowLineVertical { 0% { top: -10%; opacity: 0; } 10% { opacity: 1; } 90% { opacity: 1; } 100% { top: 110%; opacity: 0; } }
-      `}</style>
-      
       <div className="max-w-7xl mx-auto px-6 py-12 pb-32">
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-10 mb-16">
           <div className="flex items-center gap-5">

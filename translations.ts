@@ -143,6 +143,11 @@ export const translations = {
     step4Title: "Explore",
     step4Desc: "Try the 'Voice' mode for hands-free interaction or 'Vision' to analyze images.",
     footerAllRights: "© 2026 JN Productions Global • All Rights Reserved",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    tiktok: "TikTok",
+    youtube: "YouTube",
+    linkedin: "LinkedIn",
     lastUpdatedFeb2026: "Last updated February 2026",
     upgradeSubtitle: "Upgrade Your Intelligence",
     freeLabel: "Free",
@@ -168,7 +173,7 @@ export const translations = {
       chat: ["Help with homework", "Write a short story", "What's in the news?"],
       studio: ["Sunset at beach", "Cute puppy", "City of the future"],
       vision: ["What is this?", "Read the text in this photo", "Explain this picture"],
-      maths: ["Solve x + 5 = 10", "What is Pi?", "Draw a triangle"]
+      maths: ["Solve x + 5 = 10", "What is Pi?", "Graph y = 2x + 1"]
     },
     transMode: {
       start: "Start",
@@ -183,7 +188,8 @@ export const translations = {
     },
     voiceMode: {
       assistant: "Talk",
-      interpreter: "Translate"
+      interpreter: "Translate",
+      stopSessionToChangeMode: "Stop the session to change mode"
     },
     math: {
       title: "Math",
@@ -247,7 +253,7 @@ export const translations = {
     placeholderVision: "පින්තූරයක් එක් කර ප්‍රශ්නය අසන්න...",
     placeholderVoice: "කතා කරන්න...",
     placeholderMaths: "ගණිත ගැටලුව ලියන්න...",
-    langToggle: "தமிழ்",
+    langToggle: "Tamil",
     themeToggle: "පාට",
     reasoningMode: "හොඳින් සිතීම",
     search: "අන්තර්ජාලය",
@@ -340,6 +346,11 @@ export const translations = {
     step4Title: "ගවේෂණය කරන්න",
     step4Desc: "හස්ත-මුළු අන්තර්ක්‍රියාව සඳහා 'හඬ' ප්‍රකාරය හෝ රූප විශ්ලේෂණය සඳහා 'කැමරාව' උත්සාහ කරන්න.",
     footerAllRights: "© 2026 JN Productions Global • සියලු අයිතිවාසිකම් ඇවිරිණි",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    tiktok: "TikTok",
+    youtube: "YouTube",
+    linkedin: "LinkedIn",
     lastUpdatedFeb2026: "අවසන් යාවත්කාලීනය 2026 පෙබරවාරි",
     upgradeSubtitle: "ඔබේ බුද්ධිය උත්කෘෂ්ට කරන්න",
     freeLabel: "නොමිලේ",
@@ -365,7 +376,7 @@ export const translations = {
       chat: ["ගණිතයට උදව් කරන්න", "කතාවක් ලියන්න", "අලුත්ම පුවත් මොනවාද?"],
       studio: ["වෙරළේ ඉර බහිනවා", "ලස්සන පූසෙක්", "අනාගත නගරයක්"],
       vision: ["මේකේ මොනවද තියෙන්නේ?", "මේක කියවන්න", "විස්තර කරන්න"],
-      maths: ["x + 5 = 10 විසඳන්න", "Pi යනු කුමක්ද?", "කොටුවක් අඳින්න"]
+      maths: ["x + 5 = 10 විසඳන්න", "Pi යනු කුමක්ද?", "y = 2x + 1 ප්‍රස්ථාරය අඳින්න"]
     },
     transMode: {
       start: "අරඹන්න",
@@ -380,7 +391,8 @@ export const translations = {
     },
     voiceMode: {
       assistant: "කතා කරන්න",
-      interpreter: "පරිවර්තනය"
+      interpreter: "පරිවර්තනය",
+      stopSessionToChangeMode: "මාදිලිය වෙනස් කිරීමට සැසිය නවතින්න"
     },
     math: {
       title: "ගණිතය",
@@ -519,7 +531,7 @@ export const translations = {
     infoStudioTitle: "ஸ்டூடியோ உருவாக்கம்",
     infoStudioDesc: "எளிய உரை கோரிக்கைகளைப் பயன்படுத்தி உயர்தர படங்கள் மற்றும் குறுகிய வீடியோக்களை உருவாக்குங்கள். உள்ளடக்க படைப்பாளர்கள், விற்பனையாளர்கள் மற்றும் டிஜிட்டல் கலைஞர்களுக்கு ஏற்றது.",
     infoVoiceTitle: "குரல் உதவியாளர்",
-    infoVoiceDesc: "ஓரினுடன் இயல்பாக பேசுங்கள். குரல் முறை நேரடி உரையாடலை ஆதரிக்கிறது.",
+    infoVoiceDesc: "ஓரினுடன் நேரடியாகப் பேசுங்கள். குரல் வசதி உரையாடலை ஊக்குவிக்கிறது.",
     whoIsOrinFor: "ஓரின் யாருக்காக?",
     audienceStudents: "மாணவர்கள்",
     audienceStudentsDesc: "உங்கள் தாய் மொழியில் கணித சிக்கல்கள், சுருக்கங்கள் மற்றும் ஆராய்ச்சிக்கு உதவி பெறுங்கள். சிக்கலான கருத்துகளை உடனடியாக தெளிவுபடுத்துங்கள்.",
@@ -537,6 +549,11 @@ export const translations = {
     step4Title: "ஆய்வு செய்யுங்கள்",
     step4Desc: "கைகளில்லா தொடர்புக்கு 'குரல்' முறை அல்லது படங்கள் பகுப்பாய்வு செய்ய 'கணிப்பு' ஐ முயற்சிக்கவும்.",
     footerAllRights: "© 2026 JN Productions Global • அனைத்து உரிமைகளும் பாதுகாக்கப்பட்டவை",
+    instagram: "Instagram",
+    facebook: "Facebook",
+    tiktok: "TikTok",
+    youtube: "YouTube",
+    linkedin: "LinkedIn",
     lastUpdatedFeb2026: "கடைசி புதுப்பிப்பு பிப்ரவரி 2026",
     upgradeSubtitle: "உங்கள் நுண்ணறிவை மேம்படுத்துங்கள்",
     freeLabel: "இலவசம்",
@@ -562,7 +579,7 @@ export const translations = {
       chat: ["கணித உதவி", "சிறுகதை எழுது", "இன்றைய செய்திகள்?"],
       studio: ["கடற்கரை சூரிய அஸ்தமனம்", "அழகான நாய்க்குட்டி", "எதிர்கால நகரம்"],
       vision: ["இது என்ன?", "இந்த படத்தில் உள்ள உரையை வாசி", "விளக்கம் கொடு"],
-      maths: ["x + 5 = 10 தீர்", "Pi என்றால் என்ன?", "முக்கோணம் வரை"]
+      maths: ["x + 5 = 10 தீர்", "Pi என்றால் என்ன?", "y = 2x + 1 வரைபடம்"]
     },
     transMode: {
       start: "தொடங்கு",
@@ -577,7 +594,8 @@ export const translations = {
     },
     voiceMode: {
       assistant: "பேசுங்கள்",
-      interpreter: "மொழிபெயர்ப்பு"
+      interpreter: "மொழிபெயர்ப்பு",
+      stopSessionToChangeMode: "பயன்முறையை மாற்ற அமர்வை நிறுத்துங்கள்"
     },
     math: {
       title: "கணிதம்",

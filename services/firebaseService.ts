@@ -480,15 +480,8 @@ class FirebaseService {
   async saveHistory(uid: string, history: Conversation[], deletedIds: string[] = [], recentCloud: Conversation[] | null = null, embeddingsByConvId?: Record<string, number[]>) {
     if (!this.db) return;
     try {
-      let cloud: Conversation[] | null = recentCloud;
-      if (cloud === undefined || cloud === null) {
-        try {
-          cloud = await this.getHistory(uid);
-        } catch {
-          // Use empty cloud so we still persist local history (e.g. offline or permission)
-        }
-      }
-      const cloudList = (cloud || []).filter(c => conversationHasUserMessage(c));
+      // Rely on caller's recentCloud snapshot; avoid extra reads that can race with writes.
+      const cloudList = (recentCloud || []).filter(c => conversationHasUserMessage(c));
       const localList = history.filter(c => conversationHasUserMessage(c));
       const localById = new Map(localList.map(c => [c.id, c]));
       for (const c of cloudList) {

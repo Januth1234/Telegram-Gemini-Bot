@@ -28,7 +28,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return norm === 0 ? 0 : dot / norm;
 }
 
-type StudioTab = 'image' | 'video' | 'music';
+type StudioTab = 'image' | 'video' | 'music' | 'narration';
 
 const TTS_VOICES = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
@@ -49,7 +49,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [videoLastFrame, setVideoLastFrame] = useState<{ imageBytes: string; mimeType: string } | null>(null);
   const [extendingTimestamp, setExtendingTimestamp] = useState<number | null>(null);
   const [extendPrompt, setExtendPrompt] = useState('');
-  const [history, setHistory] = useState<GeneratedAsset[]>(() => cacheService.get<GeneratedAsset[]>(CacheKey.STUDIO_HISTORY, []));
+  // Studio history is kept in-memory only; persisting large data URLs to localStorage quickly hits quota.
+  const [history, setHistory] = useState<GeneratedAsset[]>([]);
   const [imageSearchQuery, setImageSearchQuery] = useState('');
   const [imageSearchOrder, setImageSearchOrder] = useState<number[] | null>(null);
   const [isImageSearching, setIsImageSearching] = useState(false);
@@ -59,6 +60,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState("");
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
 
   // Narration (TTS) state
   const [narrationText, setNarrationText] = useState('');
@@ -71,10 +73,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [dialogueSpeaker2, setDialogueSpeaker2] = useState('Speaker2');
   const [dialogueVoice2, setDialogueVoice2] = useState<string>(TTS_VOICES[1]);
 
-  // Persist studio history to localStorage (images with data URLs + embeddings survive refresh)
-  useEffect(() => {
-    cacheService.set(CacheKey.STUDIO_HISTORY, history);
-  }, [history]);
+  // NOTE: We intentionally do NOT persist full studio history (data URLs) to localStorage.
+  // A few 4K base64 images can exceed typical 5–10MB quotas and break storage for the whole app.
 
   // Reset aspect ratio when switching tabs to ensure valid state for the selected mode
   useEffect(() => {
@@ -84,6 +84,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setAspectRatio('16:9');
       }
     }
+    // Intentionally omit aspectRatio: we only normalize when switching TO video tab, not on every aspect ratio change on video (which would re-run unnecessarily).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
   // Image semantic search: embed query and sort image assets by similarity
@@ -102,8 +104,14 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           setImageSearchOrder(null);
           return;
         }
-        const imageAssets = history.filter((a): a is GeneratedAsset & { embedding: number[] } => a.type === 'image' && Array.isArray(a.embedding) && a.embedding.length > 0);
-        const scored = imageAssets.map((a) => ({ timestamp: a.timestamp, score: cosineSimilarity(queryVec, a.embedding) }));
+        const images = history.filter((a) => a.type === 'image');
+        const indexed = images.filter((a): a is GeneratedAsset & { embedding: number[] } => Array.isArray(a.embedding) && a.embedding.length > 0);
+        if (!indexed.length) {
+          // No embeddings yet (e.g. user searched immediately after generation) – fall back to recency order.
+          setImageSearchOrder(images.map((a) => a.timestamp));
+          return;
+        }
+        const scored = indexed.map((a) => ({ timestamp: a.timestamp, score: cosineSimilarity(queryVec, a.embedding) }));
         scored.sort((a, b) => b.score - a.score);
         setImageSearchOrder(scored.map((x) => x.timestamp));
       } catch {
@@ -289,29 +297,42 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
+  /** Get a Blob from a URL that may be a data: URI (fetch of data: fails in Firefox/Safari). */
+  const urlToBlob = async (url: string): Promise<Blob> => {
+    if (url.startsWith('data:')) {
+      const comma = url.indexOf(',');
+      const base64 = comma >= 0 ? url.slice(comma + 1) : '';
+      const header = url.slice(0, comma >= 0 ? comma : url.length);
+      const mimeMatch = header.match(/data:([^;]+)/);
+      const mime = (mimeMatch?.[1]?.trim() || 'image/png').replace(/;base64$/i, '');
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.blob();
+  };
+
   const handleDownload = async (asset: GeneratedAsset) => {
     try {
-      const response = await fetch(asset.url);
-      const blob = await response.blob();
+      const blob = await urlToBlob(asset.url);
       const blobUrl = window.URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = blobUrl;
       link.download = `orin-${asset.type}-${asset.timestamp}.${asset.type === 'video' ? 'mp4' : asset.type === 'audio' ? 'wav' : 'png'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       window.URL.revokeObjectURL(blobUrl);
-    } catch {
-      // Download failed (e.g. blocked by browser)
+    } catch (e) {
+      setError('Download failed. Try again or use a different browser.');
     }
   };
 
   const handleClearHistory = () => {
-    if (confirm("Are you sure you want to clear your generation history? This will delete all temporary assets.")) {
-        setHistory([]);
-    }
+    setShowClearHistoryConfirm(true);
   };
 
   const readFileAsBase64 = (file: File): Promise<{ imageBytes: string; mimeType: string }> => {
@@ -337,14 +358,20 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     setIsLoading(true);
     setLoadingMessage('Extending video...');
     try {
-      const res = await fetch(asset.url);
-      const blob = await res.blob();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => { const d = (r.result as string).split(',')[1]; resolve(d || ''); };
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
+      let base64: string;
+      if (asset.url.startsWith('data:')) {
+        const comma = asset.url.indexOf(',');
+        base64 = comma >= 0 ? asset.url.slice(comma + 1) : '';
+      } else {
+        const res = await fetch(asset.url);
+        const blob = await res.blob();
+        base64 = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => { const d = (r.result as string).split(',')[1]; resolve(d || ''); };
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+      }
       const url = await geminiService.generateVideo({
         prompt: promptToUse,
         aspectRatio: asset.videoAspectRatio,
@@ -372,7 +399,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const goToPricing = () => {
     setShowUpgradeModal(false);
-    window.location.hash = '#pricing';
+    window.location.hash = 'pricing';
     onClose();
   };
 
@@ -389,11 +416,43 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
           <div className="flex gap-3">
-            <a href="#pricing" onClick={(e) => { e.preventDefault(); goToPricing(); }} className="flex-1 py-3 px-4 rounded-xl bg-cyan-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-cyan-500 transition-colors">
+            <button type="button" onClick={goToPricing} className="flex-1 py-3 px-4 rounded-xl bg-cyan-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-cyan-500 transition-colors">
               View plans
-            </a>
+            </button>
             <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
               Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {showClearHistoryConfirm && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 animate-fade" onClick={() => setShowClearHistoryConfirm(false)}>
+        <div
+          className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">
+            Clear studio history?
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+            This will remove all generated images, videos, and audio from this session. Files you've downloaded are not affected.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowClearHistoryConfirm(false)}
+              className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setHistory([]);
+                setShowClearHistoryConfirm(false);
+              }}
+              className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-black uppercase tracking-widest hover:bg-red-500 transition-colors"
+            >
+              Clear history
             </button>
           </div>
         </div>
@@ -785,7 +844,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                       </div>
                                     </div>
                                   ) : (
-                                    <button onClick={() => setExtendingTimestamp(asset.timestamp)} className="py-2 px-4 rounded-lg bg-indigo-600/90 text-white text-[10px] font-black uppercase hover:bg-indigo-500 transition-colors">Extend (+8s)</button>
+                                    <button onClick={() => { setExtendingTimestamp(asset.timestamp); setExtendPrompt(''); }} className="py-2 px-4 rounded-lg bg-indigo-600/90 text-white text-[10px] font-black uppercase hover:bg-indigo-500 transition-colors">Extend (+8s)</button>
                                   )}
                                 </div>
                               )}

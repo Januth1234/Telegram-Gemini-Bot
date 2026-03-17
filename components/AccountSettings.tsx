@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect } from 'react';
-import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language, UserThemeId } from '../types';
 import { translations } from '../translations';
@@ -64,8 +63,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   };
 
   const handleLogout = async () => {
-      await geminiService.logout();
-      // Auth listener will reset state
+    await firebaseService.logout();
+    // onAuthStateChanged fires with null and clears geminiService / app state
   };
 
   return (
@@ -169,61 +168,51 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  <p id="memory-count" className="sr-only">Neural memory is limited to {MEMORY_MAX_LENGTH} characters so it can be used in every chat.</p>
               </div>
 
-              {/* Theme Picker */}
-              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.04s' }}>
-                <div className="flex justify-between items-center px-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                    <i className="fa-solid fa-palette text-cyan-500/80" />
-                    Workspace Theme
+              {/* Light / dark mode — separate from visual theme */}
+              {onThemeModeChange && (
+                <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.04s' }}>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
+                    <i className="fa-solid fa-circle-half-stroke text-cyan-500/80" />
+                    Light / dark
                   </label>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {/* Classic first, then Auto (mode) next to it */}
-                  {[
-                    { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
-                  ].map((tDef) => {
-                    const active = userTheme === (tDef.id as UserThemeId);
-                    return (
+                  <div className="flex gap-2 flex-wrap">
+                    {[
+                      { id: 'light' as ThemeMode, label: 'Light', desc: 'Always light.' },
+                      { id: 'dark' as ThemeMode, label: 'Dark', desc: 'Always dark.' },
+                      { id: 'auto' as ThemeMode, label: 'Auto', desc: 'Follow system or time of day.' },
+                    ].map((m) => (
                       <button
-                        key={tDef.id}
+                        key={m.id}
                         type="button"
-                        onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
-                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
-                          active
+                        onClick={() => onThemeModeChange(m.id)}
+                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 flex-1 min-w-[100px] ${
+                          themeMode === m.id
                             ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
                             : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
-                            {tDef.label}
+                            {m.label}
                           </span>
-                          {active && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                          {themeMode === m.id && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
                         </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{tDef.desc}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{m.desc}</p>
                       </button>
-                    );
-                  })}
-                  {onThemeModeChange && (
-                    <button
-                      type="button"
-                      onClick={() => onThemeModeChange('auto')}
-                      className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
-                        themeMode === 'auto'
-                          ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
-                          : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
-                          Auto
-                        </span>
-                        {themeMode === 'auto' && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
-                      </div>
-                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Light/dark by your time.</p>
-                    </button>
-                  )}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Workspace theme — visual skin (Classic, Midnight, etc.) */}
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.05s' }}>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
+                  <i className="fa-solid fa-palette text-cyan-500/80" />
+                  Workspace theme
+                </label>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {[
+                    { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
                     { id: 'midnight', label: 'Midnight', desc: 'Pure dark studio look.' },
                     { id: 'aurora', label: 'Aurora', desc: 'Gradient, glowing backdrop.' },
                     { id: 'terminal', label: 'Terminal', desc: 'Deep navy hacker vibe.' },
@@ -266,7 +255,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                     </div>
                     <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.1s' }}>
                         <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations (30 days)</span>
                     </div>
                  </div>
               </div>

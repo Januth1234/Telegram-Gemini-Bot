@@ -8,7 +8,11 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // Config: firebase functions:config:set orina.owner_uid="..." orina.secret_code="#710273"
-const OWNER_UID = functions.config().orina?.owner_uid || process.env.ORIN_OWNER_UID;
+const _ownerUidRaw = functions.config().orina?.owner_uid || process.env.ORIN_OWNER_UID || "";
+const OWNER_UID = (typeof _ownerUidRaw === "string" && _ownerUidRaw.trim() !== "") ? _ownerUidRaw.trim() : undefined;
+if (OWNER_UID === undefined) {
+  functions.logger.warn("OWNER_UID is unset; approveUser relies only on custom claims (role === 'owner').");
+}
 const SECRET_CODE = functions.config().orina?.secret_code || "#710273";
 
 async function logAudit(action, actorUid, details) {

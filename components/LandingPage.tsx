@@ -59,6 +59,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const context = useMemo(() => {
     const hour = new Date().getHours();
     return { timeOfDay: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening' };
@@ -80,32 +81,32 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   };
 
   const handleGuestSubmit = async () => {
-     if (!prompt.trim()) return;
-     
-     // If user is logged in, use standard flow
-     if (user) {
-        onStartChat(prompt, 'chat');
-        return;
-     }
+    if (!prompt.trim()) return;
 
-     // Guest Mode Logic
-     setIsGuestLoading(true);
-     setGuestResult(null);
-     try {
-        const res = await geminiService.chat(prompt, { 
-          useThinking: thinkingMode, 
-          descriptive: descriptiveMode 
-        });
-        setGuestResult(res.text);
-     } catch (e: any) {
-        if (e.message && e.message.includes("limit")) {
-           setGuestResult("Guest demo limit reached. Please sign in to continue for free.");
-        } else {
-           setGuestResult("Connection interrupted. Please try again.");
-        }
-     } finally {
-        setIsGuestLoading(false);
-     }
+    // If user is logged in, use standard flow
+    if (user) {
+      onStartChat(prompt, 'chat');
+      return;
+    }
+
+    setIsGuestLoading(true);
+    setGuestResult(null);
+    try {
+      const res = await geminiService.chat(prompt, {
+        useThinking: thinkingMode,
+        descriptive: descriptiveMode,
+      });
+      setGuestResult(res.text);
+    } catch (e: any) {
+      if (e?.message && e.message.includes('limit')) {
+        // Guest demo limit reached – show a clear sign-in modal instead of tiny inline text.
+        setShowLoginPrompt(true);
+      } else {
+        setGuestResult('Connection interrupted. Please try again.');
+      }
+    } finally {
+      setIsGuestLoading(false);
+    }
   };
 
   const landingTheme = resolveLandingTheme(userTheme);
@@ -172,11 +173,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                     <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                        {isGuestLoading ? <MarkovLoader /> : guestResult}
                     </div>
-                    {guestResult && guestResult.includes("limit") && (
-                       <button onClick={handleSignIn} disabled={isLoggingIn} className="mt-4 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-bold uppercase tracking-wider rounded-xl disabled:opacity-50">
-                          {isLoggingIn ? t.signingIn : t.signInFree}
-                       </button>
-                    )}
                  </div>
               )}
 
@@ -315,39 +311,76 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         <footer className="w-full py-16 border-t border-black/5 dark:border-white/5 mt-12 w-screen">
             <div className="max-w-6xl mx-auto flex flex-col items-center gap-8 px-6">
                <div className="flex flex-wrap justify-center gap-6">
-                  <SocialIcon icon="fa-instagram" href="https://www.instagram.com/januth10.1/" delayMs={0} />
-                  <SocialIcon icon="fa-facebook-f" href="https://web.facebook.com/januth10.1/" delayMs={80} />
-                  <SocialIcon icon="fa-tiktok" href="https://www.tiktok.com/@januth10.1" delayMs={160} />
-                  <SocialIcon icon="fa-youtube" href="#" delayMs={240} />
-                  <SocialIcon icon="fa-linkedin-in" href="#" delayMs={320} />
+                  <SocialIcon icon="fa-instagram" href="https://www.instagram.com/januth10.1/" label={t.instagram} delayMs={0} />
+                  <SocialIcon icon="fa-facebook-f" href="https://web.facebook.com/januth10.1/" label={t.facebook} delayMs={80} />
+                  <SocialIcon icon="fa-tiktok" href="https://www.tiktok.com/@januth10.1" label={t.tiktok} delayMs={160} />
+                  <SocialIcon icon="fa-youtube" href="#" label={t.youtube} delayMs={240} />
+                  <SocialIcon icon="fa-linkedin-in" href="#" label={t.linkedin} delayMs={320} />
                </div>
                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 text-center opacity-0 animate-reveal" style={{ animationDelay: '400ms', animationFillMode: 'forwards' }}>{t.footerAllRights}</p>
             </div>
         </footer>
       </article>
+
+      {/* Guest Limit Modal */}
+      {showLoginPrompt && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowLoginPrompt(false)}
+        >
+          <div
+            className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl max-w-sm w-full p-8 border border-slate-200 dark:border-white/10 flex flex-col items-center gap-6 text-center animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 flex items-center justify-center">
+              <i className="fa-solid fa-bolt text-2xl text-cyan-600 dark:text-cyan-400" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                You've used your 5 free prompts
+              </h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Sign in for free to unlock unlimited chats, Studio Create, Voice Mode, and cloud sync.
+              </p>
+            </div>
+
+            <button
+              onClick={handleSignIn}
+              disabled={isLoggingIn}
+              className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+            >
+              {isLoggingIn ? (
+                <i className="fa-solid fa-circle-notch animate-spin" />
+              ) : (
+                <img src="https://www.google.com/favicon.ico" alt="G" className="w-4 h-4" />
+              )}
+              <span>{isLoggingIn ? 'Connecting...' : "Continue with Google — It's Free"}</span>
+            </button>
+
+            <button
+              onClick={() => setShowLoginPrompt(false)}
+              className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      )}
     </main>
   );
 };
 
-const NavCard = ({ href, title, icon, lang, delayMs = 0 }: { href: string; title: string; icon: string; lang: Language; delayMs?: number }) => {
-  const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const hash = href.startsWith('#') ? href.slice(1) : href;
-    window.location.hash = hash;
-  };
-
-  return (
-    <a
-      href={href}
-      onClick={handleClick}
-      style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}
-      className="glass-panel group w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-2 border border-slate-200 dark:border-white/5 tap-target bg-white/50 dark:bg-slate-900/30 shadow-sm opacity-0 animate-slide-in-up hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 hover:shadow-lg hover:border-cyan-500/30 transition-[transform,box-shadow,background-color,border-color] duration-300"
-    >
-      <i className={`fa-solid ${icon} text-2xl text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 group-hover:scale-110 transition-all duration-300`} aria-hidden />
-      <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white text-center px-2 transition-colors duration-200 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
-    </a>
-  );
-};
+const NavCard = ({ href, title, icon, lang, delayMs = 0 }: { href: string; title: string; icon: string; lang: Language; delayMs?: number }) => (
+  <a
+    href={href}
+    style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}
+    className="glass-panel group w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-2 border border-slate-200 dark:border-white/5 tap-target bg-white/50 dark:bg-slate-900/30 shadow-sm opacity-0 animate-slide-in-up hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 hover:shadow-lg hover:border-cyan-500/30 transition-[transform,box-shadow,background-color,border-color] duration-300"
+  >
+    <i className={`fa-solid ${icon} text-2xl text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 group-hover:scale-110 transition-all duration-300`} aria-hidden />
+    <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white text-center px-2 transition-colors duration-200 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
+  </a>
+);
 
 // Helper Components for Info Section - with stagger
 const InfoCard = ({ icon, title, desc, lang, delayMs = 0 }: { icon: string; title: string; desc: string; lang?: Language; delayMs?: number }) => (
@@ -377,8 +410,16 @@ const StepRow = ({ num, title, desc, lang, delayMs = 0 }: { num: string; title: 
   </div>
 );
 
-const SocialIcon = ({ icon, href, delayMs = 0 }: { icon: string; href: string; delayMs?: number }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 hover:scale-110 hover:border-cyan-500/50 active:scale-95 transition-all duration-300 shadow-sm opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
+const SocialIcon = ({ icon, href, label, delayMs = 0 }: { icon: string; href: string; label: string; delayMs?: number }) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={label}
+    title={label}
+    className="w-11 h-11 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 hover:scale-110 hover:border-cyan-500/50 active:scale-95 transition-all duration-300 shadow-sm opacity-0 animate-scale-in"
+    style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}
+  >
      <i className={`fa-brands ${icon} text-lg`} />
   </a>
 );

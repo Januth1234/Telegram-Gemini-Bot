@@ -274,11 +274,13 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   const [mathHistory, setMathHistory] = useState<MathHistoryItem[]>(
     () => cacheService.get<MathHistoryItem[]>(CacheKey.MATH_HISTORY, []),
   );
+  const [isSolving, setIsSolving] = useState(false);
   const equationRefs = useRef<(any)[]>([]);
   const focusedMathFieldRef = useRef<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const desmosContainerRef = useRef<HTMLDivElement | null>(null);
   const desmosCalcRef = useRef<any>(null);
+  const handwritingClosedByUserRef = useRef(false);
 
   // Persist math history
   useEffect(() => {
@@ -348,8 +350,15 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     document.head.appendChild(script);
   }, []);
 
-  // Initialize Desmos calculator when ready and container exists.
+  // Initialize Desmos calculator only when inline graph is shown (not when full Graphs panel is open) to avoid two instances.
   useEffect(() => {
+    if (showGraphs) {
+      if (desmosCalcRef.current) {
+        try { desmosCalcRef.current.destroy(); } catch { /* ignore */ }
+        desmosCalcRef.current = null;
+      }
+      return;
+    }
     if (!desmosReady || !desmosContainerRef.current || desmosCalcRef.current) return;
     try {
       desmosCalcRef.current = (window as any).Desmos
@@ -362,7 +371,13 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     } catch {
       desmosCalcRef.current = null;
     }
-  }, [desmosReady]);
+    return () => {
+      if (desmosCalcRef.current) {
+        try { desmosCalcRef.current.destroy(); } catch { /* ignore */ }
+        desmosCalcRef.current = null;
+      }
+    };
+  }, [desmosReady, showGraphs]);
 
   // Read any pending graph expression that other modes left for us.
   useEffect(() => {
@@ -440,6 +455,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       const rawText = textInput.trim();
       if (!rawText) return;
       try {
+        setIsSolving(true);
         const extracted = await geminiService.extractMathFromInput(rawText);
         if (extracted.unreadable) {
           alert('Could not understand the problem. Please rephrase.');
@@ -519,6 +535,8 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         const msg = e instanceof Error ? e.message : String(e);
         alert(msg || 'Math extraction failed. Try again.');
         return;
+      } finally {
+        setIsSolving(false);
       }
     }
 
@@ -919,7 +937,10 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                           Graphs
                         </button>
                         <button
-                          onClick={() => setShowHandwriting(true)}
+                          onClick={() => {
+                          handwritingClosedByUserRef.current = false;
+                          setShowHandwriting(true);
+                        }}
                           className="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
                           title="Draw equation (handwriting)"
                         >
@@ -1115,7 +1136,10 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
               {showHandwriting && (
                 <HandwritingCanvas
                   onRecognize={handleHandwritingRecognize}
-                  onClose={() => setShowHandwriting(false)}
+                  onClose={() => {
+                  handwritingClosedByUserRef.current = true;
+                  setShowHandwriting(false);
+                }}
                   isRecognizing={handwritingRecognizing}
                 />
               )}
@@ -1138,7 +1162,7 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                     <button
                       key={i}
                       onClick={() => tool.type === 'action' ? handleAction(tool.cmd) : insertSymbol(tool.cmd)}
-                      disabled={isTyping}
+                      disabled={isTyping || isSolving}
                       className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center gap-1 ${
                         tool.type === 'action' ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500' : 
                         'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/5 hover:border-indigo-500/50'
@@ -1150,7 +1174,7 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                 {/* Global Solve Button (local solve) */}
                 <button 
                     onClick={() => handleAction('solve for x')} 
-                    disabled={isTyping}
+                    disabled={isTyping || isSolving}
                     className="flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-cyan-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-cyan-500 shadow-lg active:scale-95 transition-all"
                 >
                     Solve
@@ -1356,7 +1380,7 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
                   )}
                 </div>
               )}
-              {graphExpression && (
+              {graphExpression && !showGraphs && (
                 <div className="space-y-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase tracking-widest">
                     <i className="fa-solid fa-chart-line text-xs"></i>

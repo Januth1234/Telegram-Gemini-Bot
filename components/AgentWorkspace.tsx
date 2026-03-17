@@ -7,16 +7,18 @@ interface AgentWorkspaceProps {
   user: UserAccount | null;
   onClose: () => void;
   lang: Language;
+  /** When opening Agent from the bar with a prompt, pre-fill the task input. */
+  initialPrompt?: string;
 }
 
 type ContentTurn = { role: 'user' | 'model'; parts: unknown[] };
 
-const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang }) => {
+const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, initialPrompt = '' }) => {
   const t = translations[lang];
   const plan = user?.plan?.toLowerCase() ?? '';
   const isPro = plan === 'pro' || plan === 'pro_yearly';
 
-  const [task, setTask] = useState('');
+  const [task, setTask] = useState(initialPrompt);
   const [contents, setContents] = useState<ContentTurn[]>([]);
   const [lastText, setLastText] = useState('');
   const [lastCalls, setLastCalls] = useState<Array<{ name: string; args: Record<string, unknown> }>>([]);

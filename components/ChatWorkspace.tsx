@@ -79,7 +79,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const searchDebounceRef = useRef<number | null>(null);
   const [contextTime, setContextTime] = useState(() =>
-    new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'full', timeStyle: 'short' })
+    new Date().toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' })
   );
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -139,6 +139,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           // Ignore storage errors; graphing is a best-effort enhancement.
         }
         onModeSwitch?.('maths');
+        // Hand off to Maths workspace; do not also send this as a chat turn.
+        return;
       }
     }
     
@@ -187,11 +189,12 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       if (isPrivate) {
          setPrivateMessages(prev => [...prev, botMsg]);
       } else {
-         setMessages(prev => [...prev, botMsg]);
-         if (messages.length < 2) {
-            const title = await geminiService.generateTitle([...messages, userMsg, botMsg], [activeTab], lang);
-            onUpdateTitle(title, [activeTab]);
-         }
+        setMessages(prev => [...prev, botMsg]);
+        // Only generate a title once, when the conversation is empty (first user+bot turn).
+        if (messages.length === 0) {
+          const title = await geminiService.generateTitle([userMsg, botMsg], [activeTab], lang);
+          onUpdateTitle(title, [activeTab]);
+        }
       }
       
     } catch (e: unknown) {
@@ -297,8 +300,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           setSemanticOrder(null);
           return;
         }
-        const withEmbedding = conversations.filter((c): c is Conversation & { embedding: number[] } => Array.isArray(c.embedding) && c.embedding.length > 0);
-        const scored = withEmbedding.map((c) => ({ id: c.id, score: cosineSimilarity(queryVec, c.embedding) }));
+        const withEmbedding = conversations.filter(
+          (c): c is Conversation & { embedding: number[] } =>
+            Array.isArray(c.embedding) && c.embedding.length > 0
+        );
+        if (!withEmbedding.length) {
+          // No embeddings available yet; fall back to default ordering.
+          setSemanticOrder(null);
+          return;
+        }
+        const scored = withEmbedding.map((c) => ({
+          id: c.id,
+          score: cosineSimilarity(queryVec, c.embedding),
+        }));
         scored.sort((a, b) => b.score - a.score);
         const order = scored.map((x) => x.id);
         const withoutEmbedding = conversations.filter((c) => !order.includes(c.id));
@@ -314,15 +328,25 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     };
   }, [searchQuery, conversations]);
 
+  // Keep a stable ref to handleSend so auto-submit logic isn't sensitive to callback identity changes.
+  const handleSendRef = useRef(handleSend);
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
+
   // One-shot auto-submit when landing transitions into a workspace with an initial prompt.
   const autoSubmittedRef = useRef(false);
+  // Reset auto-submit flag when switching conversations so a new initialPrompt can fire again.
+  useEffect(() => {
+    autoSubmittedRef.current = false;
+  }, [activeConvId, initialPrompt]);
   useEffect(() => {
     if (!autoSubmit || autoSubmittedRef.current) return;
     if (!localInput.trim()) return;
     autoSubmittedRef.current = true;
     // Fire and forget; handleSend will clear input and propagate change upward.
-    void handleSend(localInput);
-  }, [autoSubmit, localInput, handleSend, activeTab]);
+    void handleSendRef.current(localInput);
+  }, [autoSubmit, localInput, activeTab]);
 
   useEffect(() => {
     setActiveTab(initialMode);
@@ -337,7 +361,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   }, [currentMessages, isTyping]);
 
   useEffect(() => {
-    const update = () => setContextTime(new Date().toLocaleString('en-US', { timeZone: 'Asia/Colombo', dateStyle: 'full', timeStyle: 'short' }));
+    const update = () => setContextTime(new Date().toLocaleString(undefined, { dateStyle: 'full', timeStyle: 'short' }));
     const t = setInterval(update, 60000);
     return () => clearInterval(t);
   }, []);
@@ -411,9 +435,9 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
           <div className="flex gap-3">
-            <a href="#pricing" onClick={(e) => { e.preventDefault(); setShowUpgradeModal(false); window.location.hash = '#pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-cyan-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-cyan-500 transition-colors">
+          <button type="button" onClick={() => { setShowUpgradeModal(false); window.location.hash = 'pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-cyan-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-cyan-500 transition-colors">
               View plans
-            </a>
+            </button>
             <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
               Cancel
             </button>
@@ -454,9 +478,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-cyan-50 dark:bg-cyan-900/20' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                     <button 
                         onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 
-                        className={`w-full text-left p-3 pr-9 text-xs font-bold truncate ${activeConvId === c.id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500'}`}
+                        className={`w-full text-left p-3 pr-9 text-xs font-bold flex items-center gap-1.5 min-w-0 ${activeConvId === c.id ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-500'}`}
                     >
-                        {c.title}
+                        <span className="truncate min-w-0">{c.title}</span>
+                        {(c.thinkingMode || c.descriptiveMode) && (
+                          <span className="shrink-0 flex items-center gap-1 text-[10px] opacity-70" title={[c.thinkingMode && 'Thinking mode', c.descriptiveMode && 'Descriptive mode'].filter(Boolean).join(' · ')}>
+                            {c.thinkingMode && <i className="fa-solid fa-brain" />}
+                            {c.descriptiveMode && <i className="fa-solid fa-align-left" />}
+                          </span>
+                        )}
                     </button>
                     <button 
                         onClick={(e) => {
@@ -477,7 +507,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm">
+        <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm relative">
           <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center" aria-label="History"><i className="fa-solid fa-bars" /></button>
           <div className="flex items-center gap-2">
             <button
@@ -490,6 +520,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">{isPrivate ? 'Private · Not saved' : 'Public'}</span>
             </button>
           </div>
+          {progress > 0 && (
+            <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-slate-200/40 dark:bg-slate-800/80 overflow-hidden">
+              <div
+                className="h-full bg-cyan-500 transition-[width] duration-200"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
         </header>
 
         {renderBody()}
@@ -532,9 +570,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                        const file = e.target.files?.[0];
                        if (!file) return;
                        const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024; // 20MB for PDFs/documents
-                       const isDoc = file.type === 'application/pdf' || file.type === 'text/plain' || file.name.toLowerCase().endsWith('.pdf') || file.name.toLowerCase().endsWith('.txt');
+                       const MAX_IMAGE_BYTES = 10 * 1024 * 1024;   // 10MB for images to avoid freezing the tab
+                       const lowerName = file.name.toLowerCase();
+                       const isDoc = file.type === 'application/pdf' || file.type === 'text/plain' || lowerName.endsWith('.pdf') || lowerName.endsWith('.txt');
+                       const isImage = file.type.startsWith('image/');
                        if (isDoc && file.size > MAX_DOCUMENT_BYTES) {
                          setChatError('File too large. PDFs and documents must be under 20MB.');
+                         e.target.value = '';
+                         return;
+                       }
+                       if (isImage && file.size > MAX_IMAGE_BYTES) {
+                         setChatError('Image too large. Please upload an image under 10MB.');
                          e.target.value = '';
                          return;
                        }

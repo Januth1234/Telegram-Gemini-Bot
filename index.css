@@ -6,4 +6,12 @@
   html { scroll-behavior: smooth; }
   :focus-visible { outline: 2px solid rgb(6 182 212); outline-offset: 2px; }
   ::selection { background-color: rgb(6 182 212 / 0.2); }
+
+  .sinhala-text {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Sinhala", "Iskoola Pota", "Malithi Web", sans-serif;
+  }
+
+  .tamil-text {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans Tamil", "Latha", "Vijaya", sans-serif;
+  }
 }

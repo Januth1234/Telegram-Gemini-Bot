@@ -3,7 +3,7 @@
 <html lang="en" prefix="og: http://ogp.me/ns#">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#0f172a" />
     
     <!-- PERFORMANCE -->
@@ -34,9 +34,8 @@
     <meta property="og:site_name" content="Orin AI Platform" />
     <meta property="og:locale" content="en_LK" />
 
-    <!-- TWITTER -->
+    <!-- TWITTER (twitter:site removed until @orinai_sl is confirmed; cards use og + twitter:card/title/description/image) -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@orinai_sl" />
     <meta name="twitter:creator" content="@januthnimnal" />
     <meta name="twitter:title" content="Orin AI | Smart AI Assistant & Dashboard" />
     <meta name="twitter:description" content="Try the simple AI chatbot interface that outperforms on ease of use. Orin AI by Januth Nimnal." />
@@ -45,7 +44,7 @@
     <!-- GOOGLE SEARCH CONSOLE -->
     <meta name="google-site-verification" content="Lu-JLRTCralp28H_YoNGHXwgMiI7grchuK-9Qq6rluc" />
     
-    <!-- FACEBOOK PIXEL -->
+    <!-- FACEBOOK PIXEL: Replace PIXEL_ID with your real 15–16 digit Pixel ID from Events Manager, then uncomment.
     <script>
       !function(f,b,e,v,n,t,s)
       {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -55,9 +54,10 @@
       t.src=v;s=b.getElementsByTagName(e)[0];
       s.parentNode.insertBefore(t,s)}(window, document,'script',
       'https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init', '1425367891'); 
+      fbq('init', 'PIXEL_ID');
       fbq('track', 'PageView');
     </script>
+    -->
     
     <!-- AGGRESSIVE JSON-LD STRUCTURED DATA -->
     <script type="application/ld+json">
@@ -79,13 +79,6 @@
             "name": "Orin AI",
             "operatingSystem": "Web, Windows, Android, iOS",
             "applicationCategory": "ProductivityApplication",
-            "aggregateRating": {
-              "@type": "AggregateRating",
-              "ratingValue": "4.9",
-              "ratingCount": "2540",
-              "bestRating": "5",
-              "worstRating": "1"
-            },
             "offers": {
               "@type": "Offer",
               "price": "0",
@@ -207,9 +200,6 @@
 </script>
 </head>
   <body class="transition-colors duration-300 overflow-hidden">
-    <noscript><img height="1" width="1" style="display:none"
-      src="https://www.facebook.com/tr?id=1425367891&ev=PageView&noscript=1"
-    /></noscript>
     <div id="root">
       <!-- Static shell: visible on first paint before JS loads (SSG-style) -->
       <div class="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 text-slate-800" style="min-height: 100dvh;">

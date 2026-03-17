@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 function writeWavHeader(pcm: Uint8Array, sampleRate: number, channels: number, bitDepth: number): ArrayBuffer {
   const header = new ArrayBuffer(44);
@@ -41,7 +41,7 @@ const SCALES = [
 
 const BAR_COUNT = 6;
 
-function throttle<T extends (...args: any[]) => any>(fn: T, ms: number): T {
+function throttle<T extends (...args: any[]) => any>(fn: T, ms: number): T & { cancel: () => void } {
   let last = 0;
   let timeout: ReturnType<typeof setTimeout> | null = null;
   let pendingArgs: Parameters<T> | null = null;
@@ -67,7 +67,12 @@ function throttle<T extends (...args: any[]) => any>(fn: T, ms: number): T {
       }, ms - elapsed);
     }
   };
-  return run as T;
+  run.cancel = () => {
+    if (timeout) clearTimeout(timeout);
+    timeout = null;
+    pendingArgs = null;
+  };
+  return run as T & { cancel: () => void };
 }
 
 const MusicStudio: React.FC = () => {
@@ -84,6 +89,7 @@ const MusicStudio: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const sessionRef = useRef<Awaited<ReturnType<typeof geminiService.connectMusicSession>> | null>(null);
+  const lastPromptRef = useRef<string>('');
   const audioCtxRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
@@ -91,6 +97,8 @@ const MusicStudio: React.FC = () => {
   const barsRef = useRef<(HTMLDivElement | null)[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef(0);
+  const steerThrottleRef = useRef<ReturnType<typeof throttle> | null>(null);
+  const bpmThrottleRef = useRef<ReturnType<typeof throttle> | null>(null);
 
   /** Lyria: 48kHz stereo PCM → AudioContext. Music is different from voice (24k mono); decode inline. */
   const playChunk = useCallback((base64: string) => {
@@ -169,16 +177,26 @@ const MusicStudio: React.FC = () => {
       try { sessionRef.current.stop(); } catch {}
       sessionRef.current = null;
     }
-    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') {
-      try { audioCtxRef.current.close(); } catch {}
-    }
+    const ctx = audioCtxRef.current;
     audioCtxRef.current = null;
     chunksRef.current = [];
     setHasRecordedChunks(false);
     setIsPlaying(false);
+    // Defer close so stopped nodes and their onended callbacks don't run against a closed context.
+    if (ctx && ctx.state !== 'closed') {
+      setTimeout(() => {
+        try { ctx.close(); } catch {}
+      }, 0);
+    }
   }, []);
 
   useEffect(() => () => stopSession(), [stopSession]);
+
+  // Cancel pending throttle timeouts on unmount so stale closures never fire (e.g. after tab switch).
+  useEffect(() => () => {
+    steerThrottleRef.current?.cancel?.();
+    bpmThrottleRef.current?.cancel?.();
+  }, []);
 
   const handlePlay = async () => {
     if (!prompt.trim()) {
@@ -186,7 +204,7 @@ const MusicStudio: React.FC = () => {
       return;
     }
     setError(null);
-    if (sessionRef.current) {
+    if (sessionRef.current && lastPromptRef.current === prompt.trim()) {
       sessionRef.current.play();
       setIsPlaying(true);
       return;
@@ -194,6 +212,8 @@ const MusicStudio: React.FC = () => {
     setIsConnecting(true);
     try {
       chunksRef.current = [];
+      setHasRecordedChunks(false);
+      lastPromptRef.current = prompt.trim();
 
       const session = await geminiService.connectMusicSession(
         prompt.trim(),
@@ -219,20 +239,24 @@ const MusicStudio: React.FC = () => {
     }
   };
 
-  const handleSteer = useCallback(
-    throttle(async (mainPrompt: string, steerPrompt: string, steerWeight: number) => {
-      if (!sessionRef.current) return;
-      const main = mainPrompt.trim();
-      const steer = steerPrompt.trim();
-      const w = Math.max(0, Math.min(1, steerWeight));
-      const weightedPrompts = steer
-        ? [
-            { text: main, weight: 1.0 - w },
-            { text: steer, weight: w },
-          ]
-        : [{ text: main, weight: 1.0 }];
-      await sessionRef.current.setWeightedPrompts({ weightedPrompts });
-    }, 300),
+  const handleSteer = useMemo(
+    () => {
+      const t = throttle(async (mainPrompt: string, steerPrompt: string, steerWeight: number) => {
+        if (!sessionRef.current) return;
+        const main = mainPrompt.trim();
+        const steer = steerPrompt.trim();
+        const w = Math.max(0, Math.min(1, steerWeight));
+        const weightedPrompts = steer
+          ? [
+              { text: main, weight: 1.0 - w },
+              { text: steer, weight: w },
+            ]
+          : [{ text: main, weight: 1.0 }];
+        await sessionRef.current.setWeightedPrompts({ weightedPrompts });
+      }, 300);
+      steerThrottleRef.current = t;
+      return t;
+    },
     []
   );
 
@@ -268,12 +292,14 @@ const MusicStudio: React.FC = () => {
     },
     [density, brightness]
   );
-  const handleBpmOrScaleChangeThrottled = useCallback(
-    throttle((newBpm: number, newScale: string) => {
+  const handleBpmOrScaleChangeThrottled = useMemo(() => {
+    bpmThrottleRef.current?.cancel?.();
+    const t = throttle((newBpm: number, newScale: string) => {
       handleBpmOrScaleChange(newBpm, newScale);
-    }, 400),
-    [handleBpmOrScaleChange]
-  );
+    }, 400);
+    bpmThrottleRef.current = t;
+    return t;
+  }, [handleBpmOrScaleChange]);
 
   function downloadRecording() {
     const allChunks = chunksRef.current;

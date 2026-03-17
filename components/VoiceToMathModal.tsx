@@ -43,6 +43,7 @@ interface VoiceToMathModalProps {
 
 export const VoiceToMathModal: React.FC<VoiceToMathModalProps> = ({ onInsert, onClose }) => {
   const [status, setStatus] = useState<'idle' | 'connecting' | 'listening' | 'got'>('idle');
+  const [sessionRequested, setSessionRequested] = useState(false);
   const [latexPreview, setLatexPreview] = useState('');
   const sessionRef = useRef<any>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -98,7 +99,7 @@ export const VoiceToMathModal: React.FC<VoiceToMathModalProps> = ({ onInsert, on
   }, [stopSession]);
 
   useEffect(() => {
-    if (status !== 'listening') return;
+    if (!sessionRequested) return;
     let cancelled = false;
     const start = async () => {
       setStatus('connecting');
@@ -151,6 +152,8 @@ export const VoiceToMathModal: React.FC<VoiceToMathModalProps> = ({ onInsert, on
               };
               src.connect(workletNode);
             } catch {
+              // Fallback for browsers without AudioWorklet. Process mic only; do NOT connect to
+              // ctx.destination to avoid mic→speakers feedback/echo when user is on speakers.
               const proc = ctx.createScriptProcessor(4096, 1, 1);
               audioInputNodeRef.current = proc;
               proc.onaudioprocess = (e: AudioProcessingEvent) => {
@@ -162,7 +165,6 @@ export const VoiceToMathModal: React.FC<VoiceToMathModalProps> = ({ onInsert, on
                 });
               };
               src.connect(proc);
-              proc.connect(ctx.destination);
             }
           },
           onmessage: async (msg: LiveServerMessage) => {
@@ -207,6 +209,7 @@ export const VoiceToMathModal: React.FC<VoiceToMathModalProps> = ({ onInsert, on
   }, [status, finishAndInsert, stopSession]);
 
   const handleStart = () => {
+    setSessionRequested(true);
     setStatus('listening');
     setLatexPreview('');
     accumulatedLatexRef.current = '';

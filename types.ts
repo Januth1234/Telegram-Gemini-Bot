@@ -34,7 +34,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type: 'text' | 'image' | 'video' | 'file' | 'audio';
+  type: 'text' | 'image' | 'video' | 'file';
   links?: GroundingLink[];
   imageUrl?: string;
   videoUrl?: string;
@@ -51,11 +51,20 @@ export interface Conversation {
   modesUsed?: WorkspaceMode[];
   /** Embedding vector for semantic search (Gemini Embedding 2). */
   embedding?: number[];
+  /** Per-conversation: use Thinking Mode (slower, deeper reasoning). */
+  thinkingMode?: boolean;
+  /** Per-conversation: use Descriptive Mode (step-by-step explanations). */
+  descriptiveMode?: boolean;
 }
 
-/** True if the conversation has at least one user message (used for persist/sync; AI-only welcome does not count). */
+/** True if the conversation has at least one *real* user message (text or attachment). */
 export function conversationHasUserMessage(c: Conversation): boolean {
-  return (c.messages || []).some(m => m.role === 'user');
+  return (c.messages || []).some(m => {
+    if (m.role !== 'user') return false;
+    const hasText = typeof m.content === 'string' && m.content.trim().length > 0;
+    const hasAttachment = !!(m.imageUrl || m.videoUrl || m.fileName);
+    return hasText || hasAttachment;
+  });
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";
@@ -66,7 +75,7 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
+export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
 export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent';
 
 // Graphing types for Maths / Graphs workspace
