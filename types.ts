@@ -75,7 +75,7 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot' | 'calculators';
+export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
 export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent';
 
 // Graphing types for Maths / Graphs workspace
@@ -194,79 +194,4 @@ export interface ExamPaper {
   uploadedBy: string;
 }
 
-// Calculator Platform Types
-export type CalculatorType = 
-  | 'basic' 
-  | 'scientific' 
-  | 'financial' 
-  | 'statistical' 
-  | 'engineering' 
-  | 'chemical' 
-  | 'health' 
-  | 'mortgage';
 
-export interface CalculationStep {
-  description: string;
-  expression: string;
-  result: string;
-}
-
-export interface CalculationResult {
-  value: number | number[] | string;
-  unit: string;
-  formula: string;
-  steps: CalculationStep[];
-  timestamp: Date;
-  calculatorType: CalculatorType;
-}
-
-export interface CalculationInput {
-  [key: string]: number | string | number[] | undefined;
-}
-
-export interface InputField {
-  name: string;
-  label: string;
-  type: 'number' | 'text' | 'select' | 'array';
-  unit?: string;
-  placeholder?: string;
-  options?: string[];
-  required: boolean;
-  min?: number;
-  max?: number;
-  step?: number;
-}
-
-export interface Calculator {
-  name: string;
-  icon: string;
-  category: string;
-  description: string;
-  inputFields: InputField[];
-  calculate(inputs: CalculationInput): Promise<CalculationResult>;
-  validateInputs(inputs: CalculationInput): string[];
-}
-
-export interface ExtractionResult {
-  values: Record<string, number | string | number[]>;
-  units: Record<string, string>;
-  type: CalculatorType;
-  confidence: number;
-  rawText?: string;
-  extractedFields?: string[];
-}
-
-export interface StoredCalculation {
-  id: string;
-  userId: string;
-  type: CalculatorType;
-  inputs: CalculationInput;
-  result: CalculationResult;
-  extractedFrom?: {
-    imageUrl?: string;
-    passage?: string;
-    extractionConfidence?: number;
-  };
-  timestamp: Date;
-  notes?: string;
-}
