@@ -105,6 +105,51 @@ export interface MathHistoryItem {
   createdAt: string; // ISO string
 }
 
+// Maths extraction & solving (AI-extracted, CAS-solved)
+export type MathExtractType =
+  | 'quadratic'
+  | 'linear'
+  | 'system'
+  | 'calculus'
+  | 'trigonometry'
+  | 'matrix'
+  | 'statistics'
+  | 'unknown';
+
+export type MathOperation =
+  | 'solve'
+  | 'simplify'
+  | 'differentiate'
+  | 'integrate'
+  | 'factor'
+  | 'expand';
+
+export interface MathExtractResult {
+  type: MathExtractType;
+  expression: string | string[]; // string[] for systems
+  latexExpression?: string;
+  variable: string;
+  operation?: MathOperation;
+  extraValues?: Record<string, any>;
+  confidence: number;
+  unreadable: boolean;
+}
+
+export interface MathStep {
+  label: string;
+  expression: string;
+  latexExpression: string;
+}
+
+export interface MathSolveResult {
+  success: boolean;
+  answers: string[];
+  latexAnswers: string[];
+  steps: MathStep[];
+  method: string;
+  error?: string;
+}
+
 export interface SiteMetrics {
   totalUsers: number;
   activeToday: number;

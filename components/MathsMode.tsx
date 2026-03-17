@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Language, ChatMessage, GraphDefinition, MathHistoryItem } from '../types';
+import { Language, ChatMessage, GraphDefinition, MathHistoryItem, MathExtractResult, MathOperation } from '../types';
 import { translations } from '../translations';
 import Graphs from './Graphs';
 import HandwritingCanvas from './HandwritingCanvas';
@@ -435,6 +435,93 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   };
 
   const handleAction = async (command: string) => {
+    // If user typed plain text, first extract math via Gemini then feed into local CAS.
+    if (inputMode === 'text') {
+      const rawText = textInput.trim();
+      if (!rawText) return;
+      try {
+        const extracted = await geminiService.extractMathFromInput(rawText);
+        if (extracted.unreadable) {
+          alert('Could not understand the problem. Please rephrase.');
+          return;
+        }
+        const expr =
+          typeof extracted.latexExpression === 'string' &&
+          extracted.latexExpression.trim()
+            ? extracted.latexExpression.trim()
+            : String(extracted.expression || '').trim();
+        if (!expr) {
+          alert('No mathematical expression detected.');
+          return;
+        }
+        const op: MathOperation =
+          extracted.operation ?? commandToOperation(command);
+        const variable = extracted.variable || 'x';
+
+        // Route to existing CAS step solvers so results stay local.
+        if (op === 'differentiate') {
+          const out = casService.derivativeWithSteps(expr, variable);
+          if (out && out.steps.length > 0) {
+            setLocalStepsResult({
+              kind: 'derivative',
+              title: 'Step-by-step derivative',
+              steps: out.steps,
+              result: out.result,
+              resultLatex: out.resultLatex,
+              input: expr,
+            });
+          }
+          return;
+        }
+        if (op === 'integrate') {
+          const out = casService.integralWithSteps(expr, variable);
+          if (out && out.steps.length > 0) {
+            setLocalStepsResult({
+              kind: 'integral',
+              title: 'Step-by-step integral',
+              steps: out.steps,
+              result: out.result,
+              resultLatex: out.resultLatex,
+              input: expr,
+            });
+          }
+          return;
+        }
+        if (op === 'simplify') {
+          const simplified = casService.simplify(expr);
+          setLocalStepsResult({
+            kind: 'solve',
+            title: 'Simplified expression',
+            steps: [`${expr} = ${simplified}`],
+            result: simplified,
+            input: expr,
+          });
+          return;
+        }
+        if (op === 'solve') {
+          const out = casService.solveEquationWithSteps(expr, variable);
+          if (out && out.steps.length > 0) {
+            setLocalStepsResult({
+              kind: 'solve',
+              title: 'Step-by-step solution',
+              steps: out.steps,
+              result:
+                out.roots?.length && out.roots.length > 0
+                  ? out.roots.join(', ')
+                  : out.steps[out.steps.length - 1] || '',
+              input: expr,
+            });
+          }
+          return;
+        }
+        // Fallback to existing flow for factor/expand or unknown operations.
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        alert(msg || 'Math extraction failed. Try again.');
+        return;
+      }
+    }
+
     const equations = getEquations();
     const rawLatex = equations.length === 1 ? equations[0] : equations.join(' ; ');
     const isSolveCommand = /solve|Solve/i.test(command);
@@ -722,6 +809,16 @@ If there is only one standard method, still use one ---METHOD: ... --- ... ---EN
       equationRefs.current.slice(0, equationCount).forEach(mf => { if (mf) mf.value = ''; });
     }
     setSelectedFile(null);
+  };
+
+  const commandToOperation = (cmd: string): MathOperation => {
+    const lower = cmd.toLowerCase();
+    if (lower.includes('deriv')) return 'differentiate';
+    if (lower.includes('integr')) return 'integrate';
+    if (lower.includes('simplif')) return 'simplify';
+    if (lower.includes('factor')) return 'factor';
+    if (lower.includes('expand')) return 'expand';
+    return 'solve';
   };
 
   const HANDWRITING_PROMPT = 'This image shows a handwritten mathematical equation. Extract it and return ONLY the LaTeX code, nothing else. No explanation, no markdown, no backticks—just the raw LaTeX (e.g. x^2+3x+2 or \\frac{1}{2}).';

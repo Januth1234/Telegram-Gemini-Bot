@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Modality } from "@google/genai";
-import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
+import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode, MathExtractResult, MathOperation } from "../types";
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
 
@@ -589,6 +589,95 @@ EXPLANATION STYLE:
       return Array.isArray(vec) ? vec : [];
     } catch {
       return [];
+    }
+  }
+
+  /**
+   * Maths-only helper: extract a clean expression + metadata from text or image.
+   * IMPORTANT: Extraction ONLY – no solving, no limits, no memory.
+   */
+  async extractMathFromInput(
+    text?: string,
+    fileData?: { data: string; mimeType: string; name?: string }
+  ): Promise<MathExtractResult> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    const extractionPrompt = `You are a mathematical expression extractor.
+Your ONLY job is to read the input and return a JSON object.
+Do NOT solve anything. Do NOT explain anything.
+Return ONLY raw JSON with no markdown, no backticks, no extra text.
+
+Extract and return this structure:
+{
+  "type": "quadratic" | "linear" | "system" | "calculus" | "trigonometry" | "matrix" | "statistics" | "unknown",
+  "expression": "the raw mathematical expression as a standard string e.g. x^2 + 5*x + 6",
+  "latexExpression": "the expression in LaTeX format e.g. x^2 + 5x + 6",
+  "variable": "the variable to solve for e.g. x",
+  "operation": "solve" | "simplify" | "differentiate" | "integrate" | "factor" | "expand",
+  "extraValues": {},
+  "confidence": 0.0,
+  "unreadable": false
+}
+
+If the input is unclear or unreadable set "unreadable": true.
+If it is a system of equations, expression should be an array of strings.`;
+
+    const contents: Array<{ role: 'user'; parts: any[] }> = [];
+    if (fileData) {
+      contents.push({
+        role: 'user',
+        parts: [
+          { inlineData: { data: fileData.data, mimeType: fileData.mimeType } },
+          { text: extractionPrompt },
+        ],
+      });
+    } else {
+      contents.push({
+        role: 'user',
+        parts: [{ text: `${extractionPrompt}\n\nInput: ${text ?? ''}` }],
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents,
+      config: {
+        systemInstruction:
+          'You are a JSON-only extractor for maths. Never output anything except a single valid JSON object.',
+      },
+    });
+
+    let raw = (response as { text?: string }).text ?? "";
+    if (!raw && response.candidates?.[0]?.content?.parts) {
+      raw = response.candidates[0].content.parts
+        .map((p: { text?: string }) => (p.text != null ? p.text : ""))
+        .join("");
+    }
+    raw = raw.trim().replace(/```json/gi, "").replace(/```/g, "").trim();
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<MathExtractResult>;
+      return {
+        type: parsed.type ?? 'unknown',
+        expression: parsed.expression ?? (text ?? ''),
+        latexExpression: parsed.latexExpression,
+        variable: parsed.variable ?? 'x',
+        operation: parsed.operation as MathOperation | undefined,
+        extraValues: parsed.extraValues ?? {},
+        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 1,
+        unreadable: !!parsed.unreadable,
+      };
+    } catch {
+      return {
+        type: 'unknown',
+        expression: text ?? '',
+        variable: 'x',
+        operation: undefined,
+        extraValues: {},
+        confidence: 0,
+        unreadable: false,
+      };
     }
   }
 
