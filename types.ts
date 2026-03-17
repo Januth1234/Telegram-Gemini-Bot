@@ -193,5 +193,3 @@ export interface ExamPaper {
   status: 'raw' | 'processed' | 'verified';
   uploadedBy: string;
 }
-
-
