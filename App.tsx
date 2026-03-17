@@ -21,6 +21,7 @@ const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m =
 const AgentWorkspace = lazy(() => import('./components/AgentWorkspace').then(m => ({ default: m.default })));
 const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
 const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
+const CalculatorHub = lazy(() => import('./components/CalculatorHub').then(m => ({ default: m.default })));
 
 // Lazy-load heavy WebGL/Three.js background shaders so only the active theme's canvas loads
 const DarkVeil = lazy(() => import('./components/backgrounds/DarkVeil').then(m => ({ default: m.default })));
@@ -68,9 +69,10 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   downloads: 'chat',
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
+  'calculators': 'chat',
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'calculators'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
@@ -663,6 +665,7 @@ const App: React.FC = () => {
       case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'pricing': return <PricingPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'calculators': return <Suspense fallback={<PageFallback />}><CalculatorHub /></Suspense>;
       default: return (
         <LandingPage
           prompt={globalPrompt}
@@ -867,6 +870,12 @@ const App: React.FC = () => {
                 icon="fa-calculator"
                 label={`${t.maths} (Beta)`}
                 onClick={() => handleStartWorkspace('', 'maths')}
+              />
+              <NavTab
+                active={view === 'calculators'}
+                icon="fa-calculator"
+                label="Calculators"
+                onClick={() => window.location.hash = 'calculators'}
               />
               <NavTab
                 active={view === 'agent'}
