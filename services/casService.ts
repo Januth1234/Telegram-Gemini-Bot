@@ -11,6 +11,9 @@ import {
   solveEquationWithSteps as solveSteps,
   type StepsResult,
 } from './casSteps';
+import { validateMathInput, sanitizeMathInput, getComplexityScore } from './mathInputValidator';
+import { formatNumber, formatFraction, formatMatrix, FormattedResult } from './mathFormatting';
+import { diagnoseError, formatErrorForDisplay, ErrorCode } from './mathErrorMessages';
 
 const math = create(all, {}) as unknown as MathJsStatic;
 
@@ -85,10 +88,22 @@ export const casService = {
 
   simplify(latex: string): string {
     try {
-      const expr = latexToMath(latex);
+      const validation = validateMathInput(latex);
+      if (!validation.isValid) {
+        console.warn('[CAS] Validation error:', validation.error);
+        return `Error: ${validation.error}`;
+      }
+      
+      const expr = latexToMath(sanitizeMathInput(latex));
       const simplified = (math.simplify(expr) as unknown as MathJsChain).toString();
-      return simplified;
-    } catch { return latex; }
+      
+      // Format the result with appropriate precision
+      const result = formatNumber(simplified).display;
+      return result;
+    } catch (e) {
+      const errorMsg = diagnoseError(e as Error);
+      return `Error: ${errorMsg.title}`;
+    }
   },
 
   derivative(latex: string, variable: string = 'x'): string {
@@ -109,16 +124,44 @@ export const casService = {
 
   solveEquation(latex: string, variable: string = 'x'): SolveResult {
     try {
-      const expr = latexToMath(latex);
-      const roots = nerdamer
+      const validation = validateMathInput(latex);
+      if (!validation.isValid) {
+        return { error: validation.error, steps: [validation.suggestion || 'Please check your input'] };
+      }
+      
+      const expr = latexToMath(sanitizeMathInput(latex));
+      const rootsText = nerdamer
         .solve(expr, variable)
         .evaluate()
-        .text()
+        .text();
+      
+      // Check for special cases
+      if (rootsText.includes('all') || rootsText.toLowerCase().includes('r')) {
+        return { error: 'Infinite solutions', steps: ['This equation is an identity (true for all values)'] };
+      }
+      
+      const roots = rootsText
         .split(',')
-        .map(parseFloat)
+        .map(r => parseFloat(r.trim()))
         .filter(v => Number.isFinite(v));
-      return { roots };
-    } catch { return {}; }
+      
+      // Format roots with appropriate precision
+      const formattedRoots = roots.map(r => {
+        const formatted = formatNumber(r);
+        return { value: r, display: formatted.display };
+      });
+      
+      return { 
+        roots,
+        formattedRoots,
+        steps: formattedRoots.length > 0 
+          ? [`Solution: ${variable} = ${formattedRoots.map(r => r.display).join(', ')}`]
+          : ['No real solutions found']
+      };
+    } catch (e) {
+      const errorMsg = diagnoseError(e as Error);
+      return { error: errorMsg.title, steps: [errorMsg.description] };
+    }
   },
 
   /** Solve a system of equations. Each equation is LaTeX or plain math. */
