@@ -8,6 +8,7 @@ import VoiceToMathModal from './VoiceToMathModal';
 import { parseSolutionMethods, isMathSolution, parseMathResponse } from '../services/solutionParser';
 import { geminiService } from '../services/geminiService';
 import { casService, matrixToPmatrix } from '../services/casService';
+import { isGenericSteps } from '../services/casSteps';
 import KatexBlock from './KatexBlock';
 import { cacheService, CacheKey } from '../services/cacheService';
 
@@ -226,6 +227,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     () => cacheService.get<MathHistoryItem[]>(CacheKey.MATH_HISTORY, [])
   );
   const [isSolving, setIsSolving] = useState(false);
+  const [aiMathMessages, setAiMathMessages] = useState<{ id: string; content: string; isAI: boolean }[]>([]);
   // Track AI extraction status separately so UI can show a message
   const [extractionStatus, setExtractionStatus] = useState<string | null>(null);
 
@@ -381,7 +383,24 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   // 1. Get input (text paragraph / image / LaTeX field)
   // 2. If text or image → Gemini extracts clean expression + operation
   // 3. Feed extracted expression to local CAS for step-by-step
-  // 4. If CAS can't handle → fallback to Gemini AI with structured prompt
+  // 4. If CAS returns null or generic steps → solveMathWithAI() (bypasses anti-chain-of-thought)
+
+  /** Push AI math result into local display (not into main chat) */
+  const pushAIResult = (inputLabel: string, content: string) => {
+    const id = \`ai-\${Date.now()}\`;
+    setAiMathMessages(prev => [...prev,
+      { id: \`\${id}-q\`, content: inputLabel, isAI: false },
+      { id: \`\${id}-a\`, content, isAI: true },
+    ]);
+  };
+
+  /** Quality gate: true only if CAS returned real, non-generic steps */
+  const isRealCASResult = (out: { steps: string[]; result: string } | null): out is { steps: string[]; result: string } => {
+    if (!out) return false;
+    if (isGenericSteps(out.steps)) return false;
+    if (out.steps.length < 2) return false;
+    return true;
+  };
 
   /** Extract expression via Gemini from text or image, then route to local CAS. */
   const runWithExtraction = async (command: string, rawText: string | undefined, fileData?: { data: string; mimeType: string; name: string }) => {
@@ -391,12 +410,12 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       const extracted = await geminiService.extractMathFromInput(rawText, fileData);
 
       if (extracted.unreadable) {
-        // Can't extract — send directly to AI
-        setExtractionStatus(null);
+        setExtractionStatus('Sending to AI math solver…');
         const prompt = fileData
-          ? `Analyze this math problem. ${command}. Show all steps.`
-          : `${command}: ${rawText}. Show step-by-step working.`;
-        onSend(prompt, fileData);
+          ? `Analyze this math problem and ${command}. Show every step.`
+          : `${command}: ${rawText}`;
+        const aiResult = await geminiService.solveMathWithAI({ prompt, fileData });
+        pushAIResult(rawText || 'Image problem', aiResult);
         return;
       }
 
@@ -406,7 +425,9 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
 
       if (!expr) {
         setExtractionStatus(null);
-        onSend(rawText ? `${command}: ${rawText}` : command, fileData);
+        const prompt = rawText ? `${command}: ${rawText}` : command;
+        const aiResult = await geminiService.solveMathWithAI({ prompt, fileData });
+        pushAIResult(rawText || command, aiResult);
         return;
       }
 
@@ -419,7 +440,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
 
       if (op === 'differentiate') {
         const out = casService.derivativeWithSteps(expr, variable);
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input: expr });
           appendMathHistory({ kind: 'expression', inputLatex: expr, result: out.result, graph: null });
           solved = true;
@@ -432,7 +453,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
           await import('nerdamer/Calculus');
           resultTex = nerd(`integrate(${expr}, ${variable})`).toTeX();
         } catch {}
-        if (out && (out.steps.length > 1 || resultTex)) {
+        if (isRealCASResult(out) || resultTex) {
           const steps = [...(out.steps || [])];
           if (resultTex && !steps.some(s => s.includes(resultTex))) steps.push(`Result: $${resultTex}$`);
           const result = resultTex || out.result || '';
@@ -442,8 +463,8 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         }
       } else if (op === 'solve') {
         const out = casService.solveEquationWithSteps(expr, variable);
-        if (out && out.steps.length > 1) {
-          const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
+        if (isRealCASResult(out)) {
+          const result = (out as any).roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
           setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input: expr });
           appendMathHistory({ kind: 'expression', inputLatex: expr, result, graph: null });
           solved = true;
@@ -458,25 +479,22 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       }
 
       if (!solved) {
-        // CAS couldn't handle it — send to Gemini AI with the extracted expression
-        setExtractionStatus(null);
-        const multiMethodInstruction = `Show ALL steps clearly numbered. If multiple methods exist, use this format:
----METHOD: [Method Name] ---
-Step 1: ...
-...
----ENDMETHOD---`;
-        const prompt = `${command} the expression: ${expr} (variable: ${variable})\n${multiMethodInstruction}`;
-        onSend(prompt, fileData);
+        // CAS null or generic steps → dedicated math AI (bypasses anti-chain-of-thought)
+        setExtractionStatus('Solving with AI — generating full step-by-step…');
+        const prompt = `${command} the expression: ${expr} (variable: ${variable})`;
+        const aiResult = await geminiService.solveMathWithAI({ prompt, fileData });
+        pushAIResult(expr, aiResult);
       }
 
     } catch (e) {
       setExtractionStatus(null);
-      const msg = e instanceof Error ? e.message : 'Extraction failed';
-      // Fallback: just send raw input to AI
-      const prompt = fileData
-        ? `Solve this math problem step by step. ${command}.`
-        : `${command}: ${rawText}. Show full step-by-step working.`;
-      onSend(prompt, fileData);
+      try {
+        const fallbackPrompt = rawText ? `${command}: ${rawText}. Show all steps.` : command;
+        const aiResult = await geminiService.solveMathWithAI({ prompt: fallbackPrompt, fileData });
+        pushAIResult(rawText || command, aiResult);
+      } catch {
+        onSend(rawText ? `${command}: ${rawText}` : command, fileData);
+      }
     } finally {
       setIsSolving(false);
       setExtractionStatus(null);
@@ -508,8 +526,9 @@ Step 1: ...
 
     // ── IMAGE + LATEX: use AI with both ──
     if (selectedFile && rawLatex) {
-      const prompt = `Image contains a math problem. Also given expression: ${rawLatex}. ${command}. Show all steps.`;
-      onSend(prompt, selectedFile);
+      const prompt = `Image contains a math problem. Also given expression: ${rawLatex}. ${command}.`;
+      const aiResult = await geminiService.solveMathWithAI({ prompt, fileData: selectedFile });
+      pushAIResult(rawLatex, aiResult);
       setSelectedFile(null);
       return;
     }
@@ -590,7 +609,7 @@ Step 1: ...
 
       if (isDerivativeCommand) {
         const out = casService.derivativeWithSteps(input, 'x');
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input });
           appendMathHistory({ kind: 'expression', inputLatex: input, result: out.result, graph: null });
           casHandled = true;
@@ -614,8 +633,8 @@ Step 1: ...
       }
       if (!casHandled && isSolveCommand) {
         const out = casService.solveEquationWithSteps(input, 'x');
-        if (out && out.steps.length > 1) {
-          const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
+        if (isRealCASResult(out)) {
+          const result = (out as any).roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
           setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input });
           appendMathHistory({ kind: 'expression', inputLatex: input, result, graph: null });
           casHandled = true;
@@ -651,7 +670,8 @@ Final Answer: ...
     } else {
       prompt = `Mathematical request: ${command}.\nExpression: ${rawLatex}.\n${multiMethodInstruction}`;
     }
-    onSend(prompt, selectedFile || undefined);
+    const aiResult = await geminiService.solveMathWithAI({ prompt, fileData: selectedFile || undefined });
+    pushAIResult(rawLatex || command, aiResult);
     setSelectedFile(null);
   };
 
@@ -1114,6 +1134,31 @@ Final Answer: ...
                 {[0, 150, 300].map(delay => <div key={delay} className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />)}
               </div>
               <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Calculating...</span>
+            </div>
+          )}
+
+          {/* AI Math Solver results — bypasses generic chat, shows full steps */}
+          {aiMathMessages.length > 0 && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 flex items-center gap-2">
+                  <i className="fa-solid fa-wand-magic-sparkles" />AI Step-by-Step Solution
+                </span>
+                <button onClick={() => setAiMathMessages([])} className="text-[9px] px-2 py-1 rounded-full border border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500">Clear</button>
+              </div>
+              {aiMathMessages.map(msg => (
+                <div key={msg.id} className={`flex flex-col ${msg.isAI ? 'items-start' : 'items-end'} animate-reveal`}>
+                  <div className={`max-w-full p-5 rounded-[20px] border shadow-sm ${msg.isAI
+                    ? 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 border-indigo-500/20 rounded-tl-none'
+                    : 'bg-indigo-600 text-white border-indigo-600 rounded-tr-none text-sm font-medium'
+                  }`}>
+                    {msg.isAI
+                      ? <SolutionMessageContent content={msg.content} />
+                      : <span>{msg.content}</span>
+                    }
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

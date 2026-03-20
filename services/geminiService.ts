@@ -878,6 +878,99 @@ If the speech is unclear or too short to translate, output nothing.`,
     await session.play();
     return session;
   }
+
+  /**
+   * Dedicated math solver — bypasses the general chat system instruction that says
+   * "Never include your internal reasoning steps or chain-of-thought".
+   * Uses a Symbolab-style system instruction: show EVERY step, always.
+   *
+   * Called directly from MathsMode instead of going through geminiService.chat().
+   */
+  async solveMathWithAI(options: {
+    prompt: string;
+    fileData?: { data: string; mimeType: string; name?: string };
+    signal?: AbortSignal;
+  }): Promise<string> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+
+    // Check usage
+    if (this.currentUser) {
+      const limitReached = await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'text');
+      if (limitReached) throw new AppError('Plan limit reached. Upgrade to continue.', 'limit_reached');
+    } else {
+      this.resetGuestWindows();
+      if (this.guestUsage.textCount >= this.guestUsage.textMax) {
+        throw new AppError('Guest demo limit reached. Sign in to continue.', 'limit_reached');
+      }
+    }
+
+    const MATH_SYSTEM_INSTRUCTION = `You are a professional math tutor, like Symbolab or Wolfram Alpha.
+Your ONLY job is to solve math problems with full step-by-step working.
+
+RULES — follow them exactly:
+1. Show EVERY algebraic step. Never skip. Never write "algebraic methods" or vague phrases.
+2. For equations: show the manipulation at each step (add/subtract/divide both sides).
+3. For trig equations: show the inverse trig, then the general solution(s).
+4. For quadratic: calculate Δ = b²−4ac explicitly, then both roots.
+5. For calculus: name the rule used (Power rule, Chain rule, etc.) then apply it.
+6. Always end with a clearly labelled FINAL ANSWER.
+7. Format your response using this structure:
+
+---METHOD: [Method Name] ---
+Step 1: [state what you do]
+[show the actual math]
+Step 2: [state what you do]
+[show the actual math]
+...
+Final Answer: [state the answer clearly]
+---ENDMETHOD---
+
+If multiple methods exist, use multiple METHOD blocks.
+Never refuse to show steps. Steps ARE the answer.`;
+
+    const contents: { role: 'user'; parts: any[] }[] = [];
+    const parts: any[] = [];
+    if (options.fileData) {
+      parts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
+    }
+    parts.push({ text: options.prompt });
+    contents.push({ role: 'user', parts });
+
+    const modelsToTry = this.getModelsToTry(this.currentUser);
+    let lastError: unknown = null;
+    let text = '';
+
+    for (const modelName of modelsToTry) {
+      try {
+        const response = await ai.models.generateContent({
+          model: modelName,
+          contents,
+          config: { systemInstruction: MATH_SYSTEM_INSTRUCTION },
+        });
+        text = (response as { text?: string }).text ?? '';
+        if (!text && response.candidates?.[0]?.content?.parts) {
+          text = response.candidates[0].content.parts
+            .map((p: { text?: string }) => (p.text ?? '')).join('');
+        }
+        break;
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
+    }
+
+    if (!text && lastError) throw lastError instanceof Error ? lastError : new Error(String(lastError));
+
+    // Increment guest usage
+    if (!this.currentUser) {
+      this.resetGuestWindows();
+      this.guestUsage.textCount++;
+      try { window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage)); } catch {}
+    }
+
+    return text || 'No solution returned. Please try again.';
+  }
 }
 
 export const geminiService = new GeminiService();
