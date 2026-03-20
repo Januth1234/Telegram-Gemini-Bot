@@ -34,7 +34,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  type: 'text' | 'image' | 'video' | 'file';
+  type: 'text' | 'image' | 'video' | 'file' | 'audio';
   links?: GroundingLink[];
   imageUrl?: string;
   videoUrl?: string;
@@ -49,22 +49,11 @@ export interface Conversation {
   timestamp: Date;
   mode: WorkspaceMode;
   modesUsed?: WorkspaceMode[];
-  /** Embedding vector for semantic search (Gemini Embedding 2). */
-  embedding?: number[];
-  /** Per-conversation: use Thinking Mode (slower, deeper reasoning). */
-  thinkingMode?: boolean;
-  /** Per-conversation: use Descriptive Mode (step-by-step explanations). */
-  descriptiveMode?: boolean;
 }
 
-/** True if the conversation has at least one *real* user message (text or attachment). */
+/** True if the conversation has at least one user message (used for persist/sync; AI-only welcome does not count). */
 export function conversationHasUserMessage(c: Conversation): boolean {
-  return (c.messages || []).some(m => {
-    if (m.role !== 'user') return false;
-    const hasText = typeof m.content === 'string' && m.content.trim().length > 0;
-    const hasAttachment = !!(m.imageUrl || m.videoUrl || m.fileName);
-    return hasText || hasAttachment;
-  });
+  return (c.messages || []).some(m => m.role === 'user');
 }
 
 export type AspectRatio = "1:1" | "2:3" | "3:2" | "3:4" | "4:3" | "9:16" | "16:9" | "21:9";
@@ -75,89 +64,8 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
-export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent';
-
-// Graphing types for Maths / Graphs workspace
-export type GraphType = 'function' | 'parametric' | 'polar' | 'data';
-
-export interface GraphDomain {
-  min: number;
-  max: number;
-}
-
-export interface GraphDataSeries {
-  id: string;
-  label: string;
-  x: number[];
-  y: number[];
-}
-
-export interface GraphDefinition {
-  id: string;
-  type: GraphType;
-  expressionLatex?: string; // for function/parametric/polar
-  xDomain?: GraphDomain;
-  yDomain?: GraphDomain;
-  dataSeries?: GraphDataSeries[]; // for data / statistics plots
-}
-
-// Maths-only history items (separate from chat history)
-export type MathHistoryKind = 'expression' | 'graph';
-
-export interface MathHistoryItem {
-  id: string;
-  kind: MathHistoryKind;
-  inputLatex: string;
-  result?: string;
-  graph?: GraphDefinition | null;
-  createdAt: string; // ISO string
-}
-
-// Maths extraction & solving (AI-extracted, CAS-solved)
-export type MathExtractType =
-  | 'quadratic'
-  | 'linear'
-  | 'system'
-  | 'calculus'
-  | 'trigonometry'
-  | 'matrix'
-  | 'statistics'
-  | 'unknown';
-
-export type MathOperation =
-  | 'solve'
-  | 'simplify'
-  | 'differentiate'
-  | 'integrate'
-  | 'factor'
-  | 'expand';
-
-export interface MathExtractResult {
-  type: MathExtractType;
-  expression: string | string[]; // string[] for systems
-  latexExpression?: string;
-  variable: string;
-  operation?: MathOperation;
-  extraValues?: Record<string, any>;
-  confidence: number;
-  unreadable: boolean;
-}
-
-export interface MathStep {
-  label: string;
-  expression: string;
-  latexExpression: string;
-}
-
-export interface MathSolveResult {
-  success: boolean;
-  answers: string[];
-  latexAnswers: string[];
-  steps: MathStep[];
-  method: string;
-  error?: string;
-}
+export type AppView = 'landing' | 'chat' | 'art' | 'camera' | 'voice' | 'math' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
+export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths';
 
 export interface SiteMetrics {
   totalUsers: number;

@@ -1,19 +1,25 @@
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js');
-importScripts('/firebase-config.js');
 
-const RAW_VERSION = '%SW_VERSION%';
-// In dev, Vite serves public/sw.js directly and the placeholder is not replaced.
-// Fallback to a stable "dev" cache name there to avoid churning caches.
-const CACHE_NAME = `orin-ai-${RAW_VERSION === '%SW_VERSION%' ? 'dev' : RAW_VERSION}`;
+const CACHE_NAME = 'orin-ai-v13';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/favicon.svg'
 ];
 
+const firebaseConfig = {
+  apiKey: "AIzaSyB5rY4e-_GOkkl4qwDZuvHqwq0_IP9mFmA",
+  authDomain: "orin-ai-f6798.firebaseapp.com",
+  projectId: "orin-ai-f6798",
+  storageBucket: "orin-ai-f6798.firebasestorage.app",
+  messagingSenderId: "259788442094",
+  appId: "1:259788442094:web:4d946378ca1b4d7349a6ff",
+  measurementId: "G-57DHESH4ZJ"
+};
+
 try {
-  firebase.initializeApp(self.FIREBASE_CONFIG);
+  firebase.initializeApp(firebaseConfig);
   const messaging = firebase.messaging();
   messaging.onBackgroundMessage((payload) => {
     const title = payload.notification?.title || 'Orin AI';

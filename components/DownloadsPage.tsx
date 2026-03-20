@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { Language } from '../types';
 import { translations } from '../translations';
-import { APP_CONFIG } from '../config';
 
 interface DownloadsPageProps {
   onClose: () => void;
@@ -14,64 +13,45 @@ const DownloadsPage: React.FC<DownloadsPageProps> = ({ onClose, lang }) => {
   const [activeCodeTab, setActiveCodeTab] = useState<'js' | 'ts' | 'py'>('js');
   const [downloading, setDownloading] = useState<string | null>(null);
 
-  const handleDownload = async (platform: string, arch?: string) => {
-    const label = `${platform} ${arch || ''}`.trim();
+  const handleDownload = (platform: string, arch?: string) => {
+    const label = `${platform} ${arch || ''}`;
     setDownloading(label);
-    const startedAt = Date.now();
-    const minToastMs = 1500;
-
-    const v = APP_CONFIG.version;
-    const tag = `V${v}`;
+    
+    // Official Release Links v4.5.3
     let url = "";
     if (platform === 'Android') {
-      url = `https://github.com/${APP_CONFIG.githubRepo}/releases/download/${tag}/Orin.AI.Mob.apk`;
+        url = "https://github.com/Januth1234/Telegram-Gemini-Bot/releases/download/V4.5.3/Orin.AI.Mob.apk";
     } else if (platform === 'Windows') {
-      if (arch === 'x64') url = `https://github.com/${APP_CONFIG.githubRepo}/releases/download/${tag}/Orin.AI.Setup.${v}.x64.exe`;
-      else if (arch === 'x32') url = `https://github.com/${APP_CONFIG.githubRepo}/releases/download/${tag}/Orin.AI.Setup.${v}.x32.exe`;
-      else if (arch === 'ARM') url = `https://github.com/${APP_CONFIG.githubRepo}/releases/download/${tag}/Orin.AI.Setup.${v}.xARM.exe`;
+        if (arch === 'x64') url = "https://github.com/Januth1234/Telegram-Gemini-Bot/releases/download/V4.5.3/Orin.AI.Setup.4.5.3.x64.exe";
+        else if (arch === 'x32') url = "https://github.com/Januth1234/Telegram-Gemini-Bot/releases/download/V4.5.3/Orin.AI.Setup.4.5.3.x32.exe";
+        else if (arch === 'ARM') url = "https://github.com/Januth1234/Telegram-Gemini-Bot/releases/download/V4.5.3/Orin.AI.Setup.4.5.3.xARM.exe";
     }
 
-    try {
+    setTimeout(() => {
       if (url) {
-        const res = await fetch(url, { mode: 'cors' });
-        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
-        const blob = await res.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.setAttribute('download', url.split('/').pop() || 'download');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
+          const link = document.createElement('a');
+          link.href = url;
+          link.setAttribute('download', '');
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
       } else {
-        const filename = `orin-setup-${platform.toLowerCase()}${arch ? '-' + arch.toLowerCase().replace(' ', '-') : ''}.exe`;
-        const dummyContent = `Orin AI Platform v${v} Installer\nTarget: ${label}\nVerified Artifact: JN-PROD-${Date.now()}\n\nThis is a secure system download from JN Productions Global.`;
-        const blob = new Blob([dummyContent], { type: 'application/octet-stream' });
-        const blobUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(blobUrl);
+          const filename = `orin-setup-${platform.toLowerCase()}${arch ? '-' + arch.toLowerCase().replace(' ', '-') : ''}.exe`;
+          const dummyContent = `Orin AI Platform v4.5.3 Installer\nTarget: ${label}\nVerified Artifact: JN-PROD-${Date.now()}\n\nThis is a secure system download from JN Productions Global.`;
+          
+          const blob = new Blob([dummyContent], { type: 'application/octet-stream' });
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(blobUrl);
       }
-    } catch {
-      if (url) {
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', '');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } finally {
-      const elapsed = Date.now() - startedAt;
-      const remaining = Math.max(0, minToastMs - elapsed);
-      if (remaining > 0) setTimeout(() => setDownloading(null), remaining);
-      else setDownloading(null);
-    }
+      setDownloading(null);
+    }, 1000);
   };
 
   const copyToClipboard = (text: string) => {
@@ -145,7 +125,7 @@ def orin_search_widget():
             </div>
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">{t.downloads}</h2>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">v{APP_CONFIG.version} Stable Distribution</p>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-2">v4.5.3 Stable Distribution</p>
             </div>
           </div>
           <button onClick={onClose} className="w-12 h-12 rounded-2xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 transition-all hover:rotate-90">

@@ -21,43 +21,26 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.split('?')[1] || '');
-    const hasSuccess = params.get('success') === 'true';
-    const hasCanceled = params.get('canceled') === 'true';
-
-    // Avoid re-triggering success on browser Back by remembering we've already handled it this session.
-    if (hasSuccess && !sessionStorage.getItem('orin-pricing-success-handled')) {
-      setMessage({ type: 'success' });
-      sessionStorage.setItem('orin-pricing-success-handled', '1');
-    } else if (hasCanceled) {
-      setMessage({ type: 'cancel' });
-    }
+    if (params.get('success') === 'true') setMessage({ type: 'success' });
+    if (params.get('canceled') === 'true') setMessage({ type: 'cancel' });
   }, []);
 
-  // Single source of truth: normalize free/starter, fallback from tier only when plan is missing/unrecognized.
-  // Tier is a display label (e.g. "Pro (BYO-Google)", "Verified Member"); only infer pro when tier is the actual Pro label, not "verified".
+  // Single source of truth: normalize free/starter, fallback from tier when plan missing
   const effectivePlan = (() => {
     const raw = (user?.plan ?? '').toLowerCase();
     if (raw === 'free' || raw === 'starter') return 'free';
     if (raw === 'basic' || raw === 'basic_yearly') return raw;
     if (raw === 'pro' || raw === 'pro_yearly') return raw;
     const tier = (user?.tier ?? '').toLowerCase();
-    if (tier.includes('pro (byo-google)')) return 'pro'; // only the Pro display string from syncUserSession, not "verified member"
-    if (tier === 'basic') return 'basic';
+    if (tier.includes('pro') || tier.includes('verified')) return 'pro';
+    if (tier.includes('basic')) return 'basic';
     return 'free';
   })();
 
   const isCurrentPlan = (cardKey: string): boolean => {
     if (cardKey === 'starter') return effectivePlan === 'free';
-
-    // Yearly vs monthly:
-    // - If user is on yearly, both monthly and yearly cards are treated as current.
-    // - If user is on monthly, only the monthly card is treated as current.
-    if (cardKey === 'basic_yearly') return effectivePlan === 'basic_yearly';
-    if (cardKey === 'basic') return effectivePlan === 'basic' || effectivePlan === 'basic_yearly';
-
-    if (cardKey === 'pro_yearly') return effectivePlan === 'pro_yearly';
-    if (cardKey === 'pro') return effectivePlan === 'pro' || effectivePlan === 'pro_yearly';
-
+    if (cardKey === 'basic' || cardKey === 'basic_yearly') return effectivePlan === 'basic' || effectivePlan === 'basic_yearly';
+    if (cardKey === 'pro' || cardKey === 'pro_yearly') return effectivePlan === 'pro' || effectivePlan === 'pro_yearly';
     return false;
   };
 
@@ -67,6 +50,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       return;
     }
     if (planKey === 'starter') return;
+    if (!confirm(`${t.confirmUpgrade} ${planKey}?`)) return;
 
     setCheckoutLoading(planKey);
     try {
@@ -125,8 +109,8 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
     { name: "Neural Engine", starter: "Orin Core", basic: "Orin Core+", pro: "Orin Ultra" },
     { name: "Daily Message Cap", starter: "200", basic: "500", pro: "Unlimited" },
     { name: "Context Window", starter: "128K", basic: "1M", pro: "2M (Long Context)" },
-    { name: "Studio (Images, 30 days)", starter: "10 / 30 days", basic: "30 / 30 days", pro: "Unlimited" },
-    { name: "Veo (Video, 30 days)", starter: "0", basic: "2 / 30 days", pro: "Unlimited" },
+    { name: "Studio (Images)", starter: "10 / day", basic: "50 / day", pro: "Unlimited" },
+    { name: "Veo (Video)", starter: "-", basic: "5 / day", pro: "Unlimited" },
     { name: "Memory Sync", starter: "Local Only", basic: "Cloud Sync", pro: "Full Neural Graph" },
     { name: "Response Speed", starter: "Standard", basic: "Fast", pro: "Instant" },
   ];

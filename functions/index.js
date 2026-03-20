@@ -8,11 +8,7 @@ admin.initializeApp();
 const db = admin.firestore();
 
 // Config: firebase functions:config:set orina.owner_uid="..." orina.secret_code="#710273"
-const _ownerUidRaw = functions.config().orina?.owner_uid || process.env.ORIN_OWNER_UID || "";
-const OWNER_UID = (typeof _ownerUidRaw === "string" && _ownerUidRaw.trim() !== "") ? _ownerUidRaw.trim() : undefined;
-if (OWNER_UID === undefined) {
-  functions.logger.warn("OWNER_UID is unset; approveUser relies only on custom claims (role === 'owner').");
-}
+const OWNER_UID = functions.config().orina?.owner_uid || process.env.ORIN_OWNER_UID;
 const SECRET_CODE = functions.config().orina?.secret_code || "#710273";
 
 async function logAudit(action, actorUid, details) {
@@ -26,16 +22,9 @@ async function logAudit(action, actorUid, details) {
 
 // --- 1. Auth & Roles ---
 
-function requireAppCheck(context) {
-  if (!context.app) {
-    throw new functions.https.HttpsError("failed-precondition", "App Check failed.");
-  }
-}
-
 exports.createPendingSignup = functions.https.onCall(async (data, context) => {
-  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
-
+  
   const { email, reason } = data;
   const uid = context.auth.uid;
   const codeDetected = reason.includes(SECRET_CODE);
@@ -55,7 +44,6 @@ exports.createPendingSignup = functions.https.onCall(async (data, context) => {
 });
 
 exports.approveUser = functions.https.onCall(async (data, context) => {
-  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Login required.");
   const isOwnerUid = context.auth.uid === OWNER_UID;
   if (!isOwnerUid) {
@@ -113,8 +101,7 @@ exports.generateApiKey = functions.https.onCall(async (data, context) => {
 // --- 3. Training: OCR Process ---
 
 exports.ocrProcess = functions.runWith({ memory: '1GB', timeoutSeconds: 300 }).https.onCall(async (data, context) => {
-  requireAppCheck(context);
-  const role = context.auth?.token?.role;
+  const role = context.auth.token.role;
   if (!["training", "devops", "owner"].includes(role)) {
     throw new functions.https.HttpsError("permission-denied", "Training role required.");
   }

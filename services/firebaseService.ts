@@ -1,11 +1,9 @@
 
-import { getApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/functions";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, writeBatch, runTransaction, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where, limit } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where } from "firebase/firestore";
 import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage, UserThemeId } from "../types";
 
 interface UsagePlanLimits {
@@ -50,19 +48,7 @@ class FirebaseService {
         this.auth = firebase.auth();
         this.functions = firebase.functions();
         this.db = getFirestore(this.app);
-
-        const recaptchaSiteKey = (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY || (typeof process !== "undefined" && process.env?.VITE_RECAPTCHA_SITE_KEY) || "";
-        if (recaptchaSiteKey) {
-          try {
-            initializeAppCheck(getApp(), {
-              provider: new ReCaptchaV3Provider(recaptchaSiteKey),
-              isTokenAutoRefreshEnabled: true,
-            });
-          } catch (_) {
-            // App Check optional if key not configured
-          }
-        }
-
+        
         if (this.auth) {
            this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
             .catch((error) => console.error("Auth Persistence Error:", error));
@@ -269,68 +255,6 @@ class FirebaseService {
     pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
   };
 
-  /**
-   * Atomically check usage limit and increment if under limit.
-   * @returns true if limit was already reached (caller should throw); false if increment was applied.
-   */
-  async checkAndIncrementUsage(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
-    const ref = this.userRef(uid);
-    if (!ref || !this.db) return false;
-    let limitReached = false;
-    await runTransaction(this.db, async (transaction) => {
-      const snap = await transaction.get(ref);
-      const data = snap.exists() ? snap.data()! : {};
-      const now = Date.now();
-      const planKey: string = (data.plan || 'free') === 'elite' ? 'pro' : (data.plan || 'free');
-      const limits = FirebaseService.USAGE_LIMITS[planKey] ?? FirebaseService.USAGE_LIMITS['free'];
-      const usage: Record<string, number> = { ...(data.usage ?? { text: 0, images: 0, videos: 0 }) };
-      let lastReset: number = data.lastReset || 0;
-      let mediaWindowStart: number = (usage.mediaWindowStart ?? lastReset) || now;
-
-      // Reset daily text if needed
-      if (!lastReset || now - lastReset > FirebaseService.DAY_MS) {
-        usage.text = 0;
-        lastReset = now;
-      }
-      // Reset 30-day media window if needed
-      if (!mediaWindowStart || now - mediaWindowStart > FirebaseService.THIRTY_DAYS_MS) {
-        usage.images = 0;
-        usage.videos = 0;
-        mediaWindowStart = now;
-      }
-      usage.mediaWindowStart = mediaWindowStart;
-
-      // Check limit
-      if (type === 'text') {
-        const limit = limits.textPerDay;
-        if (limit != null) {
-          const effectiveText = usage.text ?? 0;
-          if (effectiveText >= limit) {
-            limitReached = true;
-            return;
-          }
-        }
-      } else {
-        const isImage = type === 'images';
-        const limit = isImage ? limits.imagesPer30Days : limits.videosPer30Days;
-        if (limit != null) {
-          const windowFresh = !!mediaWindowStart && now - mediaWindowStart <= FirebaseService.THIRTY_DAYS_MS;
-          const rawUsage = isImage ? (usage.images ?? 0) : (usage.videos ?? 0);
-          const effectiveUsage = windowFresh ? rawUsage : 0;
-          if (effectiveUsage >= limit) {
-            limitReached = true;
-            return;
-          }
-        }
-      }
-
-      // Atomically increment
-      usage[type] = (usage[type] ?? 0) + 1;
-      transaction.set(ref, { usage, lastReset, lastUpdated: serverTimestamp() }, { merge: true });
-    });
-    return limitReached;
-  }
-
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
     const ref = this.userRef(uid);
     if (!ref) return false;
@@ -454,36 +378,26 @@ class FirebaseService {
     }
   }
 
-  /** Max memory length to avoid bloating chat() system instructions. Enforced server-side even if UI is bypassed. */
-  static readonly MEMORY_MAX_LENGTH = 2000;
-
   async updateUserMemory(uid: string, memory: string) {
     const ref = this.userRef(uid);
     if (!ref) return;
-    const trimmed = memory.slice(0, FirebaseService.MEMORY_MAX_LENGTH);
-    await updateDoc(ref, { memory: trimmed });
+    await updateDoc(ref, { memory });
   }
 
-  private static readonly CONVERSATIONS_LIMIT = 30;
-  private static readonly MESSAGES_PER_CONVERSATION = 50;
-  private static readonly BATCH_SIZE = 500;
-
-  private conversationRef(uid: string, convId: string) {
-    return this.db ? doc(this.db, `users/${uid}/conversations/${convId}`) : null;
-  }
-
-  private conversationsCollection(uid: string) {
-    return this.db ? collection(this.db, `users/${uid}/conversations`) : null;
-  }
-
-  /** Save history to subcollection users/{uid}/conversations/{convId}. Optional embeddingsByConvId for semantic search. */
-  async saveHistory(uid: string, history: Conversation[], deletedIds: string[] = [], recentCloud: Conversation[] | null = null, embeddingsByConvId?: Record<string, number[]>) {
-    if (!this.db) return;
+  async saveHistory(uid: string, history: Conversation[], deletedIds: string[] = []) {
+    const ref = this.userRef(uid);
+    if (!ref) return;
     try {
-      // Rely on caller's recentCloud snapshot; avoid extra reads that can race with writes.
-      const cloudList = (recentCloud || []).filter(c => conversationHasUserMessage(c));
+      let cloud: Conversation[] | null = null;
+      try {
+        cloud = await this.getHistory(uid);
+      } catch {
+        // Use empty cloud so we still persist local history (e.g. offline or permission)
+      }
+      const cloudList = (cloud || []).filter(c => conversationHasUserMessage(c));
       const localList = history.filter(c => conversationHasUserMessage(c));
       const localById = new Map(localList.map(c => [c.id, c]));
+      // Merge: for each cloud conv, keep cloud unless local has more messages or newer timestamp
       for (const c of cloudList) {
         const existing = localById.get(c.id);
         if (!existing) {
@@ -500,103 +414,33 @@ class FirebaseService {
       const merged = [...localById.values()]
         .filter(c => !deletedSet.has(c.id))
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      const col = this.conversationsCollection(uid);
-      if (!col) return;
-      type Op = { type: 'set'; ref: ReturnType<typeof this.conversationRef>; payload: object } | { type: 'delete'; ref: ReturnType<typeof this.conversationRef> };
-      const ops: Op[] = [];
-      for (const conv of merged) {
-        const convRef = this.conversationRef(uid, conv.id);
-        if (!convRef) continue;
-        const payload: Record<string, unknown> = {
-          id: conv.id,
-          title: conv.title ?? 'Chat',
-          mode: conv.mode ?? 'chat',
-          modesUsed: conv.modesUsed ?? [],
-          timestamp: conv.timestamp,
-          messages: (conv.messages || []).slice(-FirebaseService.MESSAGES_PER_CONVERSATION),
-          lastUpdated: serverTimestamp(),
-        };
-        const embedding = embeddingsByConvId?.[conv.id];
-        if (embedding && Array.isArray(embedding)) payload.embedding = embedding;
-        ops.push({ type: 'set', ref: convRef, payload });
-      }
-      for (const id of deletedIds) {
-        const convRef = this.conversationRef(uid, id);
-        if (convRef) ops.push({ type: 'delete', ref: convRef });
-      }
-      for (let i = 0; i < ops.length; i += FirebaseService.BATCH_SIZE) {
-        const chunk = ops.slice(i, i + FirebaseService.BATCH_SIZE);
-        if (chunk.length === 0) continue;
-        const batch = writeBatch(this.db);
-        for (const op of chunk) {
-          if (op.ref) {
-            if (op.type === 'set') batch.set(op.ref, op.payload);
-            else batch.delete(op.ref);
-          }
-        }
-        await batch.commit();
-      }
+      await setDoc(ref, { historyBlob: JSON.stringify(merged), lastUpdated: serverTimestamp() }, { merge: true });
     } catch {
       // Network or permission; sync will retry on next change
     }
   }
 
   async getHistory(uid: string): Promise<Conversation[] | null> {
-    const col = this.conversationsCollection(uid);
-    if (!col) return null;
+    const ref = this.userRef(uid);
+    if (!ref) return null;
     try {
-      const q = query(
-        col,
-        orderBy('timestamp', 'desc'),
-        limit(FirebaseService.CONVERSATIONS_LIMIT)
-      );
-      const snap = await getDocs(q);
-      const list = snap.docs.map((d) => {
-        const data = d.data() as any;
-        const ts = data.timestamp;
-        const timestamp = ts?.toDate?.() ?? (ts ? new Date(ts) : new Date());
-        return {
-          id: data.id ?? d.id,
-          title: data.title ?? 'Chat',
-          mode: data.mode ?? 'chat',
-          modesUsed: data.modesUsed ?? [],
-          timestamp,
-          messages: (data.messages || []).map((m: any) => ({
-            ...m,
-            timestamp: m.timestamp?.toDate?.() ?? (m.timestamp ? new Date(m.timestamp) : new Date()),
-          })),
-          embedding: Array.isArray(data.embedding) ? data.embedding : undefined,
-        } as Conversation;
-      });
-      if (list.length > 0) return list;
-      const userSnap = await getDoc(this.userRef(uid)!);
-      const blob = userSnap.data()?.historyBlob;
-      if (blob === undefined || blob === null || typeof blob !== 'string') return [];
+      const snap = await getDoc(ref);
+      const blob = snap.data()?.historyBlob;
+      if (blob === undefined || blob === null) return null;
+      if (typeof blob !== 'string') return null;
       const parsed = JSON.parse(blob) as any[];
-      if (!Array.isArray(parsed)) return [];
-      const migrated = parsed.map((c: any) => ({
+      if (!Array.isArray(parsed)) return null;
+      return parsed.map((c: any) => ({
+        ...c,
         id: c.id ?? String(Date.now()),
         title: c.title ?? 'Chat',
         mode: c.mode ?? 'chat',
-        modesUsed: c.modesUsed ?? [],
         timestamp: c.timestamp ? new Date(c.timestamp) : new Date(),
         messages: (c.messages || []).map((m: any) => ({
           ...m,
           timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
         })),
       }));
-      const batch = writeBatch(this.db!);
-      for (const conv of migrated.slice(0, FirebaseService.CONVERSATIONS_LIMIT)) {
-        const convRef = this.conversationRef(uid, conv.id)!;
-        batch.set(convRef, {
-          ...conv,
-          messages: (conv.messages || []).slice(-FirebaseService.MESSAGES_PER_CONVERSATION),
-          lastUpdated: serverTimestamp(),
-        });
-      }
-      await batch.commit();
-      return migrated;
     } catch {
       return null;
     }

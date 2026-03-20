@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { geminiService } from '../services/geminiService';
 import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language, UserThemeId } from '../types';
 import { translations } from '../translations';
@@ -21,8 +22,6 @@ interface AccountSettingsProps {
   onThemeModeChange?: (mode: ThemeMode) => void;
 }
 
-const MEMORY_MAX_LENGTH = 2000; // Keeps system instructions in chat() from bloating
-
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange, themeMode, onThemeModeChange }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
@@ -31,7 +30,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
 
   useEffect(() => {
      if (user) {
-        firebaseService.getUserMemory(user.id).then(m => setMemory(m.slice(0, MEMORY_MAX_LENGTH)));
+        firebaseService.getUserMemory(user.id).then(setMemory);
         firebaseService.getUsage(user.id).then(setUsage);
      } else {
         setUsage(null);
@@ -41,9 +40,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   const handleSaveMemory = async () => {
      if (user) {
         setLoading(true);
-        const toSave = memory.slice(0, MEMORY_MAX_LENGTH);
-        await firebaseService.updateUserMemory(user.id, toSave);
-        if (memory.length > MEMORY_MAX_LENGTH) setMemory(toSave);
+        await firebaseService.updateUserMemory(user.id, memory);
         setLoading(false);
      }
   };
@@ -63,8 +60,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   };
 
   const handleLogout = async () => {
-    await firebaseService.logout();
-    // onAuthStateChanged fires with null and clears geminiService / app state
+      await geminiService.logout();
+      // Auth listener will reset state
   };
 
   return (
@@ -150,69 +147,71 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                        <i className="fa-solid fa-memory text-cyan-500/80" />
                        Neural Memory
                     </label>
-                    <div className="flex items-center gap-3">
-                       <span className={`text-[10px] font-mono ${memory.length > MEMORY_MAX_LENGTH ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`} aria-live="polite">
-                          {memory.length} / {MEMORY_MAX_LENGTH}
-                       </span>
-                       <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
-                    </div>
+                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
                  </div>
                  <textarea 
                     value={memory} 
                     onChange={e => setMemory(e.target.value)} 
-                    maxLength={MEMORY_MAX_LENGTH}
                     className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
-                    aria-describedby="memory-count"
                  />
-                 <p id="memory-count" className="sr-only">Neural memory is limited to {MEMORY_MAX_LENGTH} characters so it can be used in every chat.</p>
               </div>
 
-              {/* Light / dark mode — separate from visual theme */}
-              {onThemeModeChange && (
-                <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.04s' }}>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
-                    <i className="fa-solid fa-circle-half-stroke text-cyan-500/80" />
-                    Light / dark
+              {/* Theme Picker */}
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.04s' }}>
+                <div className="flex justify-between items-center px-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    <i className="fa-solid fa-palette text-cyan-500/80" />
+                    Workspace Theme
                   </label>
-                  <div className="flex gap-2 flex-wrap">
-                    {[
-                      { id: 'light' as ThemeMode, label: 'Light', desc: 'Always light.' },
-                      { id: 'dark' as ThemeMode, label: 'Dark', desc: 'Always dark.' },
-                      { id: 'auto' as ThemeMode, label: 'Auto', desc: 'Follow system or time of day.' },
-                    ].map((m) => (
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {/* Classic first, then Auto (mode) next to it */}
+                  {[
+                    { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
+                  ].map((tDef) => {
+                    const active = userTheme === (tDef.id as UserThemeId);
+                    return (
                       <button
-                        key={m.id}
+                        key={tDef.id}
                         type="button"
-                        onClick={() => onThemeModeChange(m.id)}
-                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 flex-1 min-w-[100px] ${
-                          themeMode === m.id
+                        onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
+                        className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
+                          active
                             ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
                             : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
-                            {m.label}
+                            {tDef.label}
                           </span>
-                          {themeMode === m.id && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                          {active && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
                         </div>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{m.desc}</p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">{tDef.desc}</p>
                       </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Workspace theme — visual skin (Classic, Midnight, etc.) */}
-              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.05s' }}>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
-                  <i className="fa-solid fa-palette text-cyan-500/80" />
-                  Workspace theme
-                </label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    );
+                  })}
+                  {onThemeModeChange && (
+                    <button
+                      type="button"
+                      onClick={() => onThemeModeChange('auto')}
+                      className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
+                        themeMode === 'auto'
+                          ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                          : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-200">
+                          Auto
+                        </span>
+                        {themeMode === 'auto' && <i className="fa-solid fa-check text-cyan-500 text-xs" />}
+                      </div>
+                      <p className="text-[10px] text-slate-500 dark:text-slate-400">Light/dark by your time.</p>
+                    </button>
+                  )}
                   {[
-                    { id: 'classic', label: 'Classic', desc: 'Light + dark, balanced UI.' },
                     { id: 'midnight', label: 'Midnight', desc: 'Pure dark studio look.' },
                     { id: 'aurora', label: 'Aurora', desc: 'Gradient, glowing backdrop.' },
                     { id: 'terminal', label: 'Terminal', desc: 'Deep navy hacker vibe.' },
@@ -255,7 +254,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                     </div>
                     <div className="p-5 rounded-3xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/5 flex flex-col justify-center items-center gap-2 animate-reveal hover:border-cyan-500/20 hover:shadow-md transition-all duration-200" style={{ animationDelay: '0.1s' }}>
                         <span className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">{usage ? usage.images + usage.videos : user.dailyUsage.images + user.dailyUsage.videos}</span>
-                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations (30 days)</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations</span>
                     </div>
                  </div>
               </div>

@@ -2,7 +2,7 @@
 {
   "rewrites": [
     {
-      "source": "/((?!sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|sw.js|manifest.json|assets|pricing\\.html|privacy\\.html|releases\\.html).*)",
+      "source": "/((?!sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|sw.js|manifest.json|assets).*)",
       "destination": "/index.html"
     }
   ]

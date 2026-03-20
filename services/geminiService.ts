@@ -1,24 +1,13 @@
 
 import { GoogleGenAI, Modality } from "@google/genai";
-import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode, MathExtractResult, MathOperation } from "../types";
+import { Language, GroundingLink, AspectRatio, ImageSize, UserAccount, ChatMessage, Conversation, WorkspaceMode } from "../types";
 import { firebaseService } from "./firebaseService";
 import { cacheService, CacheKey } from "./cacheService";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const MEMORY_UPDATE_COOLDOWN_MS = 2 * 60 * 1000; // at most once per 2 minutes per user
-
-/** Only run memory update when the user message suggests something worth remembering (personal info, preferences). */
-function shouldUpdateMemoryFromExchange(userPrompt: string): boolean {
-  const trimmed = userPrompt.trim();
-  if (trimmed.length < 40) return false; // skip "ok", "thanks", "what's 2+2?"
-  const lower = trimmed.toLowerCase();
-  const looksPersonal =
-    /\b(i'?m|i am|my name|call me|i (like|love|prefer|enjoy|hate|dislike|need|have|live|work|study)|remember (that|this)|my (email|phone|address|job|school|birthday|age)|i'm from)\b/i.test(lower);
-  return looksPersonal;
-}
 
 export class AppError extends Error {
-  constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' | 'plan_required' = 'generic') {
+  constructor(public message: string, public type: 'safety' | 'quota' | 'auth' | 'generic' | 'not_found' | 'limit_reached' = 'generic') {
     super(message);
     this.name = 'AppError';
   }
@@ -62,7 +51,6 @@ RULES:
 
 export class GeminiService {
   private currentUser: UserAccount | null = null;
-  private lastMemoryUpdateByUser = new Map<string, number>();
   private guestUsage = {
     textCount: 0,
     textResetAt: 0,
@@ -74,22 +62,6 @@ export class GeminiService {
 
   constructor() {
     this.currentUser = cacheService.get<UserAccount | null>(CacheKey.USER, null);
-
-    // Hydrate guest usage from localStorage so limits survive page refresh.
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = window.localStorage.getItem('orin-guest-usage');
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<typeof this.guestUsage>;
-          this.guestUsage = {
-            ...this.guestUsage,
-            ...parsed,
-          };
-        }
-      } catch {
-        // Ignore storage errors; fall back to defaults.
-      }
-    }
   }
 
   setSessionUser(user: UserAccount) {
@@ -101,10 +73,10 @@ export class GeminiService {
     return this.currentUser;
   }
 
-  /** Clears local state only. Do not call firebaseService.logout() here — the UI calls it, then onAuthStateChanged runs and calls this. */
   async logout() {
     this.currentUser = null;
     cacheService.remove(CacheKey.USER);
+    try { await firebaseService.logout(); } catch(e) {}
   }
 
   private resetGuestWindows() {
@@ -117,15 +89,24 @@ export class GeminiService {
       this.guestUsage.uploadCount = 0;
       this.guestUsage.uploadResetAt = now;
     }
+  }
 
-    // Persist guest usage window to localStorage.
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
-      } catch {
-        // Best effort; ignore quota or privacy errors.
-      }
-    }
+  /** Chat model chain by plan. Free → flash, Basic → 2.5-flash, Pro → 2.5-pro */
+  private getModelsToTry(user: typeof this.currentUser): string[] {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+    if (plan === 'pro' || plan === 'pro_yearly')
+      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+    if (plan === 'basic' || plan === 'basic_yearly')
+      return ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    return ['gemini-2.0-flash', 'gemini-2.5-flash'];
+  }
+
+  /** Context window depth by plan. Free=5, Basic=10, Pro=20 */
+  private getContextLimit(user: typeof this.currentUser): number {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+    if (plan === 'pro' || plan === 'pro_yearly') return 20;
+    if (plan === 'basic' || plan === 'basic_yearly') return 10;
+    return 5;
   }
 
   private async getApiKey(): Promise<string> {
@@ -151,28 +132,6 @@ export class GeminiService {
     }
   }
 
-  /** Chat model fallback chain by plan. Matches pricing: Free=2.0-flash, Basic=2.5-flash, Pro=3.1-pro. */
-  private getModelsToTry(user: UserAccount | null): string[] {
-    const plan = user?.plan?.toLowerCase() ?? 'free';
-
-    if (plan === 'pro' || plan === 'pro_yearly') {
-      return ['gemini-3.1-pro-preview', 'gemini-3.1-pro-preview-customtools', 'gemini-2.5-flash'];
-    }
-    if (plan === 'basic' || plan === 'basic_yearly') {
-      return ['gemini-2.5-flash', 'gemini-2.0-flash'];
-    }
-    // Free: keep a single, valid model to avoid silent fallbacks to non-existent names.
-    return ['gemini-2.0-flash'];
-  }
-
-  /** Context window size by plan (last N messages). Matches pricing: Free=5, Basic=10, Pro=20. */
-  private getContextMessageLimit(user: UserAccount | null): number {
-    const plan = user?.plan?.toLowerCase() ?? 'free';
-    if (plan === 'pro' || plan === 'pro_yearly') return 20;
-    if (plan === 'basic' || plan === 'basic_yearly') return 10;
-    return 5;
-  }
-
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
     descriptive?: boolean;
@@ -183,20 +142,16 @@ export class GeminiService {
     history?: ChatMessage[];
     signal?: AbortSignal;
     isPrivate?: boolean;
-    /** Internal/system calls (e.g. release summaries) should not consume user quota. */
-    internal?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     
-    if (!options.internal) {
-      if (this.currentUser) {
-        const limitReached = await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'text');
-        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
-      } else {
-        this.resetGuestWindows();
-      if (this.guestUsage.textCount >= this.guestUsage.textMax) {
-          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
-        }
-      }
+    if (this.currentUser) {
+       const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
+       if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
+    } else {
+       this.resetGuestWindows();
+       if (this.guestUsage.textCount >= this.guestUsage.textMax) {
+         throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
+       }
     }
 
     const apiKey = await this.getApiKey();
@@ -219,13 +174,19 @@ EXPLANATION STYLE:
 - When descriptive mode is OFF, keep answers short and focused unless the user explicitly asks for more detail.
 - Never include your internal reasoning steps or chain-of-thought—only the final explanation.`;
 
+    if (useThinking) {
+      systemInstruction += `
+
+REASONING MODE:
+- For complex or technical questions, think through the problem internally before answering.
+- Use structured reasoning to avoid mistakes, but only output the final answer and concise explanation, not your intermediate thoughts.`;
+    }
     const promptText = (prompt || "Continue.").trim();
 
     try {
-      const contextLimit = this.getContextMessageLimit(this.currentUser);
       const contents: { role: 'user' | 'model'; parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] }[] = [];
       if (options.history && options.history.length > 0) {
-        for (const msg of options.history.slice(-contextLimit)) {
+        for (const msg of options.history.slice(-this.getContextLimit(this.currentUser))) {
           const role = msg.role === 'user' ? 'user' : 'model';
           const text = msg.role === 'user' && msg.imageUrl ? (msg.content + " [Image sent]") : msg.content;
           if (text) contents.push({ role, parts: [{ text }] });
@@ -244,38 +205,30 @@ EXPLANATION STYLE:
 
       const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
 
-      // Only attach tools when needed: maps by request, search only for time-sensitive or explicit search.
-      // Never enable search for private mode or file attachments (saves quota, keeps answers local).
-      const allowSearch =
-        !options.isPrivate &&
-        !options.fileData &&
-        (options.grounding === 'search' || looksTimeSensitive);
-
+      // Prefer explicit grounding if caller requested it
       if (options.grounding === 'maps') {
         config.tools = [{ googleMaps: {} }];
-      } else if (allowSearch) {
+      } else {
+        // Default: enable web search for general chat so answers can use real-time data
         config.tools = [{ googleSearch: {} }];
+
+        // If caller explicitly disabled grounding in the future we could respect that here.
+        // For now, we bias towards search for better, real-time answers—especially for time-sensitive queries.
+        if (options.grounding === 'search' || looksTimeSensitive) {
+          config.tools = [{ googleSearch: {} }];
+        }
       }
 
       const modelsToTry = this.getModelsToTry(this.currentUser);
-      // Native thinking API: plan-based budget. Free=0, Basic=4096, Pro=8192. Toggle off = 0.
-      const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
-      const thinkingBudget = !useThinking ? 0
-        : plan === 'pro' || plan === 'pro_yearly' ? 8192
-        : plan === 'basic' || plan === 'basic_yearly' ? 4096
-        : 0;
-      const thinkingConfig = { thinkingBudget };
-
       let lastError: unknown = null;
       let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
 
       for (const modelName of modelsToTry) {
         try {
-          const requestConfig = { ...config, thinkingConfig } as typeof config & { thinkingConfig: { thinkingBudget: number } };
           response = await ai.models.generateContent({
             model: modelName,
             contents,
-            config: requestConfig,
+            config,
           });
           break;
         } catch (err) {
@@ -288,16 +241,11 @@ EXPLANATION STYLE:
         throw lastError instanceof Error ? lastError : new Error(String(lastError));
       }
 
-      if (!this.currentUser) {
-        this.resetGuestWindows();
-        this.guestUsage.textCount++;
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
-          } catch {
-            // ignore
-          }
-        }
+      if (this.currentUser && !options.isPrivate) {
+         firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
+      } else if (!this.currentUser) {
+         this.resetGuestWindows();
+         this.guestUsage.textCount++;
       }
 
       const links: GroundingLink[] = [];
@@ -315,17 +263,7 @@ EXPLANATION STYLE:
       if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
 
       if (this.currentUser && !options.isPrivate && memory !== undefined) {
-        const uid = this.currentUser.id;
-        const now = Date.now();
-        const last = this.lastMemoryUpdateByUser.get(uid) ?? 0;
-        const cooldownOk = now - last >= MEMORY_UPDATE_COOLDOWN_MS;
-        if (shouldUpdateMemoryFromExchange(promptText) && cooldownOk) {
-          this.lastMemoryUpdateByUser.set(uid, now);
-          this.updateMemoryFromExchange(uid, memory, promptText, text).catch((err) => {
-            // Surface memory update failures for observability without breaking chat.
-            console.error("Orin memory update failed:", err);
-          });
-        }
+        this.updateMemoryFromExchange(this.currentUser.id, memory, promptText, text).catch(() => {});
       }
 
       return { text, links };
@@ -336,60 +274,9 @@ EXPLANATION STYLE:
     }
   }
 
-  /** Computer Use (Agent Mode): Pro-only. Screenshot → Gemini suggests UI actions (click, type, navigate). */
-  async computerUse(params: {
-    prompt: string;
-    screenshotBase64?: string;
-    mimeType?: string;
-    /** Full conversation history for multi-turn (user + model + function_response). */
-    contents?: Array<{ role: 'user' | 'model'; parts: any[] }>;
-  }): Promise<{ text: string; functionCalls: Array<{ name: string; args: Record<string, unknown> }>; safetyDecisions: Array<{ explanation?: string; decision?: string }> }> {
-    const plan = this.currentUser?.plan?.toLowerCase() ?? '';
-    if (plan !== 'pro' && plan !== 'pro_yearly') {
-      throw new AppError("Agent mode (Computer Use) is a Pro-only feature. Upgrade to use browser automation.", "plan_required");
-    }
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-3.1-pro-preview';
-    const tools = [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' } }];
-    let contents: Array<{ role: 'user' | 'model'; parts: unknown[] }>;
-    if (params.contents && params.contents.length > 0) {
-      contents = params.contents;
-    } else {
-      const parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [{ text: params.prompt }];
-      if (params.screenshotBase64 && params.screenshotBase64.length > 0) {
-        parts.push({ inlineData: { data: params.screenshotBase64, mimeType: params.mimeType || 'image/png' } });
-      }
-      contents = [{ role: 'user' as const, parts }];
-    }
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: { tools },
-    });
-    const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts) {
-      return { text: '', functionCalls: [], safetyDecisions: [] };
-    }
-    let text = '';
-    const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
-    const safetyDecisions: Array<{ explanation?: string; decision?: string }> = [];
-    for (const part of candidate.content.parts) {
-      const p = part as { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; function_call?: { name: string; args?: Record<string, unknown> } };
-      if (p.text) text += p.text;
-      const fc = p.functionCall || p.function_call;
-      if (fc) {
-        functionCalls.push({ name: fc.name, args: fc.args || {} });
-        const args = fc.args as { safety_decision?: { explanation?: string; decision?: string } } | undefined;
-        if (args?.safety_decision) safetyDecisions.push(args.safety_decision);
-      }
-    }
-    return { text: text.trim(), functionCalls, safetyDecisions };
-  }
-
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     if (this.currentUser) {
-       if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
+       if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
        this.resetGuestWindows();
        if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
@@ -400,16 +287,15 @@ EXPLANATION STYLE:
     try {
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
-      const imageModel = this.currentUser?.plan?.toLowerCase().includes('pro')
-        ? 'gemini-3-pro-image-preview'
-        : 'gemini-3.1-flash-image-preview';
       const response = await ai.models.generateContent({
-        model: imageModel,
+        model: 'gemini-3-pro-image-preview',
         contents: { parts: [{ text: prompt }] },
         config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: size as any } }
       });
 
-      if (!this.currentUser) {
+      if (this.currentUser) {
+        firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
+      } else {
         this.resetGuestWindows();
         this.guestUsage.uploadCount++;
       }
@@ -423,95 +309,42 @@ EXPLANATION STYLE:
     }
   }
 
-  async generateVideo(options: {
-    prompt: string;
-    aspectRatio: '16:9' | '9:16';
-    resolution?: '720p' | '1080p';
-    /** Image-to-video or first frame: base64 image data and mime type. */
-    image?: { imageBytes: string; mimeType: string };
-    /** Last frame for first/last interpolation. Use with image (first frame). */
-    lastFrame?: { imageBytes: string; mimeType: string };
-    /** Extend: previous video bytes (base64). Forces veo-3.1-generate-preview and 720p. */
-    video?: { videoBytes: string; mimeType: string };
-  }): Promise<string> {
-    const { prompt, aspectRatio, image, lastFrame, video } = options;
-    const isExtend = !!video;
-    const resolution = isExtend ? '720p' : (options.resolution ?? '720p');
-
+  async generateVideo(prompt: string, aspectRatio: '16:9' | '9:16', resolution: '720p' | '1080p' = '720p'): Promise<string> {
     if (this.currentUser) {
-      const plan = this.currentUser.plan?.toLowerCase() ?? 'free';
-      const hasVideoPlan = plan === 'basic' || plan === 'basic_yearly' || plan === 'pro' || plan === 'pro_yearly';
-      if (!hasVideoPlan) {
-        throw new AppError("Video generation requires a Basic or Pro plan. Upgrade to continue.", "plan_required");
-      }
-      if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
+       if (await firebaseService.checkLimit(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
     } else {
-      this.resetGuestWindows();
-      if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
-        throw new AppError("Guest upload limit reached. Sign in to continue.", "limit_reached");
-      }
+       this.resetGuestWindows();
+       if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
+         throw new AppError("Guest upload limit reached. Sign in to continue.", "limit_reached");
+       }
     }
 
     try {
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
-      const model = isExtend || resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+      const model = resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
 
-      const config: { numberOfVideos: number; resolution: string; aspectRatio: string; lastFrame?: { imageBytes: string; mimeType: string } } = {
-        numberOfVideos: 1,
-        resolution,
-        aspectRatio,
-      };
-      if (lastFrame) config.lastFrame = lastFrame;
-
-      const params: {
-        model: string;
-        prompt: string;
-        image?: { imageBytes: string; mimeType: string };
-        video?: { videoBytes: string; mimeType: string };
-        config: typeof config;
-      } = { model, prompt, config };
-      if (image) params.image = image;
-      if (video) params.video = video;
-
-      let operation = await ai.models.generateVideos(params);
-
-      // Poll for completion with timeout + max attempts to avoid infinite spinner.
-      const pollIntervalMs = 8000;
-      const maxPollMs = 5 * 60 * 1000; // 5 minutes
-      const startedAt = Date.now();
-      let attempts = 0;
-      const maxAttempts = Math.ceil(maxPollMs / pollIntervalMs);
+      let operation = await ai.models.generateVideos({
+        model: model,
+        prompt: prompt,
+        config: { numberOfVideos: 1, resolution: resolution, aspectRatio: aspectRatio }
+      });
 
       while (!operation.done) {
-        if (Date.now() - startedAt > maxPollMs || attempts >= maxAttempts) {
-          throw new AppError("Video generation is taking longer than expected. Please try again.", "generic");
-        }
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-        operation = await ai.operations.getVideosOperation({ operation });
-        // If the operation itself reports an error, surface it.
-        const opError = (operation as any)?.error;
-        if (opError?.message) {
-          throw new AppError("Video generation failed: " + opError.message, "generic");
-        }
+        await new Promise(resolve => setTimeout(resolve, 10000));
+        operation = await ai.operations.getVideosOperation({operation: operation});
       }
 
-      if (!this.currentUser) {
+      if (this.currentUser) {
+        firebaseService.incrementUsage(this.currentUser.id, 'videos').catch(() => {});
+      } else {
         this.resetGuestWindows();
         this.guestUsage.uploadCount++;
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
-          } catch {
-            // ignore
-          }
-        }
       }
 
       const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (!videoUri) throw new Error("No video generated.");
-
+      
       const response = await fetch(`${videoUri}&key=${apiKey}`);
       const blob = await response.blob();
       return URL.createObjectURL(blob);
@@ -519,63 +352,6 @@ EXPLANATION STYLE:
       const msg = e instanceof Error ? e.message : "Unknown error";
       throw new AppError("Video generation failed: " + msg, 'generic');
     }
-  }
-
-  /** Gemini TTS: single- or multi-speaker. Returns base64-encoded 24kHz mono 16-bit PCM. */
-  async generateTts(options: {
-    text: string;
-    stylePrompt?: string;
-    voiceName?: string;
-    multiSpeaker?: { speaker: string; voiceName: string }[];
-    model?: 'flash' | 'pro';
-  }): Promise<string> {
-    const { text, stylePrompt, voiceName = 'Kore', multiSpeaker, model = 'flash' } = options;
-    if (!text.trim()) throw new AppError("No text to speak.", 'generic');
-
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const ttsModel = model === 'pro' ? 'gemini-2.5-pro-preview-tts' : 'gemini-2.5-flash-preview-tts';
-
-    const promptText = stylePrompt?.trim()
-      ? `${stylePrompt.trim()}\n\n${text.trim()}`
-      : text.trim();
-
-    const config: {
-      responseModalities: string[];
-      speechConfig: {
-        voiceConfig?: { prebuiltVoiceConfig: { voiceName: string } };
-        multiSpeakerVoiceConfig?: {
-          speakerVoiceConfigs: { speaker: string; voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } }[];
-        };
-      };
-    } = {
-      responseModalities: ['AUDIO'],
-      speechConfig: multiSpeaker?.length
-        ? {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: multiSpeaker.map(({ speaker, voiceName: v }) => ({
-                speaker,
-                voiceConfig: { prebuiltVoiceConfig: { voiceName: v } },
-              })),
-            },
-          }
-        : {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName },
-            },
-          },
-    };
-
-    const response = await ai.models.generateContent({
-      model: ttsModel,
-      contents: [{ role: 'user', parts: [{ text: promptText }] }],
-      config,
-    });
-
-    const part = response.candidates?.[0]?.content?.parts?.[0];
-    const data = (part as { inlineData?: { data?: string } })?.inlineData?.data;
-    if (!data) throw new AppError("No audio generated.", 'generic');
-    return data;
   }
 
   private async updateMemoryFromExchange(uid: string, previousMemory: string, userPrompt: string, assistantReply: string): Promise<void> {
@@ -598,11 +374,7 @@ EXPLANATION STYLE:
           .trim();
       }
       if (newMemory) await firebaseService.updateUserMemory(uid, newMemory);
-    } catch (err) {
-      // Log for diagnostics; chat flow should not break if memory sync fails.
-      console.error("Orin memory update pipeline failed:", err);
-      throw err;
-    }
+    } catch {}
   }
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
@@ -610,136 +382,10 @@ EXPLANATION STYLE:
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
       const prompt = `Generate 3 word title for chat starting with: "${messages[0]?.content}". Lang: ${lang}.`;
-      const response = await ai.models.generateContent({ model: 'gemini-3.1-flash-lite', contents: prompt });
+      const response = await ai.models.generateContent({ model: 'gemini-2.0-flash', contents: prompt });
       const text = (response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
       return text.trim() || "New Chat";
     } catch { return "New Chat"; }
-  }
-
-  /** Embed text(s) with Gemini Embedding 2 for semantic search. Returns one vector per input. */
-  async embedText(texts: string[], options?: { outputDimensionality?: number }): Promise<number[][]> {
-    if (texts.length === 0) return [];
-    const apiKey = await this.getApiKey().catch(() => null);
-    if (!apiKey) return texts.map(() => []);
-    const ai = new GoogleGenAI({ apiKey });
-    const config = options?.outputDimensionality != null ? { outputDimensionality: options.outputDimensionality } : undefined;
-    try {
-      const response = await ai.models.embedContent({
-        model: 'gemini-embedding-2-preview',
-        contents: texts,
-        config,
-      });
-      const embeddings = response.embeddings ?? [];
-      return embeddings.map((e) => e.values ?? []);
-    } catch {
-      return texts.map(() => []);
-    }
-  }
-
-  /** Embed a single image (base64) into the same vector space as text for cross-modal search. */
-  async embedImage(imageBase64: string, mimeType: string = 'image/png'): Promise<number[]> {
-    const apiKey = await this.getApiKey().catch(() => null);
-    if (!apiKey) return [];
-    const ai = new GoogleGenAI({ apiKey });
-    try {
-      const response = await ai.models.embedContent({
-        model: 'gemini-embedding-2-preview',
-        contents: [{ inlineData: { mimeType, data: imageBase64 } }],
-      });
-      const vec = response.embeddings?.[0]?.values;
-      return Array.isArray(vec) ? vec : [];
-    } catch {
-      return [];
-    }
-  }
-
-  /**
-   * Maths-only helper: extract a clean expression + metadata from text or image.
-   * IMPORTANT: Extraction ONLY – no solving, no limits, no memory.
-   */
-  async extractMathFromInput(
-    text?: string,
-    fileData?: { data: string; mimeType: string; name?: string }
-  ): Promise<MathExtractResult> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-
-    const extractionPrompt = `You are a mathematical expression extractor.
-Your ONLY job is to read the input and return a JSON object.
-Do NOT solve anything. Do NOT explain anything.
-Return ONLY raw JSON with no markdown, no backticks, no extra text.
-
-Extract and return this structure:
-{
-  "type": "quadratic" | "linear" | "system" | "calculus" | "trigonometry" | "matrix" | "statistics" | "unknown",
-  "expression": "the raw mathematical expression as a standard string e.g. x^2 + 5*x + 6",
-  "latexExpression": "the expression in LaTeX format e.g. x^2 + 5x + 6",
-  "variable": "the variable to solve for e.g. x",
-  "operation": "solve" | "simplify" | "differentiate" | "integrate" | "factor" | "expand",
-  "extraValues": {},
-  "confidence": 0.0,
-  "unreadable": false
-}
-
-If the input is unclear or unreadable set "unreadable": true.
-If it is a system of equations, expression should be an array of strings.`;
-
-    const contents: Array<{ role: 'user'; parts: any[] }> = [];
-    if (fileData) {
-      contents.push({
-        role: 'user',
-        parts: [
-          { inlineData: { data: fileData.data, mimeType: fileData.mimeType } },
-          { text: extractionPrompt },
-        ],
-      });
-    } else {
-      contents.push({
-        role: 'user',
-        parts: [{ text: `${extractionPrompt}\n\nInput: ${text ?? ''}` }],
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents,
-      config: {
-        systemInstruction:
-          'You are a JSON-only extractor for maths. Never output anything except a single valid JSON object.',
-      },
-    });
-
-    let raw = (response as { text?: string }).text ?? "";
-    if (!raw && response.candidates?.[0]?.content?.parts) {
-      raw = response.candidates[0].content.parts
-        .map((p: { text?: string }) => (p.text != null ? p.text : ""))
-        .join("");
-    }
-    raw = raw.trim().replace(/```json/gi, "").replace(/```/g, "").trim();
-
-    try {
-      const parsed = JSON.parse(raw) as Partial<MathExtractResult>;
-      return {
-        type: parsed.type ?? 'unknown',
-        expression: parsed.expression ?? (text ?? ''),
-        latexExpression: parsed.latexExpression,
-        variable: parsed.variable ?? 'x',
-        operation: parsed.operation as MathOperation | undefined,
-        extraValues: parsed.extraValues ?? {},
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 1,
-        unreadable: !!parsed.unreadable,
-      };
-    } catch {
-      return {
-        type: 'unknown',
-        expression: text ?? '',
-        variable: 'x',
-        operation: undefined,
-        extraValues: {},
-        confidence: 0,
-        unreadable: false,
-      };
-    }
   }
 
   private getVoiceSystemInstruction(tone: string, sessionContext?: { timezone: string; localTime: string; country: string; currency: string; locale: string }) {
@@ -766,48 +412,26 @@ SESSION CONTEXT (use for answers about time, place, money, weather):
 When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.`;
   }
 
-  /** Native audio model (gemini-2.5-flash-native-audio-preview-12-2025 deprecated March 19, 2026). */
-  private static readonly LIVE_NATIVE_AUDIO_MODEL = 'gemini-live-2.5-flash-native-audio-preview';
-
   async connectLive(callbacks: any, config: any) {
       const apiKey = await this.getApiKey();
-      const useV1Alpha = !!(config.proactiveAudio || config.enableAffectiveDialog);
-      const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha && { apiVersion: 'v1alpha' as const }) });
+      const ai = new GoogleGenAI({ apiKey });
       const systemInstruction = config.systemInstruction != null
         ? config.systemInstruction
         : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-      const finalConfig: Record<string, unknown> = {
+      const finalConfig = {
         ...config,
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
         systemInstruction
       };
-      if (config.proactiveAudio) finalConfig.proactivity = { proactiveAudio: true };
-      if (config.enableAffectiveDialog) finalConfig.enableAffectiveDialog = true;
-      const { __setSessionPromise, ...passThroughCallbacks } = callbacks as { __setSessionPromise?: (p: Promise<unknown>) => void; [k: string]: unknown };
-      const sessionPromise = ai.live.connect({ model: GeminiService.LIVE_NATIVE_AUDIO_MODEL, callbacks: passThroughCallbacks, config: finalConfig });
-      __setSessionPromise?.(sessionPromise);
-      return sessionPromise;
-  }
-
-  /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */
-  async connectLiveMath(callbacks: any) {
-    return this.connectLive(callbacks, {
-      systemInstruction: `You are a math speech-to-LaTeX converter. The user will speak a mathematical expression or equation in plain English (e.g. "x squared plus 5x minus 6 equals zero"). Respond with ONLY the LaTeX equivalent, nothing else. No explanation, no words—just the raw LaTeX. Examples: "x squared plus 1" -> x^2+1, "five x minus two equals zero" -> 5x-2=0, "square root of 2" -> \\sqrt{2}. Output only valid LaTeX.`,
-    });
+      return ai.live.connect({ model: 'gemini-2.5-flash-native-audio-preview-12-2025', callbacks, config: finalConfig });
   }
 
   async connectTranslator(callbacks: any, options: any) {
-     return this.connectLive(callbacks, {
+     return this.connectLive(callbacks, { 
         responseModalities: [Modality.AUDIO],
         speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-        systemInstruction: `You are a real-time interpreter. The user will speak in either ${options.source} or ${options.target}.
-Detect the language automatically. If they speak ${options.source}, output the translation in ${options.target}.
-If they speak ${options.target}, output in ${options.source}.
-Output ONLY the translation. Do not add commentary, greetings, or explanations.
-If the speech is unclear or too short to translate, output nothing.`,
-        proactiveAudio: options.proactiveAudio,
-        enableAffectiveDialog: options.enableAffectiveDialog,
+        systemInstruction: `ACT AS A STRICT INTERPRETER. TASK: Translate speech between ${options.source} and ${options.target}.`
      });
   }
 
@@ -818,85 +442,21 @@ If the speech is unclear or too short to translate, output nothing.`,
         systemInstruction: `${getToneInstruction(config.tone)}. Processing real-time video feed.`
      });
   }
-
-  /** Separate client for Lyria (needs v1alpha). */
-  private getMusicClient(apiKey: string) {
-    return new GoogleGenAI({ apiKey, apiVersion: 'v1alpha' });
-  }
-
-  /**
-   * Lyria RealTime music session. Opens WebSocket, sets prompt and config, starts playback, returns session for steering.
-   *
-   * Gotcha (Node/Cloud Functions): If you move this to a backend, the SDK's receive-style API can block until
-   * a required number of chunks are met, so you won't be able to send new prompts or config updates while receiving.
-   * In the browser this is fine because callbacks are async; in Node.js use a non-blocking/event-driven pattern.
-   */
-  async connectMusicSession(
-    prompt: string,
-    config: {
-      bpm?: number;
-      density?: number;
-      brightness?: number;
-      scale?: string;
-    },
-    callbacks: {
-      onAudioChunk: (data: string) => void;
-      onError: (e: unknown) => void;
-      onClose: () => void;
-    }
-  ) {
-    const apiKey = await this.getApiKey();
-    const ai = this.getMusicClient(apiKey);
-
-    const session = await ai.live.music.connect({
-      model: 'models/lyria-realtime-exp',
-      callbacks: {
-        onmessage: (msg: { serverContent?: { audioChunks?: { data?: string }[] } }) => {
-          const chunks = msg.serverContent?.audioChunks ?? [];
-          for (const chunk of chunks) {
-            if (chunk.data) callbacks.onAudioChunk(chunk.data);
-          }
-        },
-        onerror: callbacks.onError,
-        onclose: callbacks.onClose,
-      },
-    });
-
-    await session.setWeightedPrompts({
-      weightedPrompts: [{ text: prompt, weight: 1.0 }],
-    });
-
-    await session.setMusicGenerationConfig({
-      musicGenerationConfig: {
-        bpm: config.bpm ?? 120,
-        density: config.density ?? 0.5,
-        brightness: config.brightness ?? 0.5,
-        scale: (config.scale ?? 'SCALE_UNSPECIFIED') as any,
-      },
-    });
-
-    await session.play();
-    return session;
-  }
+}
 
   /**
    * Dedicated math solver — bypasses the general chat system instruction that says
    * "Never include your internal reasoning steps or chain-of-thought".
-   * Uses a Symbolab-style system instruction: show EVERY step, always.
-   *
-   * Called directly from MathsMode instead of going through geminiService.chat().
+   * Uses a Symbolab-style system instruction that forces full numbered steps.
+   * Respects plan hierarchy: Free uses flash, Basic uses 2.5-flash, Pro uses 2.5-pro.
    */
   async solveMathWithAI(options: {
     prompt: string;
     fileData?: { data: string; mimeType: string; name?: string };
-    signal?: AbortSignal;
   }): Promise<string> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-
-    // Check usage
+    // Usage gate
     if (this.currentUser) {
-      const limitReached = await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'text');
+      const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
       if (limitReached) throw new AppError('Plan limit reached. Upgrade to continue.', 'limit_reached');
     } else {
       this.resetGuestWindows();
@@ -905,72 +465,70 @@ If the speech is unclear or too short to translate, output nothing.`,
       }
     }
 
-    const MATH_SYSTEM_INSTRUCTION = `You are a professional math tutor, like Symbolab or Wolfram Alpha.
-Your ONLY job is to solve math problems with full step-by-step working.
+    const MATH_SYSTEM = `You are a professional math tutor like Symbolab or Wolfram Alpha.
+Your ONLY job: solve math problems with complete step-by-step working.
 
-RULES — follow them exactly:
-1. Show EVERY algebraic step. Never skip. Never write "algebraic methods" or vague phrases.
-2. For equations: show the manipulation at each step (add/subtract/divide both sides).
-3. For trig equations: show the inverse trig, then the general solution(s).
-4. For quadratic: calculate Δ = b²−4ac explicitly, then both roots.
-5. For calculus: name the rule used (Power rule, Chain rule, etc.) then apply it.
-6. Always end with a clearly labelled FINAL ANSWER.
-7. Format your response using this structure:
+RULES (follow exactly):
+1. Show EVERY algebraic step — never skip, never write vague phrases like "algebraic methods".
+2. For equations: show each manipulation (add/subtract/divide both sides).
+3. For trig equations: show inverse trig + general solution(s) e.g. θ = π/6 + 2nπ.
+4. For quadratic: calculate Δ = b²−4ac explicitly, then derive both roots.
+5. For calculus: name the rule (Power rule, Chain rule, etc.) then apply it.
+6. End with a clearly labelled Final Answer.
 
+FORMAT — use this structure exactly:
 ---METHOD: [Method Name] ---
-Step 1: [state what you do]
-[show the actual math]
-Step 2: [state what you do]
-[show the actual math]
+Step 1: [what you're doing]
+[actual math]
+Step 2: [what you're doing]
+[actual math]
 ...
-Final Answer: [state the answer clearly]
+Final Answer: [clearly stated]
 ---ENDMETHOD---
 
-If multiple methods exist, use multiple METHOD blocks.
-Never refuse to show steps. Steps ARE the answer.`;
+If multiple methods exist, add a second METHOD block.
+Steps ARE the answer — never refuse to show them.`;
 
-    const contents: { role: 'user'; parts: any[] }[] = [];
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const modelsToTry = this.getModelsToTry(this.currentUser);
+
     const parts: any[] = [];
     if (options.fileData) {
       parts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
     }
     parts.push({ text: options.prompt });
-    contents.push({ role: 'user', parts });
 
-    const modelsToTry = this.getModelsToTry(this.currentUser);
-    let lastError: unknown = null;
     let text = '';
-
+    let lastError: unknown = null;
     for (const modelName of modelsToTry) {
       try {
         const response = await ai.models.generateContent({
           model: modelName,
-          contents,
-          config: { systemInstruction: MATH_SYSTEM_INSTRUCTION },
+          contents: [{ role: 'user', parts }],
+          config: { systemInstruction: MATH_SYSTEM },
         });
-        text = (response as { text?: string }).text ?? '';
+        text = (response as any).text ?? '';
         if (!text && response.candidates?.[0]?.content?.parts) {
-          text = response.candidates[0].content.parts
-            .map((p: { text?: string }) => (p.text ?? '')).join('');
+          text = response.candidates[0].content.parts.map((p: any) => p.text ?? '').join('');
         }
-        break;
+        if (text) break;
       } catch (err) {
         lastError = err;
-        continue;
       }
     }
 
     if (!text && lastError) throw lastError instanceof Error ? lastError : new Error(String(lastError));
 
-    // Increment guest usage
-    if (!this.currentUser) {
+    // Increment usage after success
+    if (this.currentUser) {
+      firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
+    } else {
       this.resetGuestWindows();
       this.guestUsage.textCount++;
-      try { window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage)); } catch {}
     }
 
     return text || 'No solution returned. Please try again.';
   }
-}
 
 export const geminiService = new GeminiService();

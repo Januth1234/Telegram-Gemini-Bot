@@ -11,7 +11,6 @@ node_modules
 dist
 dist-ssr
 *.local
-.env
 
 # Editor directories and files
 .vscode/*
@@ -24,5 +23,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-# Single service worker lives in public/sw.js; ignore any root sw.js to avoid conflict
-/sw.js
