@@ -40,8 +40,6 @@ export default defineConfig(({ mode }) => {
             'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/messaging'],
             // Math libraries — only loaded in maths tab
             'vendor-math': ['mathjs', 'nerdamer'],
-            // Stripe
-            'vendor-stripe': ['@stripe/stripe-js'],
             // KaTeX for math rendering
             'vendor-katex': ['katex'],
           },
