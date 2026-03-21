@@ -871,7 +871,6 @@ If the speech is unclear or too short to translate, output nothing.`,
     await session.play();
     return session;
   }
-}
 
   /**
    * Dedicated math solver — own Symbolab-style system instruction, bypasses
@@ -935,5 +934,6 @@ If multiple methods, add a second block. Steps ARE the answer.`;
 
     return text || 'No solution returned. Try again.';
   }
+}
 
 export const geminiService = new GeminiService();
