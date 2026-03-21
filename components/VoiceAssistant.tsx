@@ -366,7 +366,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           if (msg.serverContent?.inputTranscription) {
             const txt = msg.serverContent.inputTranscription.text;
             setTranscription(prev => {
-              const next = [...prev, { role: 'user', text: txt }];
+              const next = [...prev, { role: 'user' as const, text: txt }];
               return next.length > MAX_TRANSCRIPTION_ENTRIES ? next.slice(-MAX_TRANSCRIPTION_ENTRIES) : next;
             });
           } else if (msg.serverContent?.outputTranscription) {
@@ -374,8 +374,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             setTranscription(prev => {
               const last = prev[prev.length - 1];
               const next = last?.role === 'model'
-                ? [...prev.slice(0, -1), { role: 'model', text: last.text + txt }]
-                : [...prev, { role: 'model', text: txt }];
+                ? [...prev.slice(0, -1), { role: 'model' as const, text: last.text + txt }]
+                : [...prev, { role: 'model' as const, text: txt }];
               return next.length > MAX_TRANSCRIPTION_ENTRIES ? next.slice(-MAX_TRANSCRIPTION_ENTRIES) : next;
             });
           }

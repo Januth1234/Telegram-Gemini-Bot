@@ -91,7 +91,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
       },
     ];
     try {
-      const result = await geminiService.computerUse({ contents: nextContents });
+      const result = await geminiService.computerUse({ prompt: task, contents: nextContents });
       setLastText(result.text);
       setLastCalls(result.functionCalls);
       setSafetyDecisions(result.safetyDecisions);

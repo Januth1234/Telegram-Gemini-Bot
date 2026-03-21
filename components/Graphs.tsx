@@ -3,8 +3,10 @@ import { Language, GraphDefinition, GraphType, GraphDataSeries } from '../types'
 import { translations } from '../translations';
 import { casService } from '../services/casService';
 import * as PlotlyNS from 'plotly.js-dist-min';
+type PlotlyType = typeof import('plotly.js-dist-min');
 /** Resolve Plotly API for Vite/bundlers that expose it as default */
 const Plotly = (PlotlyNS as any).default ?? PlotlyNS;
+type PlotlyModule = typeof PlotlyNS;
 
 declare const Desmos: any;
 
@@ -121,12 +123,12 @@ const Graphs: React.FC<GraphsProps> = ({ mode, initialGraph, onGraphsChange, onE
       type: 'scatter',
       name: series.label,
     }));
-    const layout: Partial<Plotly.Layout> = {
+    const layout: Partial<any> = {
       margin: { l: 40, r: 10, t: 20, b: 35 },
       paper_bgcolor: 'rgba(0,0,0,0)',
       plot_bgcolor: 'rgba(0,0,0,0)',
     };
-    Plotly.newPlot(plotlyRef.current, traces, layout, { displayModeBar: false });
+    (Plotly as any).newPlot(plotlyRef.current, traces, layout, { displayModeBar: false });
   }, [dataSeries, activeType]);
 
   // Sync outward GraphDefinition whenever core inputs change (use ref for callback to avoid infinite loop when parent passes inline fn)

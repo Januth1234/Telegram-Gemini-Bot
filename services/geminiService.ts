@@ -359,7 +359,7 @@ EXPLANATION STYLE:
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });
     const model = 'gemini-2.5-pro-preview-06-05';
-    const tools = [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' } }];
+    const tools = [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' as any } }];
     let contents: Array<{ role: 'user' | 'model'; parts: unknown[] }>;
     if (params.contents && params.contents.length > 0) {
       contents = params.contents;
@@ -811,7 +811,7 @@ When the user asks about time, date, weather, or prices, use this context. For w
 
     const sessionPromise = ai.live.connect({
       model: GeminiService.LIVE_MODEL,
-      callbacks: passThroughCallbacks,
+      callbacks: passThroughCallbacks as any,
       config: liveConfig,
     });
     __setSessionPromise?.(sessionPromise);

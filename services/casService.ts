@@ -20,6 +20,15 @@ const math = create(all, {}) as unknown as MathJsStatic;
 export interface SolveResult {
   roots?: number[];
   steps?: string[];
+  result?: string;
+  error?: string;
+  solution?: string;
+  value?: number;
+  matrix?: number[][];
+  values?: number[];
+  eigenvectors?: number[][][];
+  rank?: number;
+  formattedRoots?: string;
 }
 
 export interface StepsResultWithAnswer extends StepsResult {
@@ -95,7 +104,7 @@ export const casService = {
       }
       
       const expr = latexToMath(sanitizeMathInput(latex));
-      const simplified = (math.simplify(expr) as unknown as MathJsChain).toString();
+      const simplified = (math.simplify(expr) as any).toString();
       
       // Format the result with appropriate precision
       const result = formatNumber(simplified).display;
@@ -126,18 +135,18 @@ export const casService = {
     try {
       const validation = validateMathInput(latex);
       if (!validation.isValid) {
-        return { error: validation.error, steps: [validation.suggestion || 'Please check your input'] };
+        return { result: '', error: validation.error, steps: [validation.suggestion || 'Please check your input'] };
       }
       
       const expr = latexToMath(sanitizeMathInput(latex));
-      const rootsText = nerdamer
+      const rootsText = (nerdamer as any)
         .solve(expr, variable)
         .evaluate()
         .text();
       
       // Check for special cases
       if (rootsText.includes('all') || rootsText.toLowerCase().includes('r')) {
-        return { error: 'Infinite solutions', steps: ['This equation is an identity (true for all values)'] };
+        return { result: '', error: 'Infinite solutions', steps: ['This equation is an identity (true for all values)'] };
       }
       
       const roots = rootsText
@@ -160,19 +169,19 @@ export const casService = {
       };
     } catch (e) {
       const errorMsg = diagnoseError(e as Error);
-      return { error: errorMsg.title, steps: [errorMsg.description] };
+      return { result: '', error: errorMsg.title, steps: [errorMsg.description] };
     }
   },
 
   /** Solve a system of equations. Each equation is LaTeX or plain math. */
-  solveEquations(equations: string[], variables?: string[]): { solution?: string; error?: string } {
+  solveEquations(equations: string[], variables?: string[]): { solution?: string; result?: string; error?: string } {
     try {
       const converted = equations.map(eq => latexToMath(eq.trim())).filter(Boolean);
-      if (converted.length === 0) return { error: 'No equations' };
+      if (converted.length === 0) return { result: '', error: 'No equations' };
       // FIX: nerdamer.solveEquations may not exist on all builds; guard it
       const nerd = nerdamer as any;
       if (typeof nerd.solveEquations !== 'function') {
-        return { error: 'System solve not available; try individual equations' };
+        return { result: '', error: 'System solve not available; try individual equations' };
       }
       const vars = variables ?? (converted.length === 1 ? ['x'] : undefined);
       const sol = nerd.solveEquations(
@@ -182,7 +191,7 @@ export const casService = {
       const text = sol && typeof sol.toString === 'function' ? sol.toString() : String(sol);
       return text ? { solution: text } : { error: 'No solution found' };
     } catch (e) {
-      return { error: e instanceof Error ? e.message : String(e) };
+      return { result: '', error: e instanceof Error ? e.message : String(e) };
     }
   },
 
@@ -252,7 +261,7 @@ export const casService = {
       const stepOut = solveSteps(expr, variable);
       let roots: number[] = [];
       try {
-        roots = nerdamer
+        roots = (nerdamer as any)
           .solve(expr, variable)
           .evaluate()
           .text()
@@ -274,50 +283,50 @@ export const casService = {
   evaluateWithUnits(expr: string): { result: string; error?: string } {
     try {
       const s = latexToUnitExpr(expr?.trim() || '');
-      if (!s) return { error: 'Empty expression' };
+      if (!s) return { result: '', error: 'Empty expression' };
       const value = math.evaluate(s);
-      if (value == null) return { error: 'No result' };
+      if (value == null) return { result: '', error: 'No result' };
       const unit = value as any;
       if (typeof unit?.toString === 'function' && (unit.units || unit.unit)) return { result: unit.toString() };
       if (typeof value === 'number' && Number.isFinite(value)) return { result: String(value) };
       if (typeof value === 'object' && value !== null && 'toString' in value) return { result: String((value as { toString(): string }).toString()) };
       return { result: String(value) };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
   // ── Matrix ops ──────────────────────────────────────────────────────────────
 
-  matrixDet(grid: number[][]): { value?: number; error?: string } {
+  matrixDet(grid: number[][]): { value?: number; result?: string; error?: string } {
     try { const v = math.det(math.matrix(grid)); return { value: typeof v === 'number' ? v : Number(v) }; }
-    catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  matrixInv(grid: number[][]): { matrix?: number[][]; error?: string } {
+  matrixInv(grid: number[][]): { matrix?: number[][]; result?: string; error?: string } {
     try { return { matrix: (math.inv(math.matrix(grid)) as any).toArray() as number[][] }; }
-    catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  matrixEigs(grid: number[][]): { values?: number[]; eigenvectors?: number[][][]; error?: string } {
+  matrixEigs(grid: number[][]): { values?: number[]; eigenvectors?: number[][][]; result?: string; error?: string } {
     try {
       const out = math.eigs(math.matrix(grid), { eigenvectors: true });
       const values = (out.values as any).toArray ? (out.values as any).toArray() : Array.isArray(out.values) ? out.values : [];
       const vectors = (out.eigenvectors || []).map((ev: any) => (ev.vector?.toArray ? ev.vector.toArray() : ev.vector));
       return { values: values.map((x: number) => Number(x)), eigenvectors: vectors };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  matrixRank(grid: number[][]): { rank?: number; error?: string } {
+  matrixRank(grid: number[][]): { rank?: number; result?: string; error?: string } {
     try {
       const rref = rrefCopy(grid);
       let rank = 0;
       for (const row of rref) { if (row.some((x: number) => Math.abs(x) > 1e-10)) rank++; }
       return { rank };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  matrixRref(grid: number[][]): { matrix?: number[][]; error?: string } {
+  matrixRref(grid: number[][]): { matrix?: number[][]; result?: string; error?: string } {
     try { return { matrix: rrefCopy(grid) }; }
-    catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
   // ── Number theory ──────────────────────────────────────────────────────────
@@ -325,41 +334,41 @@ export const casService = {
   primeFactors(n: number): { factors?: [number, number][]; result?: string; error?: string } {
     try {
       const x = Math.floor(Math.abs(Number(n)));
-      if (x < 2 || !Number.isFinite(x)) return { error: 'Need integer ≥ 2' };
+      if (x < 2 || !Number.isFinite(x)) return { result: '', error: 'Need integer ≥ 2' };
       const factors: [number, number][] = [];
       let rest = x;
       for (let p = 2; p * p <= rest; p++) { let count = 0; while (rest % p === 0) { rest /= p; count++; } if (count) factors.push([p, count]); }
       if (rest > 1) factors.push([rest, 1]);
       const result = factors.map(([p, k]) => k === 1 ? String(p) : `${p}^${k}`).join(' × ');
       return { factors, result };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  gcd(a: number, b: number): { value?: number; error?: string } {
+  gcd(a: number, b: number): { value?: number; result?: string; error?: string } {
     try {
       const x = Math.floor(Math.abs(Number(a))), y = Math.floor(Math.abs(Number(b)));
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return { error: 'Need two integers' };
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { result: '', error: 'Need two integers' };
       return { value: Number(math.gcd(x, y)) };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  lcm(a: number, b: number): { value?: number; error?: string } {
+  lcm(a: number, b: number): { value?: number; result?: string; error?: string } {
     try {
       const x = Math.floor(Math.abs(Number(a))), y = Math.floor(Math.abs(Number(b)));
-      if (!Number.isFinite(x) || !Number.isFinite(y)) return { error: 'Need two integers' };
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return { result: '', error: 'Need two integers' };
       return { value: Number(math.lcm(x, y)) };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  mod(a: number, m: number): { value?: number; error?: string } {
+  mod(a: number, m: number): { value?: number; result?: string; error?: string } {
     try {
       const x = Number(a), mVal = Math.floor(Math.abs(Number(m)));
-      if (!Number.isFinite(x) || !mVal) return { error: 'Need number and non-zero modulus' };
+      if (!Number.isFinite(x) || !mVal) return { result: '', error: 'Need number and non-zero modulus' };
       return { value: Number(math.mod(x, mVal)) };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
-  baseConvert(input: string, toBase: 2 | 8 | 10 | 16): { value?: string; error?: string } {
+  baseConvert(input: string, toBase: 2 | 8 | 10 | 16): { value?: string; result?: string; error?: string } {
     try {
       const s = (input || '').trim().replace(/\s+/g, '');
       let num: number;
@@ -367,12 +376,12 @@ export const casService = {
       else if (/^0b[01]+$/.test(s)) num = parseInt(s.slice(2), 2);
       else if (/^0o?[0-7]+$/.test(s)) num = parseInt(s.replace(/^0o?/, ''), 8);
       else num = parseInt(s, 10);
-      if (!Number.isFinite(num) || num < 0) return { error: 'Invalid number' };
+      if (!Number.isFinite(num) || num < 0) return { result: '', error: 'Invalid number' };
       if (toBase === 2) return { value: '0b' + num.toString(2) };
       if (toBase === 8) return { value: '0o' + num.toString(8) };
       if (toBase === 16) return { value: '0x' + num.toString(16).toUpperCase() };
       return { value: String(num) };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+    } catch (e) { return { result: '', error: e instanceof Error ? e.message : String(e) }; }
   },
 
   // FIX: evaluateRHSAt and getFunctionRHS defined as normal methods (not using `this`)
@@ -404,7 +413,7 @@ export const casService = {
       if (!expr) return { roots, yIntercept, criticalPoints, verticalAsymptotes };
 
       try {
-        const sol = nerdamer.solve(expr, 'x');
+        const sol = (nerdamer as any).solve(expr, 'x');
         const text = sol.evaluate().text().replace(/^\[|\]$/g, '');
         text.split(',').forEach(s => { const n = parseFloat(s.trim()); if (Number.isFinite(n)) roots.push(n); });
       } catch {}
@@ -413,7 +422,7 @@ export const casService = {
 
       try {
         const deriv = nerdamer(`diff(${expr}, x)`).toString();
-        const sol = nerdamer.solve(deriv, 'x');
+        const sol = (nerdamer as any).solve(deriv, 'x');
         const text = sol.evaluate().text().replace(/^\[|\]$/g, '');
         text.split(',').forEach(s => { const n = parseFloat(s.trim()); if (Number.isFinite(n)) criticalPoints.push(n); });
       } catch {}
@@ -422,7 +431,7 @@ export const casService = {
         const denomMatch = expr.match(/\/\s*\(([^()]+)\)|\/\s*\(\(([^()]*)\)\)/);
         if (denomMatch) {
           const denom = denomMatch[1] || denomMatch[2] || '';
-          const sol = nerdamer.solve(denom, 'x');
+          const sol = (nerdamer as any).solve(denom, 'x');
           const text = sol.evaluate().text().replace(/^\[|\]$/g, '');
           text.split(',').forEach(s => { const n = parseFloat(s.trim()); if (Number.isFinite(n)) verticalAsymptotes.push(n); });
         }

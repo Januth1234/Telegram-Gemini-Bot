@@ -169,10 +169,10 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-24 items-start">
-            {plans.map((plan, i) => (
-              <div key={i} className={`relative p-8 rounded-[40px] border flex flex-col gap-6 transition-all duration-500 hover:-translate-y-2 group ${plan.style} ${plan.popular ? 'md:-mt-4 md:mb-4 z-10' : ''}`}>
+            {(plans as any[]).map((plan, i) => (
+              <div key={i} className={`relative p-8 rounded-[40px] border flex flex-col gap-6 transition-all duration-500 hover:-translate-y-2 group ${plan.style} ${plan?.popular ? 'md:-mt-4 md:mb-4 z-10' : ''}`}>
                 
-                {plan.popular && (
+                {plan?.popular && (
                   <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-500/30">
                     Most Popular
                   </div>
@@ -194,7 +194,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                 <ul className="space-y-4 py-4 flex-1">
                   {plan.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-3 text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan.popular ? 'bg-indigo-500/20 text-indigo-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan?.popular ? 'bg-indigo-500/20 text-indigo-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
                       {feat}
@@ -215,7 +215,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                       className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                         isCurrent
                           ? 'bg-slate-300 dark:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-500'
-                          : plan.popular
+                          : plan?.popular
                             ? 'bg-indigo-500 hover:bg-cyan-400 text-white shadow-cyan-500/20'
                             : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
                       }`}

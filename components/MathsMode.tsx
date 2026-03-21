@@ -504,7 +504,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   // Results shown as tabbed methods (CAS + AI methods can coexist)
 
   /** Returns true only if CAS produced real, non-generic steps */
-  const isRealCASResult = (out: { steps: string[]; result: string } | null): boolean => {
+  const isRealCASResult = (out: { steps: string[]; result?: string } | null): boolean => {
     if (!out || out.steps.length < 2) return false;
     const joined = out.steps.join(' ').toLowerCase();
     const GENERIC = ['algebraic methods', 'isolate', 'rearrang', 'further analysis', 'standard technique', 'applying'];
@@ -586,7 +586,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         const out = casService.solveEquationWithSteps(expr, variable);
         if (isRealCASResult(out)) {
           const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
-          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input: expr });
+          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result: result || out.result || '', input: expr });
           appendMathHistory({ kind: 'expression', inputLatex: expr, result, graph: null });
           solved = true;
         }
@@ -609,7 +609,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
           // Show as localStepsResult with multiple methods (first method displayed, rest as tabs)
           if (aiMethods.length > 0) {
             const primary = aiMethods[0];
-            const finalLine = primary.steps.findLast((s: string) => /final answer/i.test(s)) || primary.steps[primary.steps.length - 1] || '';
+            const finalLine = primary.steps.slice().reverse().find((s: string) => /final answer/i.test(s)) || primary.steps[primary.steps.length - 1] || '';
             setLocalStepsResult({
               kind: 'solve',
               title: primary.name,
@@ -780,7 +780,7 @@ ${aiResult}`, undefined);
         const out = casService.solveEquationWithSteps(input, 'x');
         if (isRealCASResult(out)) {
           const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
-          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input });
+          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result: result || out.result || '', input });
           appendMathHistory({ kind: 'expression', inputLatex: input, result, graph: null });
           casHandled = true;
         }

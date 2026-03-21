@@ -165,7 +165,7 @@ function formatNumberForSpeech(value: number | string): string {
 export function getAriaButtonAttrs(
   action: string,
   tooltip?: string
-): Record<string, string | boolean> {
+): Record<string, string | boolean | number> {
   return {
     'aria-label': tooltip || getMathOperationLabel(action),
     'role': 'button',
@@ -301,7 +301,7 @@ export function createSkipLink(): HTMLElement {
     px-3 py-2 bg-indigo-600 text-white
     focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-600
   `;
-  link.onKeyDown = (e) => {
+  link.onkeydown = (e) => {
     if (e.key === 'Enter') {
       const main = document.getElementById('main-content');
       main?.focus();

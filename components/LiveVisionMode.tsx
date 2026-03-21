@@ -39,6 +39,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   const [cameraList, setCameraList] = useState<MediaDeviceInfo[]>([]);
   const [activeCameraId, setActiveCameraId] = useState<string>('');
   const [aiSpeaking, setAiSpeaking] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   
   // Settings (persisted via cacheService so they survive tab switch / unmount)
   const [showSettings, setShowSettings] = useState(false);
@@ -361,9 +362,9 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
           }
         },
         onclose: () => stopSession(),
-        onerror: (e: unknown) => {
-          const msg = e instanceof Error ? e.message : 'Connection failed';
-          setErrorMessage(
+        onerror: (err: unknown) => {
+          const msg = err instanceof Error ? err.message : 'Connection failed';
+          setConnectionError(
             msg.includes('Permission') || msg.includes('denied')
               ? 'Camera/mic permission denied. Check browser settings.'
               : msg.includes('model') || msg.includes('Model')
@@ -376,9 +377,9 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
       
       sessionPromise.then(session => {
         sessionRef.current = session;
-      }).catch(() => {
-        const errMsg = e instanceof Error ? e.message : 'Connection failed';
-        setErrorMessage(
+      }).catch((err: unknown) => {
+        const errMsg = err instanceof Error ? err.message : 'Connection failed';
+        setConnectionError(
           errMsg.includes('Permission') || errMsg.includes('denied')
             ? 'Camera/microphone permission denied. Check your browser settings.'
             : errMsg.includes('NotFound') || errMsg.includes('not found')

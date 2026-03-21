@@ -28,7 +28,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return norm === 0 ? 0 : dot / norm;
 }
 
-type StudioTab = 'image' | 'video' | 'music' | 'narration';
+type StudioTab = 'image' | 'video' | 'audio' | 'audio' | 'narration';
 
 const TTS_VOICES = [
   'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
@@ -481,8 +481,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 Veo
               </button>
               <button 
-                onClick={() => setActiveTab('music')}
-                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'music' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+                onClick={() => setActiveTab('audio')}
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'audio' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               >
                 Music
               </button>
@@ -503,7 +503,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       </div>
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeTab === 'music' ? (
+        {activeTab === 'audio' ? (
           <MusicStudio />
         ) : activeTab === 'narration' ? (
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-6 items-start overflow-hidden">
