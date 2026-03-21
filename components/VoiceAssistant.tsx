@@ -66,6 +66,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
+  const sessionReadyRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
   const updateVisualizer = useCallback(() => {
@@ -135,6 +136,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
   const stopSession = useCallback(() => {
     stopAiSpeaking();
+    sessionReadyRef.current = null; // stop sending audio immediately
     if (sessionRef.current) { try { sessionRef.current.close(); } catch(e) {} sessionRef.current = null; }
     // CRITICAL: stop mic tracks so device audio isn't locked and volume returns to normal
     if (streamRef.current) {
@@ -217,6 +219,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           silentSink.connect(inputAudioContextRef.current!.destination);
 
           proc.onaudioprocess = (e) => {
+            if (!sessionReadyRef.current) return; // not ready yet
             const raw = e.inputBuffer.getChannelData(0);
             // Resample to 16kHz — Gemini Live only accepts 16000 Hz PCM
             const targetRate = 16000;
@@ -228,15 +231,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               const s = Math.max(-1, Math.min(1, raw[srcIdx] || 0));
               resampled[i] = s * 32767;
             }
-            // Use sessionPromise closure — works even before await resolves
-            (sessionPromise as Promise<any>).then(session => {
-              session.sendRealtimeInput({
-                media: {
+            try {
+              sessionReadyRef.current.sendRealtimeInput({
+                audio: {
                   data: encodeBase64(new Uint8Array(resampled.buffer)),
                   mimeType: 'audio/pcm;rate=16000'
                 }
               });
-            }).catch(() => {});
+            } catch { /* ignore send errors */ }
           };
         },
         onmessage: async (msg: LiveServerMessage) => {
@@ -252,6 +254,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           if (audio && capturedAudioCtx && capturedAudioCtx.state !== 'closed') {
             setIsSpeaking(true);
             try {
+                // Resume AudioContext — required on mobile (autoplay policy)
+                if (capturedAudioCtx.state === 'suspended') await capturedAudioCtx.resume();
                 const buf = await decodeAudioData(decodeBase64(audio), capturedAudioCtx);
                 const s = capturedAudioCtx.createBufferSource();
                 s.buffer = buf;
@@ -281,10 +285,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
         : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext });
 
-      // Store promise immediately so onopen closure can use it
+      // When session resolves, mark it ready for onaudioprocess
       (sessionPromise as Promise<any>).then(session => {
         sessionRef.current = session;
-      }).catch(() => {});
+        sessionReadyRef.current = session;
+      }).catch((err: unknown) => {
+        setErrorMessage(err instanceof Error ? err.message : 'Connection failed');
+        stopSession();
+      });
     } catch (e: unknown) {
       setErrorMessage(e instanceof Error ? e.message : "Microphone Error");
       setIsConnecting(false);

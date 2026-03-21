@@ -199,7 +199,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
             }
             sessionPromise.then(session => {
               session.sendRealtimeInput({
-                media: {
+                audio: {
                   data: encodeBase64(new Uint8Array(resampled.buffer)),
                   mimeType: 'audio/pcm;rate=16000'
                 }

@@ -789,13 +789,9 @@ When the user asks about time, date, weather, or prices, use this context. For w
   // SDK-documented model for Gemini API (non-Vertex) live sessions
   // SDK-documented live model for Gemini API (not Vertex AI)
   // Live model — try native audio first (what the working build used), fallback to preview
-  private static readonly LIVE_MODELS = [
-    'gemini-2.5-flash-native-audio-preview-12-2025', // original working model (grace period)
-    'gemini-live-2.5-flash-preview',                  // SDK-documented current model
-  ];
-
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
@@ -803,21 +799,14 @@ When the user asks about time, date, weather, or prices, use this context. For w
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
+      // Enable transcriptions so UI shows what user said and what AI said
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
       ...(config.enableAffectiveDialog ? { enableAffectiveDialog: true } : {}),
       ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
-    // Try each model — connect() is async/WS based so errors come in onerror, not throw
-    // We wrap each attempt with a timeout-based health check
-    for (const model of GeminiService.LIVE_MODELS) {
-      try {
-        const ai = new GoogleGenAI({ apiKey });
-        const sessionPromise = ai.live.connect({ model, callbacks, config: liveConfig });
-        return sessionPromise;
-      } catch {
-        continue;
-      }
-    }
-    throw new Error('No live model available');
+    // gemini-live-2.5-flash-preview is the only current SDK-documented model for Gemini API
+    return ai.live.connect({ model: 'gemini-live-2.5-flash-preview', callbacks, config: liveConfig });
   }
 
   async connectTranslator(callbacks: any, options: any) {
