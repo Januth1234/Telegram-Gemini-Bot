@@ -128,6 +128,14 @@ export class GeminiService {
     }
   }
 
+  /** Context window by plan: Free=5, Basic=10, Pro=20 */
+  private getContextLimit(user: typeof this.currentUser): number {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+    if (plan === 'pro' || plan === 'pro_yearly') return 20;
+    if (plan === 'basic' || plan === 'basic_yearly') return 10;
+    return 5;
+  }
+
   private async getApiKey(): Promise<string> {
     const envKey = process.env.API_KEY;
     if (envKey && envKey.trim()) return envKey.trim();
@@ -156,7 +164,7 @@ export class GeminiService {
     const plan = user?.plan?.toLowerCase() ?? 'free';
 
     if (plan === 'pro' || plan === 'pro_yearly') {
-      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.5-flash'];
+      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.0-flash'];
     }
     if (plan === 'basic' || plan === 'basic_yearly') {
       return ['gemini-2.5-flash', 'gemini-2.0-flash'];
