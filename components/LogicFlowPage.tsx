@@ -15,14 +15,14 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
 
   const FlowStep = ({ icon, title, label, color, isLast = false }: any) => {
     const colorMap: Record<string, string> = {
-      cyan: "bg-cyan-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400",
+      cyan: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
       indigo: "bg-indigo-500/10 border-indigo-500/20 text-indigo-600 dark:text-indigo-400",
       violet: "bg-violet-500/10 border-violet-500/20 text-violet-600 dark:text-violet-400",
       emerald: "bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400"
     };
 
     const dotColorMap: Record<string, string> = {
-      cyan: "bg-cyan-500",
+      cyan: "bg-indigo-500",
       indigo: "bg-indigo-500",
       violet: "bg-violet-500",
       emerald: "bg-emerald-500"
@@ -45,7 +45,7 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
         {/* Horizontal Line - Desktop */}
         {!isLast && (
           <div className={`hidden md:block absolute top-[56px] left-[110%] h-[1px] bg-slate-200 dark:bg-slate-800 -z-10 ${isSinhalaFlow ? 'w-20 lg:w-28' : 'w-28 lg:w-40'}`}>
-             <div className="absolute top-1/2 left-0 w-2 h-2 -translate-y-1/2 bg-cyan-500 rounded-full blur-[2px] animate-[flowLine_4s_infinite_linear]"></div>
+             <div className="absolute top-1/2 left-0 w-2 h-2 -translate-y-1/2 bg-indigo-500 rounded-full blur-[2px] animate-[flowLine_4s_infinite_linear]"></div>
              <div className={`absolute right-0 -top-1 w-2.5 h-2.5 rounded-full ${dotColorMap[color]} opacity-20 flex items-center justify-center`}><div className={`w-1.5 h-1.5 rounded-full ${dotColorMap[color]} animate-ping`}></div></div>
           </div>
         )}
@@ -53,7 +53,7 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
         {/* Vertical Line - Mobile */}
         {!isLast && (
           <div className="md:hidden w-[1px] h-12 bg-slate-200 dark:bg-slate-800 my-4 relative -z-10">
-            <div className="absolute left-1/2 top-0 w-2 h-2 -translate-x-1/2 bg-cyan-500 rounded-full blur-[2px] animate-[flowLineVertical_4s_infinite_linear]"></div>
+            <div className="absolute left-1/2 top-0 w-2 h-2 -translate-x-1/2 bg-indigo-500 rounded-full blur-[2px] animate-[flowLineVertical_4s_infinite_linear]"></div>
           </div>
         )}
       </div>
@@ -109,7 +109,7 @@ const LogicFlowPage: React.FC<LogicFlowPageProps> = ({ onClose, lang }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
              <div className="p-10 md:p-14 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl rounded-[48px] border border-black/5 dark:border-white/5 space-y-6 hover:-translate-y-1 transition-all shadow-sm">
-                <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-600 shadow-inner"><i className="fa-solid fa-microchip text-2xl"></i></div>
+                <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 shadow-inner"><i className="fa-solid fa-microchip text-2xl"></i></div>
                 <h5 className="text-[11px] font-black uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Neural Relay Mechanism</h5>
                 <p className="text-base leading-relaxed text-slate-700 dark:text-slate-300 font-medium">Orin v4.0 leverages an advanced relay system that translates Sinhala queries into high-precision English prompts, ensuring the model's global reasoning depth is applied to local context.</p>
              </div>

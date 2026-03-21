@@ -292,7 +292,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                          <button 
                            key={v.id}
                            onClick={() => setSelectedVoice(v.id)}
-                           className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-cyan-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
+                           className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
                          >
                             <span className="text-xs font-bold">{v.label}</span>
                             {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
@@ -330,7 +330,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
            </div>
            
            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 border border-black/5 dark:border-white/5">
-               <button onClick={() => { if(!isActive) setMode('assistant'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.assistant}</button>
+               <button onClick={() => { if(!isActive) setMode('assistant'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.assistant}</button>
                <button onClick={() => { if(!isActive) setMode('translator'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.interpreter}</button>
            </div>
         </div>
@@ -339,8 +339,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         <div className="flex-1 w-full flex flex-col items-center min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar py-2">
             <div className="relative flex flex-col items-center justify-center py-4 md:py-6">
                <div className="relative">
-                  <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
-                  <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
+                  <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-indigo-500'}`}></div>
+                  <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-indigo-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
                     {isActive && <div className={`absolute -inset-4 rounded-full border-2 border-current opacity-10 ${isSpeaking ? 'animate-ping' : ''}`}></div>}
                     <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl`}></i>
                     
@@ -407,7 +407,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
             <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 h-0 pointer-events-none overflow-hidden'}`}>
                 <div className="w-full h-6 flex items-end justify-center gap-1.5 px-8">
                   {Array.from({ length: BAR_COUNT }).map((_, i) => (
-                    <div key={i} ref={(el) => { barsRef.current[i] = el; }} className={`w-2.5 rounded-full transition-all duration-100 ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`} style={{ height: '10%' }}></div>
+                    <div key={i} ref={(el) => { barsRef.current[i] = el; }} className={`w-2.5 rounded-full transition-all duration-100 ${mode === 'translator' ? 'bg-indigo-500' : 'bg-indigo-500'}`} style={{ height: '10%' }}></div>
                   ))}
                 </div>
 

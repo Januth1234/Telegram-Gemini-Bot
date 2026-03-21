@@ -91,7 +91,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
       desc: t.planStarterDesc,
       periodLabel: isYearly ? t.perYearLabel : t.perMonthLabel,
       features: [t.planStarterF1, t.planStarterF2, t.planStarterF3],
-      style: 'border-cyan-500/50 bg-gradient-to-b from-cyan-500/10 to-transparent shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]',
+      style: 'border-indigo-500/50 bg-gradient-to-b from-indigo-500/10 to-transparent shadow-[0_0_40px_-10px_rgba(6,182,212,0.3)]',
     };
     const pro = {
       name: t.proPlan,
@@ -119,7 +119,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
     <div className="h-full w-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 animate-reveal">
       <div className="max-w-6xl mx-auto px-6 py-12 pb-32">
         {message.type === 'success' && (
-          <div className="mb-6 p-4 rounded-2xl bg-cyan-500/20 border border-cyan-500/30 text-cyan-800 dark:text-cyan-200 text-sm font-bold text-center">
+          <div className="mb-6 p-4 rounded-2xl bg-indigo-500/20 border border-indigo-500/30 text-cyan-800 dark:text-cyan-200 text-sm font-bold text-center">
             Payment successful. Your plan is updated — refresh to see changes.
           </div>
         )}
@@ -131,24 +131,24 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
         <header className="flex items-center justify-between border-b border-black/5 dark:border-white/5 pb-8 mb-12">
            <div className="space-y-1">
              <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{t.pricing}</h2>
-             <p className="text-[10px] font-black text-cyan-600 uppercase tracking-[0.4em]">{t.upgradeSubtitle}</p>
+             <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.4em]">{t.upgradeSubtitle}</p>
            </div>
-           <button type="button" onClick={onClose} aria-label="Close" className="w-12 h-12 flex items-center justify-center rounded-2xl glass-panel text-slate-500 hover:text-red-500 transition-all hover:rotate-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2"><i className="fa-solid fa-xmark text-lg" aria-hidden /></button>
+           <button type="button" onClick={onClose} aria-label="Close" className="w-12 h-12 flex items-center justify-center rounded-2xl glass-panel text-slate-500 hover:text-red-500 transition-all hover:rotate-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"><i className="fa-solid fa-xmark text-lg" aria-hidden /></button>
         </header>
 
         {/* Billing interval toggle */}
         <div className="flex items-center justify-center gap-3 mb-10">
-          <span className={`text-sm font-bold ${billingInterval === 'monthly' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400'}`}>{t.billingMonthly}</span>
+          <span className={`text-sm font-bold ${billingInterval === 'monthly' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>{t.billingMonthly}</span>
           <button
             type="button"
             role="switch"
             aria-checked={billingInterval === 'yearly'}
             onClick={() => setBillingInterval((prev) => (prev === 'monthly' ? 'yearly' : 'monthly'))}
-            className="relative w-12 h-6 rounded-full bg-slate-300 dark:bg-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+            className="relative w-12 h-6 rounded-full bg-slate-300 dark:bg-slate-600 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${billingInterval === 'yearly' ? 'translate-x-7 left-1' : 'left-1'}`} />
           </button>
-          <span className={`text-sm font-bold ${billingInterval === 'yearly' ? 'text-cyan-600 dark:text-cyan-400' : 'text-slate-400'}`}>{t.billingYearly}</span>
+          <span className={`text-sm font-bold ${billingInterval === 'yearly' ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`}>{t.billingYearly}</span>
         </div>
 
         {/* Pricing Cards */}
@@ -157,7 +157,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
               <div key={i} className={`relative p-8 rounded-[40px] border flex flex-col gap-6 transition-all duration-500 hover:-translate-y-2 group ${plan.style} ${plan.popular ? 'md:-mt-4 md:mb-4 z-10' : ''}`}>
                 
                 {plan.popular && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-cyan-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-500/30">
+                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-indigo-500 text-white rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-cyan-500/30">
                     Most Popular
                   </div>
                 )}
@@ -178,7 +178,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                 <ul className="space-y-4 py-4 flex-1">
                   {plan.features.map((feat, idx) => (
                     <li key={idx} className="flex items-center gap-3 text-xs font-bold text-slate-700 dark:text-slate-300">
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan.popular ? 'bg-cyan-500/20 text-cyan-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${plan.popular ? 'bg-indigo-500/20 text-indigo-600' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
                         <i className="fa-solid fa-check text-[10px]"></i>
                       </div>
                       {feat}
@@ -196,11 +196,11 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                       onClick={() => handlePlanSelect(plan.key)}
                       disabled={isDisabled}
                       aria-busy={isLoading}
-                      className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:ring-offset-2 ${
+                      className={`w-full py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all duration-200 hover:scale-[1.02] active:scale-95 shadow-lg disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${
                         isCurrent
                           ? 'bg-slate-300 dark:bg-slate-600 text-slate-600 dark:text-slate-300 border border-slate-300 dark:border-slate-500'
                           : plan.popular
-                            ? 'bg-cyan-500 hover:bg-cyan-400 text-white shadow-cyan-500/20'
+                            ? 'bg-indigo-500 hover:bg-cyan-400 text-white shadow-cyan-500/20'
                             : 'bg-slate-900 dark:bg-white text-white dark:text-slate-950'
                       }`}
                     >
@@ -235,7 +235,7 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                           <th className="p-6 text-[10px] font-black uppercase text-slate-400 tracking-widest w-1/4">Capability</th>
                           <th className="p-6 text-[10px] font-black uppercase text-slate-500 tracking-widest w-1/4">{t.freePlan}</th>
                           <th className="p-6 text-[10px] font-black uppercase text-slate-600 dark:text-slate-400 tracking-widest w-1/4">{t.basicPlan}</th>
-                          <th className="p-6 text-[10px] font-black uppercase text-cyan-600 tracking-widest w-1/4">{t.proPlan}</th>
+                          <th className="p-6 text-[10px] font-black uppercase text-indigo-600 tracking-widest w-1/4">{t.proPlan}</th>
                        </tr>
                     </thead>
                     <tbody className="divide-y divide-black/5 dark:divide-white/5">
@@ -243,8 +243,8 @@ const PricingPage: React.FC<PricingPageProps> = ({ onClose, lang }) => {
                           <tr key={i} className="hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                              <td className="p-6 text-xs font-bold text-slate-600 dark:text-slate-400">{item.name}</td>
                              <td className="p-6 text-xs font-bold text-slate-800 dark:text-white">{item.starter}</td>
-                             <td className="p-6 text-xs font-bold text-slate-800 dark:text-white group-hover:text-cyan-600 transition-colors">{item.basic}</td>
-                             <td className="p-6 text-xs font-bold text-slate-800 dark:text-white group-hover:text-cyan-600 transition-colors">{item.pro}</td>
+                             <td className="p-6 text-xs font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 transition-colors">{item.basic}</td>
+                             <td className="p-6 text-xs font-bold text-slate-800 dark:text-white group-hover:text-indigo-600 transition-colors">{item.pro}</td>
                           </tr>
                        ))}
                     </tbody>

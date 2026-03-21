@@ -84,7 +84,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                
                {/* Hero Icon */}
                <div className="relative">
-                  <div className="absolute inset-0 bg-cyan-500 blur-[60px] opacity-20 rounded-full"></div>
+                  <div className="absolute inset-0 bg-indigo-500 blur-[60px] opacity-20 rounded-full"></div>
                   <div className="w-24 h-24 bg-white dark:bg-slate-900 rounded-[32px] flex items-center justify-center shadow-2xl relative border border-slate-100 dark:border-white/10">
                      <i className="fa-solid fa-fingerprint text-5xl text-slate-800 dark:text-white"></i>
                   </div>
@@ -137,7 +137,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                     <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase">{user.name}</h3>
                     <p className="text-sm font-mono text-slate-500">{user.email}</p>
                  </div>
-                 <div className="px-4 py-1 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">{user.tier}</div>
+                 <div className="px-4 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">{user.tier}</div>
               </div>
 
               {/* Memory Editor */}
@@ -147,12 +147,12 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                        <i className="fa-solid fa-memory text-cyan-500/80" />
                        Neural Memory
                     </label>
-                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
+                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-indigo-600 hover:underline tap-target">{loading ? "Saving..." : "Save Changes"}</button>
                  </div>
                  <textarea 
                     value={memory} 
                     onChange={e => setMemory(e.target.value)} 
-                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-cyan-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
+                    className="w-full h-40 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 text-sm font-medium resize-none focus:ring-2 focus:ring-indigo-500 outline-none focus:outline-none shadow-inner transition-shadow duration-200 focus:shadow-md"
                     placeholder="Tell Orin what to remember about you (e.g. 'I am a software engineer', 'I prefer concise answers')..."
                  />
               </div>
@@ -178,7 +178,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                         onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
                         className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
                           active
-                            ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                            ? 'border-cyan-500 bg-indigo-500/10 shadow-md'
                             : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
                         }`}
                       >
@@ -198,7 +198,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                       onClick={() => onThemeModeChange('auto')}
                       className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
                         themeMode === 'auto'
-                          ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                          ? 'border-cyan-500 bg-indigo-500/10 shadow-md'
                           : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
                       }`}
                     >
@@ -227,7 +227,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                         onClick={() => onThemeChange && onThemeChange(tDef.id as UserThemeId)}
                         className={`text-left p-4 rounded-2xl border text-xs space-y-1 transition-all duration-200 ${
                           active
-                            ? 'border-cyan-500 bg-cyan-500/10 shadow-md'
+                            ? 'border-cyan-500 bg-indigo-500/10 shadow-md'
                             : 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/5 hover:border-cyan-500/60 hover:shadow-sm'
                         }`}
                       >

@@ -103,7 +103,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  const inputStyle = "w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
+  const inputStyle = "w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
 
   return (
     <div className="max-w-7xl mx-auto space-y-4 animate-reveal pb-12 px-2 sm:px-6 lg:px-8 pt-4 h-full flex flex-col">
@@ -118,7 +118,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="flex items-center justify-center sm:justify-start gap-2 mt-2">
               <button 
                 onClick={() => setActiveTab('image')}
-                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'image' ? 'bg-cyan-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'image' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               >
                 Images
               </button>
@@ -145,7 +145,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="space-y-6 relative z-10">
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
-                    <i className="fa-solid fa-terminal text-cyan-500"></i>
+                    <i className="fa-solid fa-terminal text-indigo-500"></i>
                     {activeTab === 'video' ? 'Motion Prompt' : 'Neural Input Prompt'}
                   </label>
                   <textarea
@@ -171,7 +171,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             ['16:9', '9:16'].map(r => <option key={r} value={r} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{r}</option>)
                         )}
                       </select>
-                      <i className="fa-solid fa-shapes absolute right-3 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[10px]"></i>
+                      <i className="fa-solid fa-shapes absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none text-[10px]"></i>
                     </div>
                   </div>
                   
@@ -186,7 +186,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         >
                             {['1K', '2K', '4K'].map(s => <option key={s} value={s} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{s}</option>)}
                         </select>
-                        <i className="fa-solid fa-microchip absolute right-3 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[10px]"></i>
+                        <i className="fa-solid fa-microchip absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none text-[10px]"></i>
                         </div>
                     </div>
                   ) : (
@@ -201,7 +201,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <option value="720p" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">720p (Fast)</option>
                             <option value="1080p" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">1080p (HD)</option>
                         </select>
-                        <i className="fa-solid fa-film absolute right-3 top-1/2 -translate-y-1/2 text-cyan-500 pointer-events-none text-[10px]"></i>
+                        <i className="fa-solid fa-film absolute right-3 top-1/2 -translate-y-1/2 text-indigo-500 pointer-events-none text-[10px]"></i>
                         </div>
                     </div>
                   )}
@@ -235,7 +235,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
             <div className="p-6 glass-panel rounded-3xl border border-black/5 dark:border-white/5 opacity-80">
                <div className="flex items-start gap-3">
-                  <i className="fa-solid fa-shield-halved text-cyan-600 text-base mt-0.5"></i>
+                  <i className="fa-solid fa-shield-halved text-indigo-600 text-base mt-0.5"></i>
                   <div>
                     <p className="text-[9px] font-black text-slate-700 dark:text-slate-300 uppercase tracking-widest">Neural Safety Core Active</p>
                     <p className="text-[8px] text-slate-500 dark:text-slate-500 font-bold mt-1">All generated content is private and adheres to safety protocols.</p>
@@ -252,8 +252,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
                 <div className="text-center space-y-6 animate-reveal">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-full border-2 border-cyan-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
-                      <i className={`fa-solid ${activeTab === 'video' ? 'fa-video' : 'fa-layer-group'} text-2xl text-cyan-500/40`}></i>
+                    <div className="w-24 h-24 rounded-full border-2 border-indigo-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
+                      <i className={`fa-solid ${activeTab === 'video' ? 'fa-video' : 'fa-layer-group'} text-2xl text-indigo-500/40`}></i>
                     </div>
                   </div>
                   <div className="space-y-1">
@@ -310,7 +310,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <div className="w-full">
                         <button 
                           onClick={() => handleDownload(asset)}
-                          className="w-full py-4 bg-cyan-600 text-white rounded-[20px] text-[10px] font-black uppercase tracking-[0.3em] shadow-xl shadow-cyan-600/10 hover:bg-cyan-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
+                          className="w-full py-4 bg-indigo-600 text-white rounded-[20px] text-[10px] font-black uppercase tracking-[0.3em] shadow-xl shadow-cyan-600/10 hover:bg-indigo-500 hover:scale-[1.02] active:scale-95 transition-all flex items-center justify-center gap-3"
                         >
                           <i className="fa-solid fa-download text-base"></i>
                           <span>Secure Download</span>

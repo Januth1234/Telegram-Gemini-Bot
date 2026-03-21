@@ -166,7 +166,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               {(guestResult || isGuestLoading) && (
                  <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-white/10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm text-left animate-reveal max-h-56 overflow-y-auto custom-scrollbar shadow-sm">
                     <div className="flex items-center gap-2 mb-2">
-                       <i className="fa-solid fa-robot text-cyan-600" />
+                       <i className="fa-solid fa-robot text-indigo-600" />
                        <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{t.guestModeLabel}</span>
                     </div>
                     <div className="text-sm font-medium text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
@@ -237,19 +237,19 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
           {/* Stats / features strip */}
           <div className="w-full max-w-2xl flex flex-wrap justify-center gap-4 md:gap-8 py-8 opacity-0 animate-slide-in-up" style={{ animationDelay: '500ms', animationFillMode: 'forwards' }}>
             <span className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-language text-cyan-500" /> Sinhala · Tamil · English
+              <i className="fa-solid fa-language text-indigo-500" /> Sinhala · Tamil · English
             </span>
             <span className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-message text-cyan-500" /> Chat
+              <i className="fa-solid fa-message text-indigo-500" /> Chat
             </span>
             <span className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-microphone text-cyan-500" /> Voice
+              <i className="fa-solid fa-microphone text-indigo-500" /> Voice
             </span>
             <span className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-camera text-cyan-500" /> Vision
+              <i className="fa-solid fa-camera text-indigo-500" /> Vision
             </span>
             <span className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-              <i className="fa-solid fa-palette text-cyan-500" /> Create
+              <i className="fa-solid fa-palette text-indigo-500" /> Create
             </span>
           </div>
         </section>
@@ -341,9 +341,9 @@ const NavCard = ({ href, title, icon, lang, delayMs = 0 }: { href: string; title
       href={href}
       onClick={handleClick}
       style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}
-      className="glass-panel group w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-2 border border-slate-200 dark:border-white/5 tap-target bg-white/50 dark:bg-slate-900/30 shadow-sm opacity-0 animate-slide-in-up hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 hover:shadow-lg hover:border-cyan-500/30 transition-[transform,box-shadow,background-color,border-color] duration-300"
+      className="glass-panel group w-28 h-28 md:w-32 md:h-32 rounded-[24px] flex flex-col items-center justify-center gap-2 border border-slate-200 dark:border-white/5 tap-target bg-white/50 dark:bg-slate-900/30 shadow-sm opacity-0 animate-slide-in-up hover:bg-white dark:hover:bg-slate-800 hover:-translate-y-2 hover:shadow-lg hover:border-indigo-500/30 transition-[transform,box-shadow,background-color,border-color] duration-300"
     >
-      <i className={`fa-solid ${icon} text-2xl text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 group-hover:scale-110 transition-all duration-300`} aria-hidden />
+      <i className={`fa-solid ${icon} text-2xl text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 group-hover:scale-110 transition-all duration-300`} aria-hidden />
       <h3 className={`text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white text-center px-2 transition-colors duration-200 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{title}</h3>
     </a>
   );
@@ -351,8 +351,8 @@ const NavCard = ({ href, title, icon, lang, delayMs = 0 }: { href: string; title
 
 // Helper Components for Info Section - with stagger
 const InfoCard = ({ icon, title, desc, lang, delayMs = 0 }: { icon: string; title: string; desc: string; lang?: Language; delayMs?: number }) => (
-  <div className="flex gap-4 p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-cyan-500/30 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
-     <div className="w-12 h-12 shrink-0 rounded-2xl bg-cyan-500/10 dark:bg-cyan-500/20 flex items-center justify-center text-cyan-600 dark:text-cyan-400"><i className={`fa-solid ${icon} text-xl`} /></div>
+  <div className="flex gap-4 p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:border-indigo-500/30 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
+     <div className="w-12 h-12 shrink-0 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/20 flex items-center justify-center text-indigo-600 dark:text-indigo-400"><i className={`fa-solid ${icon} text-xl`} /></div>
      <div>
         <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-2">{title}</h5>
         <p className={`text-xs leading-relaxed opacity-80 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
@@ -361,15 +361,15 @@ const InfoCard = ({ icon, title, desc, lang, delayMs = 0 }: { icon: string; titl
 );
 
 const AudienceCard = ({ title, desc, lang, delayMs = 0 }: { title: string; desc: string; lang?: Language; delayMs?: number }) => (
-  <div className="p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:-translate-y-2 hover:shadow-lg hover:border-cyan-500/20 transition-all duration-300 opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
-     <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-3 border-b border-cyan-500/20 pb-2 inline-block">{title}</h5>
+  <div className="p-6 rounded-3xl bg-white dark:bg-white/5 border border-slate-200 dark:border-white/5 hover:-translate-y-2 hover:shadow-lg hover:border-indigo-500/20 transition-all duration-300 opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
+     <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wide mb-3 border-b border-indigo-500/20 pb-2 inline-block">{title}</h5>
      <p className={`text-xs leading-relaxed opacity-80 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
   </div>
 );
 
 const StepRow = ({ num, title, desc, lang, delayMs = 0 }: { num: string; title: string; desc: string; lang?: Language; delayMs?: number }) => (
   <div className="flex items-start gap-4 p-4 rounded-2xl hover:bg-white/60 dark:hover:bg-white/10 transition-colors opacity-0 animate-reveal" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
-     <span className="text-xs font-black text-cyan-600 dark:text-cyan-400 bg-cyan-500/15 px-2.5 py-1 rounded-lg shrink-0">{num}</span>
+     <span className="text-xs font-black text-indigo-600 dark:text-indigo-400 bg-indigo-500/15 px-2.5 py-1 rounded-lg shrink-0">{num}</span>
      <div>
         <h6 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide mb-1">{title}</h6>
         <p className={`text-xs leading-relaxed opacity-70 ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : ''}`}>{desc}</p>
@@ -378,7 +378,7 @@ const StepRow = ({ num, title, desc, lang, delayMs = 0 }: { num: string; title: 
 );
 
 const SocialIcon = ({ icon, href, delayMs = 0 }: { icon: string; href: string; delayMs?: number }) => (
-  <a href={href} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-cyan-600 hover:scale-110 hover:border-cyan-500/50 active:scale-95 transition-all duration-300 shadow-sm opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
+  <a href={href} target="_blank" rel="noopener noreferrer" className="w-11 h-11 rounded-full bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 hover:scale-110 hover:border-indigo-500/50 active:scale-95 transition-all duration-300 shadow-sm opacity-0 animate-scale-in" style={{ animationDelay: `${delayMs}ms`, animationFillMode: 'forwards' }}>
      <i className={`fa-brands ${icon} text-lg`} />
   </a>
 );

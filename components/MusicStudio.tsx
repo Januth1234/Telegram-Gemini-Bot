@@ -327,7 +327,7 @@ const MusicStudio: React.FC = () => {
   }
 
   const inputStyle =
-    'w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-cyan-500 focus:ring-4 focus:ring-cyan-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm';
+    'w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm';
   const labelStyle = 'text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1';
 
   return (
@@ -338,7 +338,7 @@ const MusicStudio: React.FC = () => {
           <div className="space-y-6">
             <div className="space-y-3">
               <label className={`flex items-center gap-3 ${labelStyle}`}>
-                <i className="fa-solid fa-music text-cyan-500"></i>
+                <i className="fa-solid fa-music text-indigo-500"></i>
                 Prompt
               </label>
               <textarea
@@ -435,7 +435,7 @@ const MusicStudio: React.FC = () => {
               <button
                 onClick={handlePlay}
                 disabled={isConnecting || !prompt.trim()}
-                className="flex-1 py-3 rounded-xl bg-cyan-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-cyan-500 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 py-3 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-indigo-500 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {isConnecting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-play"></i>}
                 {isConnecting ? 'Connecting...' : 'Play'}
@@ -471,7 +471,7 @@ const MusicStudio: React.FC = () => {
             <div
               key={i}
               ref={(el) => { barsRef.current[i] = el; }}
-              className="w-2.5 rounded-full transition-all duration-100 bg-cyan-500"
+              className="w-2.5 rounded-full transition-all duration-100 bg-indigo-500"
               style={{ height: '12%' }}
             />
           ))}
@@ -482,7 +482,7 @@ const MusicStudio: React.FC = () => {
         <button
           onClick={downloadRecording}
           disabled={!hasRecordedChunks}
-          className="py-3 px-6 rounded-xl bg-cyan-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-cyan-500 disabled:opacity-50 flex items-center gap-2"
+          className="py-3 px-6 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-wider hover:bg-indigo-500 disabled:opacity-50 flex items-center gap-2"
         >
           <i className="fa-solid fa-download"></i>
           Download WAV

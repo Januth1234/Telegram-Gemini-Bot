@@ -119,7 +119,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
     return (
       <div className="flex flex-col h-full items-center justify-center p-8 text-center">
         <p className="text-sm font-bold text-slate-600 dark:text-slate-400 mb-4">{t.connectToContinue}</p>
-        <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-black uppercase tracking-widest">
+        <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest">
           {t.back}
         </button>
       </div>
@@ -135,7 +135,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
         <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{t.agent}</h2>
         <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">{t.agentProOnly}</p>
         <div className="flex gap-3">
-          <button onClick={() => { window.location.hash = 'pricing'; }} className="px-5 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-black uppercase tracking-widest">
+          <button onClick={() => { window.location.hash = 'pricing'; }} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest">
             {t.pricing}
           </button>
           <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-700 dark:text-slate-300 text-xs font-bold uppercase tracking-widest">
@@ -191,11 +191,11 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
 
         {lastCalls.length > 0 && (
           <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
-            <p className="text-[10px] font-black text-cyan-700 dark:text-cyan-400 uppercase tracking-widest mb-2">{t.agentSuggestedActions}</p>
+            <p className="text-[10px] font-black text-cyan-700 dark:text-indigo-400 uppercase tracking-widest mb-2">{t.agentSuggestedActions}</p>
             <ul className="space-y-2">
               {lastCalls.map((fc, i) => (
                 <li key={i} className="text-xs font-mono text-slate-800 dark:text-slate-200">
-                  <span className="font-bold text-cyan-600 dark:text-cyan-400">{fc.name}</span>
+                  <span className="font-bold text-indigo-600 dark:text-indigo-400">{fc.name}</span>
                   {Object.keys(fc.args).length > 0 && <span className="text-slate-500"> {JSON.stringify(fc.args)}</span>}
                 </li>
               ))}
@@ -223,7 +223,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
             <button
               onClick={startAgent}
               disabled={loading || !task.trim()}
-              className="px-5 py-3 rounded-xl bg-cyan-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
+              className="px-5 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
             >
               {loading ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-play" />}
               {t.agentStart}
@@ -245,7 +245,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
                 <button
                   onClick={runNextStep}
                   disabled={loading}
-                  className="px-5 py-2 rounded-xl bg-cyan-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
+                  className="px-5 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest disabled:opacity-50 flex items-center gap-2"
                 >
                   {loading ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-forward" />}
                   {t.agentNextStep}
