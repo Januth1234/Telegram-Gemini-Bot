@@ -208,7 +208,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
           const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
           src.connect(proc);
-          // DO NOT connect proc to destination — avoids mic feedback loop
+          // Connect proc to a SILENT gain node → destination.
+          // Required: ScriptProcessorNode won't fire onaudioprocess unless it has
+          // a path to AudioDestination (Web Audio API spec). gain=0 = no feedback.
+          const silentSink = inputAudioContextRef.current!.createGain();
+          silentSink.gain.value = 0;
+          proc.connect(silentSink);
+          silentSink.connect(inputAudioContextRef.current!.destination);
 
           proc.onaudioprocess = (e) => {
             const raw = e.inputBuffer.getChannelData(0);

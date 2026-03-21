@@ -177,7 +177,12 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
           const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
           
           src.connect(proc);
-          // NOT connected to destination — avoids camera mic feedback
+          // Connect proc to silent GainNode → destination.
+          // Required for onaudioprocess to fire (Web Audio API spec).
+          const silentSink = inputAudioContextRef.current!.createGain();
+          silentSink.gain.value = 0;
+          proc.connect(silentSink);
+          silentSink.connect(inputAudioContextRef.current!.destination);
           
           proc.onaudioprocess = (e) => {
             if (isMuted) return;
