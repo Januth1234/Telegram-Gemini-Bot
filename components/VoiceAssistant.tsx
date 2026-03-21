@@ -197,24 +197,26 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           // DO NOT connect proc to destination — avoids mic feedback loop
 
           proc.onaudioprocess = (e) => {
-            if (!sessionRef.current) return;
             const raw = e.inputBuffer.getChannelData(0);
-            // Resample to 16kHz (Gemini Live only accepts 16000 Hz)
+            // Resample to 16kHz — Gemini Live only accepts 16000 Hz PCM
             const targetRate = 16000;
             const ratio = inputSampleRate / targetRate;
             const targetLen = Math.floor(raw.length / ratio);
             const resampled = new Int16Array(targetLen);
             for (let i = 0; i < targetLen; i++) {
-              const src = Math.floor(i * ratio);
-              const s = Math.max(-1, Math.min(1, raw[src] || 0));
+              const srcIdx = Math.floor(i * ratio);
+              const s = Math.max(-1, Math.min(1, raw[srcIdx] || 0));
               resampled[i] = s * 32767;
             }
-            sessionRef.current.sendRealtimeInput({
-              media: {
-                data: encodeBase64(new Uint8Array(resampled.buffer)),
-                mimeType: 'audio/pcm;rate=16000'
-              }
-            });
+            // Use sessionPromise closure — works even before await resolves
+            (sessionPromise as Promise<any>).then(session => {
+              session.sendRealtimeInput({
+                media: {
+                  data: encodeBase64(new Uint8Array(resampled.buffer)),
+                  mimeType: 'audio/pcm;rate=16000'
+                }
+              });
+            }).catch(() => {});
           };
         },
         onmessage: async (msg: LiveServerMessage) => {
@@ -251,11 +253,18 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         }
       };
 
-      const p = mode === 'translator' 
+      // IMPORTANT: ai.live.connect() awaits onopen internally before resolving.
+      // So sessionRef.current = await p would be set AFTER onopen already ran,
+      // meaning sessionRef.current is null when onopen tries to send audio.
+      // Fix: capture sessionPromise in closure so onopen can use .then() on it.
+      const sessionPromise = mode === 'translator'
         ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
         : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext });
 
-      sessionRef.current = await p;
+      // Store promise immediately so onopen closure can use it
+      (sessionPromise as Promise<any>).then(session => {
+        sessionRef.current = session;
+      }).catch(() => {});
     } catch (e: unknown) {
       setErrorMessage(e instanceof Error ? e.message : "Microphone Error");
       setIsConnecting(false);
