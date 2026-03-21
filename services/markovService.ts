@@ -127,3 +127,35 @@ export function getMarkovSuggestions(userMessageTexts: string[], count: number =
   const model = buildMarkovModel(userMessageTexts);
   return generateSuggestions(model, count);
 }
+
+/** MarkovModel type alias for caching */
+export type MarkovModel = { starts: string[]; transitions: Map<string, string[]>; builtAt?: number };
+
+/** Serialize model to a JSON-safe object for cacheService storage */
+export function serializeMarkovModel(model: { starts: string[]; transitions: Map<string, string[]> }): string {
+  return JSON.stringify({
+    starts: model.starts,
+    transitions: Array.from(model.transitions.entries()),
+    builtAt: Date.now(),
+  });
+}
+
+/** Deserialize a cached model back to a usable Markov model + builtAt timestamp */
+export function deserializeMarkovModel(raw: string): { starts: string[]; transitions: Map<string, string[]>; builtAt: number } | null {
+  try {
+    const parsed = JSON.parse(raw);
+    return {
+      starts: parsed.starts ?? [],
+      transitions: new Map(parsed.transitions ?? []),
+      builtAt: parsed.builtAt ?? 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Returns true if the cached model was built less than 30 minutes ago */
+export function isMarkovCacheValid(model: { builtAt?: number }): boolean {
+  if (!model.builtAt) return false;
+  return Date.now() - model.builtAt < 30 * 60 * 1000;
+}
