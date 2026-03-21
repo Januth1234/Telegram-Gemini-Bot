@@ -400,7 +400,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         },
         onclose: () => { setIsActive(false); setIsConnecting(false); },
         onerror: (e: unknown) => {
-            setErrorMessage(e instanceof Error ? e.message : "Connection Error");
+            const errMsg = e instanceof Error ? e.message : 'Connection lost';
+            setErrorMessage(errMsg.includes('model') || errMsg.includes('Model')
+              ? 'Voice model unavailable. Please try again in a moment.'
+              : errMsg || 'Connection error. Please retry.');
             stopSession();
         }
       };
@@ -411,7 +414,12 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       sessionRef.current = await p;
     } catch (e: unknown) {
-      setErrorMessage(e instanceof Error ? e.message : "Microphone Error");
+      const msg = e instanceof Error ? e.message : 'Microphone access failed';
+      setErrorMessage(msg.includes('Permission') || msg.includes('permission') || msg.includes('denied')
+        ? 'Microphone permission denied. Please allow microphone access in your browser settings.'
+        : msg.includes('NotFound') || msg.includes('not found')
+        ? 'No microphone found. Please connect a microphone and try again.'
+        : msg || 'Could not start voice session. Try again.');
       setIsConnecting(false);
     }
   };
@@ -426,7 +434,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     }
   }, [transcription]);
 
-  const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
+  const activeColor = mode === 'translator' ? 'violet' : 'indigo';
   const containerClass = inline 
     ? "w-full h-full flex flex-col items-center p-4 overflow-hidden relative" 
     : "w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center p-4 md:p-6 bg-white dark:bg-slate-900/95 shadow-2xl transition-all duration-500 overflow-hidden relative max-h-[min(90vh,calc(var(--vh,1vh)*90))]";

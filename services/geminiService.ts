@@ -542,7 +542,11 @@ EXPLANATION STYLE:
 
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });
-    const ttsModel = model === 'pro' ? 'gemini-2.5-pro-preview-tts' : 'gemini-2.5-flash-preview-tts';
+    // TTS models: pro gets higher quality, flash is default
+    const ttsModels = model === 'pro'
+      ? ['gemini-2.5-pro-preview-tts', 'gemini-2.5-flash-preview-tts']
+      : ['gemini-2.5-flash-preview-tts'];
+    const ttsModel = ttsModels[0]; // Use first; error handling below falls back
 
     const promptText = stylePrompt?.trim()
       ? `${stylePrompt.trim()}\n\n${text.trim()}`
@@ -776,28 +780,43 @@ SESSION CONTEXT (use for answers about time, place, money, weather):
 When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.`;
   }
 
-  /** Native audio model (gemini-2.5-flash-native-audio-preview-12-2025 deprecated March 19, 2026). */
-  private static readonly LIVE_NATIVE_AUDIO_MODEL = 'gemini-live-2.5-flash-native-audio-preview';
+  /** Live audio models — try native audio first (best quality), fall back to stable. */
+  private static readonly LIVE_MODELS = [
+    'gemini-live-2.5-flash-preview',          // latest native audio (March 2026+)
+    'gemini-2.0-flash-live-001',              // stable fallback
+  ];
 
   async connectLive(callbacks: any, config: any) {
-      const apiKey = await this.getApiKey();
-      const useV1Alpha = !!(config.proactiveAudio || config.enableAffectiveDialog);
-      const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha && { apiVersion: 'v1alpha' as const }) });
-      const systemInstruction = config.systemInstruction != null
-        ? config.systemInstruction
-        : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-      const finalConfig: Record<string, unknown> = {
-        ...config,
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
-        systemInstruction
-      };
-      if (config.proactiveAudio) finalConfig.proactivity = { proactiveAudio: true };
-      if (config.enableAffectiveDialog) finalConfig.enableAffectiveDialog = true;
-      const { __setSessionPromise, ...passThroughCallbacks } = callbacks as { __setSessionPromise?: (p: Promise<unknown>) => void; [k: string]: unknown };
-      const sessionPromise = ai.live.connect({ model: GeminiService.LIVE_NATIVE_AUDIO_MODEL, callbacks: passThroughCallbacks, config: finalConfig });
-      __setSessionPromise?.(sessionPromise);
-      return sessionPromise;
+    const apiKey = await this.getApiKey();
+    const useV1Alpha = !!(config.proactiveAudio || config.enableAffectiveDialog);
+    const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha && { apiVersion: 'v1alpha' as const }) });
+    const systemInstruction = config.systemInstruction != null
+      ? config.systemInstruction
+      : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
+    const finalConfig: Record<string, unknown> = {
+      ...config,
+      responseModalities: [Modality.AUDIO],
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
+      systemInstruction,
+    };
+    if (config.proactiveAudio) finalConfig.proactivity = { proactiveAudio: true };
+    if (config.enableAffectiveDialog) finalConfig.enableAffectiveDialog = true;
+    const { __setSessionPromise, ...passThroughCallbacks } = callbacks as { __setSessionPromise?: (p: Promise<unknown>) => void; [k: string]: unknown };
+
+    // Try models in order — pick first one that connects successfully
+    let lastErr: unknown;
+    for (const model of GeminiService.LIVE_MODELS) {
+      try {
+        const sessionPromise = ai.live.connect({ model, callbacks: passThroughCallbacks, config: finalConfig });
+        __setSessionPromise?.(sessionPromise);
+        return sessionPromise;
+      } catch (e) {
+        lastErr = e;
+        // Model not found / deprecated — try next
+        continue;
+      }
+    }
+    throw lastErr ?? new Error('No live audio model available');
   }
 
   /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */

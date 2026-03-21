@@ -367,7 +367,14 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
       sessionPromise.then(session => {
         sessionRef.current = session;
       }).catch(() => {
-        alert("Connection failed. Please try again.");
+        const errMsg = e instanceof Error ? e.message : 'Connection failed';
+        setErrorMessage(
+          errMsg.includes('Permission') || errMsg.includes('denied')
+            ? 'Camera/microphone permission denied. Check your browser settings.'
+            : errMsg.includes('NotFound') || errMsg.includes('not found')
+            ? 'No camera found. Please connect a camera and try again.'
+            : errMsg || 'Connection failed. Please try again.'
+        );
         stopSession();
       });
 
