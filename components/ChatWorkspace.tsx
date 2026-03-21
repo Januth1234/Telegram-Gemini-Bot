@@ -213,7 +213,6 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           setChatError('Your account does not have access to this feature right now.');
         } else {
           setChatError(msg || 'Something went wrong. Try again.');
-          alert(msg || 'Something went wrong. Try again.');
         }
       }
     } finally { 

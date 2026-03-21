@@ -726,7 +726,28 @@ const App: React.FC = () => {
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
+  // Detect if device is mobile or low-power GPU
+  const isMobileDevice = typeof window !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    window.innerWidth < 768 ||
+    (navigator as any).hardwareConcurrency <= 4
+  );
+
   const renderLandingBackground = () => {
+    // On mobile or low-power devices, skip heavy WebGL shaders entirely
+    if (isMobileDevice) {
+      const mobileBg: Record<string, string> = {
+        aurora:   'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900',
+        midnight: 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900',
+        terminal: 'bg-black',
+        ocean:    'bg-gradient-to-br from-sky-900 via-cyan-950 to-slate-900',
+        sunset:   'bg-gradient-to-br from-orange-950 via-red-900 to-slate-900',
+        paper:    'bg-gradient-to-br from-amber-950 via-orange-900 to-slate-900',
+        classic:  '',
+      };
+      const cls = mobileBg[userTheme] || '';
+      return cls ? <div className={`w-full h-full ${cls}`} /> : null;
+    }
     const content = (() => {
       switch (userTheme) {
         case 'aurora':
@@ -739,7 +760,7 @@ const App: React.FC = () => {
               scanlineFrequency={0}
               speed={0.45}
               warpAmount={0.06}
-              resolutionScale={0.9}
+              resolutionScale={0.5}
               />
             </div>
           );
@@ -748,10 +769,10 @@ const App: React.FC = () => {
             <Particles
             key={`midnight-${effectiveDark}`}
             particleColors={effectiveDark ? ['#c7d2fe', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
-            particleCount={220}
+            particleCount={60}
             particleSpread={10}
             speed={0.12}
-            particleBaseSize={105}
+            particleBaseSize={80}
             moveParticlesOnHover
             particleHoverFactor={1.2}
             alphaParticles={false}
@@ -794,7 +815,7 @@ const App: React.FC = () => {
               color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
               noiseIntensity={0.7}
               rotation={0.1}
-              dprMax={1}
+              dprMax={0.75}
               />
             </div>
           );

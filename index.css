@@ -115,3 +115,39 @@ math-field::part(menu-toggle) {
   margin-left: 4px;
   margin-right: 0;
 }
+
+/* ─── GPU optimisation ───────────────────────────────────────────────────── */
+/* Disable WebGL/heavy animations on mobile / reduced-motion preference */
+@media (max-width: 767px) {
+  .animate-hero-float,
+  .animate-glow-pulse,
+  .animate-shimmer,
+  .animate-theme-classic,
+  .animate-theme-midnight,
+  .animate-theme-aurora,
+  .animate-theme-terminal,
+  .animate-theme-ocean,
+  .animate-theme-sunset,
+  .animate-theme-paper {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Chat bubbles: avoid promoting to compositor layer unnecessarily */
+.chat-prose, .chat-bubble {
+  contain: layout style;
+}
+
+/* Scrollable containers: let browser optimise scrolling */
+.custom-scrollbar {
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+}

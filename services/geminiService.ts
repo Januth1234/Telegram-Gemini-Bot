@@ -195,17 +195,17 @@ export class GeminiService {
     internal?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     
-    if (!options.internal) {
-      if (this.currentUser) {
-        const limitReached = await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'text');
+    if (this.currentUser) {
+        // Use checkLimit (read-only) to avoid Firestore write permission issues
+        // incrementUsage fires after successful response
+        const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
         if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
       } else {
         this.resetGuestWindows();
-      if (this.guestUsage.textCount >= this.guestUsage.textMax) {
+        if (this.guestUsage.textCount >= this.guestUsage.textMax) {
           throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
         }
       }
-    }
 
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });
@@ -397,7 +397,7 @@ EXPLANATION STYLE:
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     if (this.currentUser) {
-       if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
+       if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
        this.resetGuestWindows();
        if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
@@ -452,7 +452,7 @@ EXPLANATION STYLE:
       if (!hasVideoPlan) {
         throw new AppError("Video generation requires a Basic or Pro plan. Upgrade to continue.", "plan_required");
       }
-      if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
+      if (await firebaseService.checkLimit(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
     } else {
       this.resetGuestWindows();
       if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
