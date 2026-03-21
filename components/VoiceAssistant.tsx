@@ -190,23 +190,32 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           setIsConnecting(false);
           setIsActive(true);
           const src = inputAudioContextRef.current!.createMediaStreamSource(stream);
-          const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
           src.connect(inputAnalyserRef.current!);
+
+          const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
+          src.connect(proc);
+          // DO NOT connect proc to destination — avoids mic feedback loop
+
           proc.onaudioprocess = (e) => {
             if (!sessionRef.current) return;
-            const data = e.inputBuffer.getChannelData(0);
-            const int16 = new Int16Array(data.length);
-            for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
-            
-            sessionRef.current.sendRealtimeInput({ 
-                media: { 
-                    data: encodeBase64(new Uint8Array(int16.buffer)), 
-                    mimeType: `audio/pcm;rate=${inputSampleRate}`
-                } 
+            const raw = e.inputBuffer.getChannelData(0);
+            // Resample to 16kHz (Gemini Live only accepts 16000 Hz)
+            const targetRate = 16000;
+            const ratio = inputSampleRate / targetRate;
+            const targetLen = Math.floor(raw.length / ratio);
+            const resampled = new Int16Array(targetLen);
+            for (let i = 0; i < targetLen; i++) {
+              const src = Math.floor(i * ratio);
+              const s = Math.max(-1, Math.min(1, raw[src] || 0));
+              resampled[i] = s * 32767;
+            }
+            sessionRef.current.sendRealtimeInput({
+              media: {
+                data: encodeBase64(new Uint8Array(resampled.buffer)),
+                mimeType: 'audio/pcm;rate=16000'
+              }
             });
           };
-          src.connect(proc);
-          proc.connect(inputAudioContextRef.current!.destination);
         },
         onmessage: async (msg: LiveServerMessage) => {
           if (msg.serverContent?.inputTranscription) {
