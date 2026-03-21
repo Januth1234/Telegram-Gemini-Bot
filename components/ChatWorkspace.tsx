@@ -459,14 +459,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {/* Sidebar Overlay */}
       {isHistoryOpen && <div className="fixed inset-0 bg-black/50 z-[140]" onClick={() => setIsHistoryOpen(false)} />}
       
-      <div className={`fixed inset-y-0 left-0 z-[150] w-72 md:w-80 bg-white/98 dark:bg-slate-950/98 border-r border-slate-200/70 dark:border-white/[0.06] backdrop-blur-xl transition-transform flex flex-col shadow-2xl ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-4 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shrink-0">
+      <div className={`fixed inset-y-0 left-0 z-[150] w-72 md:w-80 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-white/[0.06] transition-transform duration-300 ease-in-out flex flex-col shadow-2xl ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-4 border-b border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</span>
             <button onClick={() => setIsHistoryOpen(false)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5" aria-label="Close"><i className="fa-solid fa-xmark" /></button>
         </div>
         <div className="p-3 space-y-2 shrink-0">
             <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors shadow-sm">+ New Chat</button>
-            <button onClick={() => { togglePrivate(); setIsHistoryOpen(false); }} className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border ${isPrivate ? 'bg-red-500 text-white border-red-500' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
+            <button onClick={() => { togglePrivate(); setIsHistoryOpen(false); }} className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border ${isPrivate ? 'bg-red-500 text-white border-red-500' : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10'}`}>
                {isPrivate ? 'Turn Off Private' : 'Private Mode'}
             </button>
         </div>
@@ -476,7 +476,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by meaning..."
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 outline-none"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none"
               aria-label="Semantic search conversations"
             />
             {isSearching && <p className="text-[9px] text-slate-400 mt-1">Searching...</p>}
@@ -484,7 +484,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         </div>
         <div className="overflow-y-auto flex-1 min-h-0 p-2">
             {(semanticOrder ? semanticOrder.map((id) => conversations.find((c) => c.id === id)).filter(Boolean) as Conversation[] : [...conversations].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())).map(c => (
-                <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-100/80 dark:hover:bg-white/[0.04]'}`}>
+                <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}>
                     <button 
                         onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 
                         className={`w-full text-left p-3 pr-9 text-xs font-bold flex items-center gap-1.5 min-w-0 ${activeConvId === c.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}

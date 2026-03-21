@@ -326,24 +326,30 @@ const App: React.FC = () => {
         .filter((c: any) => (c.messages || []).some((m: { role: string }) => m.role === 'user'));
     } catch { return []; }
   });
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(() => {
-    const savedId = cacheService.get<string | null>(CacheKey.ACTIVE_CONV, null);
-    const saved = cacheService.get<any[]>(CacheKey.HISTORY, []);
-    const meaningful = Array.isArray(saved) ? saved.filter((c: any) => (c.messages || []).some((m: { role: string }) => m.role === 'user')) : [];
-    const hasId = meaningful.some((c: any) => c.id === savedId);
-    return hasId ? savedId : (meaningful[0]?.id ?? null);
-  });
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  // Always open a fresh chat on page load — restoring mid-conversation is confusing.
 
   const saveTimeoutRef = useRef<number | null>(null);
   const bootstrappedConvRef = useRef(false);
 
-  // Drop conversations with no user messages when switching away (AI-only welcome is not kept)
+  // Auto-delete empty chats (no user messages) whenever active conv changes or on mount
   useEffect(() => {
     setConversations(prev => {
       const keep = prev.filter(c => c.id === activeConversationId || conversationHasUserMessage(c));
       return keep.length === prev.length ? prev : keep;
     });
   }, [activeConversationId]);
+
+  // Also clean up empties when conversations list changes (catches newly-abandoned chats)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setConversations(prev => {
+        const keep = prev.filter(c => c.id === activeConversationId || conversationHasUserMessage(c));
+        return keep.length === prev.length ? prev : keep;
+      });
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [conversations.length]);
 
   useEffect(() => {
     const meaningfulConversations = conversations.filter(conversationHasUserMessage);

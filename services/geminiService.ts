@@ -602,10 +602,18 @@ EXPLANATION STYLE:
     try {
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
-      const prompt = `Generate 3 word title for chat starting with: "${messages[0]?.content}". Lang: ${lang}.`;
-      const response = await ai.models.generateContent({ model: 'gemini-2.0-flash-lite', contents: prompt });
-      const text = (response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "";
-      return text.trim() || "New Chat";
+      const firstMsg = (messages[0]?.content || '').slice(0, 120);
+      const prompt = `Reply with ONLY a 2-4 word title for this chat. No punctuation, no quotes, no explanation — just the title words.
+Chat: "${firstMsg}"`;
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.0-flash-lite',
+        contents: prompt,
+        config: { maxOutputTokens: 12 },
+      });
+      const raw = ((response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "").trim();
+      // Strip any surrounding quotes, bullets, or "Title:" prefixes the model might add
+      const clean = raw.replace(/^["'`*•\-–—]|["'`*•]$/g, '').replace(/^title[:\s]*/i, '').trim();
+      return clean.slice(0, 40) || "New Chat";
     } catch { return "New Chat"; }
   }
 
