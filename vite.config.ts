@@ -29,6 +29,25 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [react(), swVersionPlugin()],
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            // AI/Google SDK — large, rarely changes
+            'vendor-ai': ['@google/genai'],
+            // Firebase
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/messaging'],
+            // Math libraries — only loaded in maths tab
+            'vendor-math': ['mathjs', 'nerdamer'],
+            // Stripe
+            'vendor-stripe': ['@stripe/stripe-js'],
+            // KaTeX for math rendering
+            'vendor-katex': ['katex'],
+          },
+        },
+      },
+    },
     define: {
       // Expose API Keys
       'process.env.API_KEY': JSON.stringify(env.API_KEY || env.VITE_API_KEY),
