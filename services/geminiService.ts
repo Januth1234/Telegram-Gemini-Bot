@@ -781,42 +781,44 @@ When the user asks about time, date, weather, or prices, use this context. For w
   }
 
   /** Live audio models — try native audio first (best quality), fall back to stable. */
-  private static readonly LIVE_MODELS = [
-    'gemini-live-2.5-flash-preview',          // latest native audio (March 2026+)
-    'gemini-2.0-flash-live-001',              // stable fallback
-  ];
+  // SDK-documented model for Gemini API (non-Vertex) live sessions
+  private static readonly LIVE_MODEL = 'gemini-live-2.5-flash-preview';
 
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
+    // proactiveAudio + affectiveDialog require v1alpha API version
     const useV1Alpha = !!(config.proactiveAudio || config.enableAffectiveDialog);
-    const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha && { apiVersion: 'v1alpha' as const }) });
+    const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha ? { apiVersion: 'v1alpha' as any } : {}) });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-    const finalConfig: Record<string, unknown> = {
-      ...config,
+
+    // Build a clean config — only include fields the Live API accepts
+    const liveConfig: Record<string, unknown> = {
       responseModalities: [Modality.AUDIO],
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
+      },
       systemInstruction,
     };
-    if (config.proactiveAudio) finalConfig.proactivity = { proactiveAudio: true };
-    if (config.enableAffectiveDialog) finalConfig.enableAffectiveDialog = true;
-    const { __setSessionPromise, ...passThroughCallbacks } = callbacks as { __setSessionPromise?: (p: Promise<unknown>) => void; [k: string]: unknown };
+    if (config.proactiveAudio) liveConfig.proactivity = { proactiveAudio: true };
+    if (config.enableAffectiveDialog) liveConfig.enableAffectiveDialog = true;
+    // inputAudioTranscription: get transcripts back from the model
+    liveConfig.inputAudioTranscription = {};
+    liveConfig.outputAudioTranscription = {};
 
-    // Try models in order — pick first one that connects successfully
-    let lastErr: unknown;
-    for (const model of GeminiService.LIVE_MODELS) {
-      try {
-        const sessionPromise = ai.live.connect({ model, callbacks: passThroughCallbacks, config: finalConfig });
-        __setSessionPromise?.(sessionPromise);
-        return sessionPromise;
-      } catch (e) {
-        lastErr = e;
-        // Model not found / deprecated — try next
-        continue;
-      }
-    }
-    throw lastErr ?? new Error('No live audio model available');
+    const { __setSessionPromise, ...passThroughCallbacks } = callbacks as {
+      __setSessionPromise?: (p: Promise<unknown>) => void;
+      [k: string]: unknown;
+    };
+
+    const sessionPromise = ai.live.connect({
+      model: GeminiService.LIVE_MODEL,
+      callbacks: passThroughCallbacks,
+      config: liveConfig,
+    });
+    __setSessionPromise?.(sessionPromise);
+    return sessionPromise;
   }
 
   /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */
@@ -827,25 +829,23 @@ When the user asks about time, date, weather, or prices, use this context. For w
   }
 
   async connectTranslator(callbacks: any, options: any) {
-     return this.connectLive(callbacks, {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
-        systemInstruction: `You are a real-time interpreter. The user will speak in either ${options.source} or ${options.target}.
+    return this.connectLive(callbacks, {
+      voiceName: 'Zephyr',
+      systemInstruction: `You are a real-time interpreter. The user will speak in either ${options.source} or ${options.target}.
 Detect the language automatically. If they speak ${options.source}, output the translation in ${options.target}.
 If they speak ${options.target}, output in ${options.source}.
 Output ONLY the translation. Do not add commentary, greetings, or explanations.
 If the speech is unclear or too short to translate, output nothing.`,
-        proactiveAudio: options.proactiveAudio,
-        enableAffectiveDialog: options.enableAffectiveDialog,
-     });
+      proactiveAudio: options.proactiveAudio,
+      enableAffectiveDialog: options.enableAffectiveDialog,
+    });
   }
 
   async connectMultimodal(callbacks: any, config: any) {
-     return this.connectLive(callbacks, {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
-        systemInstruction: `${getToneInstruction(config.tone)}. Processing real-time video feed.`
-     });
+    return this.connectLive(callbacks, {
+      voiceName: config.voiceName || 'Zephyr',
+      systemInstruction: `${getToneInstruction(config.tone)}. You are viewing a live video feed. Describe what you see and answer questions about the video in real time.`,
+    });
   }
 
   /** Separate client for Lyria (needs v1alpha). */
