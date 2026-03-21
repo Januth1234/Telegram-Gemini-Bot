@@ -361,7 +361,17 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
           }
         },
         onclose: () => stopSession(),
-        onerror: () => { stopSession(); }
+        onerror: (e: unknown) => {
+          const msg = e instanceof Error ? e.message : 'Connection failed';
+          setErrorMessage(
+            msg.includes('Permission') || msg.includes('denied')
+              ? 'Camera/mic permission denied. Check browser settings.'
+              : msg.includes('model') || msg.includes('Model')
+              ? 'Live AI model unavailable. Please try again.'
+              : msg || 'Connection failed. Please try again.'
+          );
+          stopSession();
+        }
       }, { voiceName: selectedVoice, tone: selectedTone });
       
       sessionPromise.then(session => {

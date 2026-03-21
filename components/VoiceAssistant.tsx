@@ -52,8 +52,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [modeSwitchBlockedFeedback, setModeSwitchBlockedFeedback] = useState(false);
   const [selectedVoice, setSelectedVoice] = useState(() => cacheService.get(CacheKey.VOICE_NAME, 'Zephyr'));
   const [selectedTone, setSelectedTone] = useState(() => cacheService.get(CacheKey.VOICE_TONE, 'neutral'));
-  const [proactiveAudio, setProactiveAudio] = useState(() => cacheService.get(CacheKey.VOICE_PROACTIVE_AUDIO, true));
-  const [affectiveDialog, setAffectiveDialog] = useState(() => cacheService.get(CacheKey.VOICE_AFFECTIVE_DIALOG, true));
+  const [proactiveAudio, setProactiveAudio] = useState(() => cacheService.get(CacheKey.VOICE_PROACTIVE_AUDIO, false));
+  const [affectiveDialog, setAffectiveDialog] = useState(() => cacheService.get(CacheKey.VOICE_AFFECTIVE_DIALOG, false));
 
   const handleVoiceChange = useCallback((voice: string) => {
     setSelectedVoice(voice);

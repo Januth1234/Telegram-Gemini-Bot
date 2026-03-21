@@ -786,14 +786,13 @@ When the user asks about time, date, weather, or prices, use this context. For w
 
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
-    // proactiveAudio + affectiveDialog require v1alpha API version
-    const useV1Alpha = !!(config.proactiveAudio || config.enableAffectiveDialog);
-    const ai = new GoogleGenAI({ apiKey, ...(useV1Alpha ? { apiVersion: 'v1alpha' as any } : {}) });
+    // Always use stable v1 — v1alpha causes connection rejection with current live models
+    const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
 
-    // Build a clean config — only include fields the Live API accepts
+    // Minimal, clean config — only proven-valid fields for Gemini Live API
     const liveConfig: Record<string, unknown> = {
       responseModalities: [Modality.AUDIO],
       speechConfig: {
@@ -801,11 +800,9 @@ When the user asks about time, date, weather, or prices, use this context. For w
       },
       systemInstruction,
     };
-    if (config.proactiveAudio) liveConfig.proactivity = { proactiveAudio: true };
-    if (config.enableAffectiveDialog) liveConfig.enableAffectiveDialog = true;
-    // inputAudioTranscription: get transcripts back from the model
-    liveConfig.inputAudioTranscription = {};
-    liveConfig.outputAudioTranscription = {};
+    // Only add optional features if explicitly enabled (don't send empty objects)
+    if (config.enableAffectiveDialog === true) liveConfig.enableAffectiveDialog = true;
+    if (config.proactiveAudio === true) liveConfig.proactivity = { proactiveAudio: true };
 
     const { __setSessionPromise, ...passThroughCallbacks } = callbacks as {
       __setSessionPromise?: (p: Promise<unknown>) => void;
