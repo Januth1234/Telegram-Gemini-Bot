@@ -447,6 +447,10 @@ export function solveEquationWithSteps(
 ): (StepsResult & { roots?: number[] }) | null {
   try {
     const eq  = exprMath.trim();
+    // Trig/log/complex expressions → AI handles these properly
+    if (/\b(sin|cos|tan|csc|sec|cot|asin|acos|atan|sinh|cosh|tanh|theta|phi|alpha|beta|gamma|pi|log|ln|exp)\b/i.test(eq)) {
+      return null;
+    }
     const steps: string[] = [];
     const hasEq = eq.includes('=');
     let lhs = eq, rhs = '0';
@@ -476,9 +480,8 @@ export function solveEquationWithSteps(
       }
     }
 
-    // Fallback: try direct evaluation / nerdamer
-    steps.push(`Applying algebraic methods to isolate ${variable}...`);
-    return { result: '', steps };
+    // CAS can't solve this algebraically → return null so AI handles it
+    return null;
   } catch {
     return null;
   }

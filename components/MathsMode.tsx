@@ -191,6 +191,120 @@ const SolutionMessageContent: React.FC<{ content: string }> = ({ content }) => {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
+// ─── Multi-method tabbed result card ─────────────────────────────────────────
+interface MathResultProps {
+  result: {
+    kind: string;
+    title: string;
+    steps: string[];
+    result: string;
+    input: string;
+    resultLatex?: string;
+    extraMethods?: { name: string; steps: string[] }[];
+  };
+  isTyping: boolean;
+  onExplain: () => void;
+  onClose: () => void;
+}
+
+const MathResultCard: React.FC<MathResultProps> = ({ result, isTyping, onExplain, onClose }) => {
+  const isUtility = result.kind === 'units' || result.kind === 'number';
+  const allMethods = [
+    { name: result.title, steps: result.steps },
+    ...(result.extraMethods || []),
+  ];
+  const [activeMethod, setActiveMethod] = React.useState(0);
+  const current = allMethods[activeMethod];
+
+  if (isUtility) {
+    return (
+      <div className="w-full p-5 rounded-2xl border-2 border-violet-200 dark:border-violet-800 bg-violet-50/80 dark:bg-violet-950/50 shadow-lg space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <span className="text-[10px] font-black uppercase tracking-widest text-violet-700 dark:text-violet-300 flex items-center gap-2">
+            <i className={result.kind === 'units' ? 'fa-solid fa-ruler-combined' : 'fa-solid fa-hashtag'} />
+            {result.title}
+          </span>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-500 hover:text-red-500 flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-xs" />
+          </button>
+        </div>
+        {result.result && <div className="text-2xl font-bold text-slate-900 dark:text-white font-mono">{result.result}</div>}
+        {result.steps.length > 0 && <p className="text-sm text-red-600 dark:text-red-400">{result.steps[0]}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 shadow-xl overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-indigo-100 dark:border-indigo-900 flex-wrap">
+        <div className="flex items-center gap-2">
+          <i className="fa-solid fa-list-check text-indigo-500 text-sm" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
+            Solution — Step by Step
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button type="button" disabled={isTyping} onClick={onExplain}
+            className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+            <i className="fa-solid fa-wand-magic-sparkles mr-1" />Explain
+          </button>
+          <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-red-500 flex items-center justify-center">
+            <i className="fa-solid fa-xmark text-xs" />
+          </button>
+        </div>
+      </div>
+
+      {/* Method tabs — only show if multiple methods */}
+      {allMethods.length > 1 && (
+        <div className="flex gap-2 px-5 pt-3 pb-0 border-b border-indigo-50 dark:border-indigo-900/40 overflow-x-auto no-scrollbar">
+          {allMethods.map((m, i) => (
+            <button
+              key={i}
+              onClick={() => setActiveMethod(i)}
+              className={`px-4 py-1.5 rounded-t-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap border-b-2 transition-all ${
+                activeMethod === i
+                  ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20'
+                  : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+              }`}
+            >
+              {m.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Steps */}
+      <div className="px-5 py-4 space-y-2">
+        {allMethods.length === 1 && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-3">{current.name}</p>
+        )}
+        {current.steps.map((step: string, i: number) => {
+          const isFinal = /^final answer/i.test(step);
+          return (
+            <div key={i} className={`flex gap-3 items-start ${isFinal ? 'pt-3 mt-1 border-t border-indigo-100 dark:border-indigo-800' : ''}`}>
+              {!isFinal && (
+                <span className="text-[10px] font-black text-indigo-300 mt-0.5 shrink-0 w-5">{i + 1}.</span>
+              )}
+              <span className={`text-sm leading-relaxed font-mono ${
+                isFinal
+                  ? 'font-black text-indigo-700 dark:text-indigo-300 text-base'
+                  : 'text-slate-700 dark:text-slate-300'
+              }`}>{step}</span>
+            </div>
+          );
+        })}
+        {result.result && !/final answer/i.test(current.steps[current.steps.length - 1] || '') && (
+          <div className="pt-3 border-t border-indigo-100 dark:border-indigo-800">
+            <span className="text-[10px] font-black uppercase text-indigo-500">Result: </span>
+            <span className="font-bold text-slate-900 dark:text-white font-mono">{result.result}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
   const t = translations[lang];
   const [activeCat, setActiveCat] = useState<MathCategory>('General');
@@ -214,6 +328,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
   } | null>(null);
   const [localStepsResult, setLocalStepsResult] = useState<{
     kind: 'derivative' | 'integral' | 'solve' | 'units' | 'number';
+    extraMethods?: { name: string; steps: string[] }[];
     title: string;
     steps: string[];
     result: string;
@@ -383,11 +498,32 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     setSelectedFile(null);
   };
 
-  // ─── Symbolab-style pipeline ────────────────────────────────────────────────
-  // 1. Get input (text paragraph / image / LaTeX field)
-  // 2. If text or image → Gemini extracts clean expression + operation
-  // 3. Feed extracted expression to local CAS for step-by-step
-  // 4. If CAS can't handle → fallback to Gemini AI with structured prompt
+  // ─── Math solve pipeline ─────────────────────────────────────────────────────
+  // Direct input (LaTeX field) → local CAS first, null/generic → solveMathWithAI
+  // Text/image → AI extracts expression → local CAS → null/generic → solveMathWithAI
+  // Results shown as tabbed methods (CAS + AI methods can coexist)
+
+  /** Returns true only if CAS produced real, non-generic steps */
+  const isRealCASResult = (out: { steps: string[]; result: string } | null): boolean => {
+    if (!out || out.steps.length < 2) return false;
+    const joined = out.steps.join(' ').toLowerCase();
+    const GENERIC = ['algebraic methods', 'isolate', 'rearrang', 'further analysis', 'standard technique', 'applying'];
+    return !GENERIC.some(g => joined.includes(g));
+  };
+
+  /** Parse ---METHOD--- blocks from AI text into named method objects */
+  const parseAIMethods = (text: string): { name: string; steps: string[] }[] => {
+    const re = /---METHOD:\s*(.+?)\s*---\n([\s\S]*?)---ENDMETHOD---/gi;
+    const methods: { name: string; steps: string[] }[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) {
+      methods.push({ name: m[1].trim(), steps: m[2].trim().split('\n').filter(l => l.trim()) });
+    }
+    if (!methods.length && text.trim()) {
+      methods.push({ name: 'AI Solution', steps: text.trim().split('\n').filter(l => l.trim()) });
+    }
+    return methods;
+  };
 
   /** Extract expression via Gemini from text or image, then route to local CAS. */
   const runWithExtraction = async (command: string, rawText: string | undefined, fileData?: { data: string; mimeType: string; name: string }) => {
@@ -425,7 +561,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
 
       if (op === 'differentiate') {
         const out = casService.derivativeWithSteps(expr, variable);
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input: expr });
           appendMathHistory({ kind: 'expression', inputLatex: expr, result: out.result, graph: null });
           solved = true;
@@ -438,7 +574,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
           await import('nerdamer/Calculus');
           resultTex = nerd(`integrate(${expr}, ${variable})`).toTeX();
         } catch {}
-        if (out && (out.steps.length > 1 || resultTex)) {
+        if (isRealCASResult(out) || resultTex) {
           const steps = [...(out.steps || [])];
           if (resultTex && !steps.some(s => s.includes(resultTex))) steps.push(`Result: $${resultTex}$`);
           const result = resultTex || out.result || '';
@@ -448,7 +584,7 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         }
       } else if (op === 'solve') {
         const out = casService.solveEquationWithSteps(expr, variable);
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
           setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input: expr });
           appendMathHistory({ kind: 'expression', inputLatex: expr, result, graph: null });
@@ -464,15 +600,30 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       }
 
       if (!solved) {
-        // CAS couldn't handle it — solveMathWithAI bypasses anti-chain-of-thought
-        setExtractionStatus('Solving with AI...');
+        // CAS null/generic → solveMathWithAI with full method parsing
+        setExtractionStatus('Solving with AI — finding all methods…');
         try {
           const mathPrompt = `${command} the expression: ${expr} (variable: ${variable})`;
-          const aiResult = await geminiService.solveMathWithAI({ prompt: mathPrompt, fileData });
-          onSend(`[MATH_RESULT]\n${aiResult}`, undefined);
+          const aiText = await geminiService.solveMathWithAI({ prompt: mathPrompt, fileData });
+          const aiMethods = parseAIMethods(aiText);
+          // Show as localStepsResult with multiple methods (first method displayed, rest as tabs)
+          if (aiMethods.length > 0) {
+            const primary = aiMethods[0];
+            const finalLine = primary.steps.findLast((s: string) => /final answer/i.test(s)) || primary.steps[primary.steps.length - 1] || '';
+            setLocalStepsResult({
+              kind: 'solve',
+              title: primary.name,
+              steps: primary.steps,
+              result: finalLine.replace(/^final answer[:\s]*/i, '').trim(),
+              input: expr,
+              extraMethods: aiMethods.slice(1),
+            });
+            appendMathHistory({ kind: 'expression', inputLatex: expr, result: finalLine, graph: null });
+          }
         } catch {
-          const fmt = `Show ALL steps. Format:\n---METHOD: [Name] ---\nStep 1...\nFinal Answer:\n---ENDMETHOD---`;
-          onSend(`${command} the expression: ${expr} (variable: ${variable})\n${fmt}`, fileData);
+          // Last resort — route to chat
+          const fmt = `Solve step by step. Use format:\n---METHOD: [Name] ---\nStep 1: ...\nFinal Answer: ...\n---ENDMETHOD---`;
+          onSend(`${command}: ${expr}\n${fmt}`, fileData);
         }
       }
 
@@ -603,7 +754,7 @@ ${aiResult}`, undefined);
 
       if (isDerivativeCommand) {
         const out = casService.derivativeWithSteps(input, 'x');
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input });
           appendMathHistory({ kind: 'expression', inputLatex: input, result: out.result, graph: null });
           casHandled = true;
@@ -611,7 +762,7 @@ ${aiResult}`, undefined);
       }
       if (!casHandled && isIntegralCommand) {
         const out = casService.integralWithSteps(input, 'x');
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           let resultTex = '';
           try {
             const nerd = (await import('nerdamer')).default;
@@ -627,7 +778,7 @@ ${aiResult}`, undefined);
       }
       if (!casHandled && isSolveCommand) {
         const out = casService.solveEquationWithSteps(input, 'x');
-        if (out && out.steps.length > 1) {
+        if (isRealCASResult(out)) {
           const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
           setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input });
           appendMathHistory({ kind: 'expression', inputLatex: input, result, graph: null });
@@ -649,22 +800,36 @@ ${aiResult}`, undefined);
 
     if (casHandled) return;
 
-    // ── FALLBACK: send to Gemini AI with Symbolab-style prompt ──
-    const multiMethodInstruction = `
-Show ALL steps clearly. If multiple methods exist, use this EXACT format:
----METHOD: [Short method name] ---
-Step 1: ...
-Step 2: ...
-Final Answer: ...
----ENDMETHOD---`;
-
-    let prompt = '';
-    if (selectedFile) {
-      prompt = `Analyze this math problem image and ${command}. ${multiMethodInstruction}`;
-    } else {
-      prompt = `Mathematical request: ${command}.\nExpression: ${rawLatex}.\n${multiMethodInstruction}`;
+    // ── FALLBACK: CAS failed → solveMathWithAI for full multi-method solution ──
+    setIsSolving(true);
+    try {
+      const prompt = selectedFile
+        ? `Analyze this math problem image and ${command}.`
+        : `${command} the expression: ${rawLatex}`;
+      const aiText = await geminiService.solveMathWithAI({
+        prompt,
+        fileData: selectedFile || undefined,
+      });
+      const aiMethods = parseAIMethods(aiText);
+      if (aiMethods.length > 0) {
+        const primary = aiMethods[0];
+        const finalLine = [...primary.steps].reverse().find((s: string) => /final answer/i.test(s)) || primary.steps[primary.steps.length - 1] || '';
+        setLocalStepsResult({
+          kind: 'solve',
+          title: primary.name,
+          steps: primary.steps,
+          result: finalLine.replace(/^final answer[:\s]*/i, '').trim(),
+          input: rawLatex || '(image)',
+          extraMethods: aiMethods.slice(1),
+        });
+        appendMathHistory({ kind: 'expression', inputLatex: rawLatex || '(image)', result: finalLine, graph: null });
+      }
+    } catch {
+      // Absolute last resort
+      onSend(`Solve step by step: ${rawLatex}`, selectedFile || undefined);
+    } finally {
+      setIsSolving(false);
     }
-    onSend(prompt, selectedFile || undefined);
     setSelectedFile(null);
   };
 
@@ -1038,59 +1203,18 @@ Final Answer: ...
             </div>
           )}
 
-          {/* Local step-by-step result */}
+          {/* Local step-by-step result — multi-method tabbed view */}
           {localStepsResult && (
-            <div className={`w-full p-6 rounded-2xl border-2 shadow-lg space-y-4 ${
-              localStepsResult.kind === 'units' || localStepsResult.kind === 'number'
-                ? 'border-violet-200 dark:border-violet-800 bg-violet-50/80 dark:bg-violet-950/50'
-                : 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/50'
-            }`}>
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
-                  localStepsResult.kind === 'units' || localStepsResult.kind === 'number' ? 'text-violet-700 dark:text-violet-300' : 'text-emerald-700 dark:text-emerald-300'
-                }`}>
-                  <i className={localStepsResult.kind === 'units' ? 'fa-solid fa-ruler-combined' : localStepsResult.kind === 'number' ? 'fa-solid fa-hashtag' : 'fa-solid fa-list-check'} />
-                  {localStepsResult.title}
-                </span>
-                <div className="flex items-center gap-2">
-                  {localStepsResult.kind !== 'units' && localStepsResult.kind !== 'number' && (
-                    <button type="button" disabled={isTyping}
-                      onClick={() => {
-                        const text = [`Input: ${localStepsResult.input}`, '', 'Steps:', ...localStepsResult.steps.map((s, i) => `${i + 1}. ${s}`), '', `Result: ${localStepsResult.result}`].join('\n');
-                        onSend(`Explain this step-by-step solution in simple terms:\n\n${text}`);
-                        setLocalStepsResult(null);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-cyan-500 disabled:opacity-50">
-                      Explain with AI
-                    </button>
-                  )}
-                  <button type="button" onClick={() => setLocalStepsResult(null)}
-                    className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-500 flex items-center justify-center" title="Dismiss">
-                    <i className="fa-solid fa-xmark text-xs" />
-                  </button>
-                </div>
-              </div>
-              {(localStepsResult.kind === 'units' || localStepsResult.kind === 'number') ? (
-                <>
-                  {localStepsResult.result ? <div className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white font-mono">{localStepsResult.result}</div> : null}
-                  {localStepsResult.steps.length > 0 && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{localStepsResult.steps[0]}</p>}
-                </>
-              ) : (
-                <>
-                  <ol className="list-decimal list-inside space-y-2 text-sm text-slate-800 dark:text-slate-200 font-medium">
-                    {localStepsResult.steps.map((step, i) => (
-                      <li key={i} className="pl-1 leading-relaxed">{step}</li>
-                    ))}
-                  </ol>
-                  {localStepsResult.result && (
-                    <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800">
-                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">Result: </span>
-                      <span className="font-bold text-slate-900 dark:text-white font-mono">{localStepsResult.result}</span>
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
+            <MathResultCard
+              result={localStepsResult}
+              isTyping={isTyping}
+              onExplain={() => {
+                const text = ['Input: ' + localStepsResult.input, '', 'Steps:', ...localStepsResult.steps.map((s: string, i: number) => `${i + 1}. ${s}`), '', 'Result: ' + localStepsResult.result].join('\n');
+                onSend('Explain this step-by-step solution in simple terms:\n\n' + text);
+                setLocalStepsResult(null);
+              }}
+              onClose={() => setLocalStepsResult(null)}
+            />
           )}
 
           {/* Inline Desmos graph (from detected graph expressions) */}
