@@ -1,48 +1,103 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Language, ChatMessage } from '../types';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Language, ChatMessage, GraphDefinition, MathHistoryItem, MathExtractResult, MathOperation } from '../types';
 import { translations } from '../translations';
+import Graphs from './Graphs';
+import HandwritingCanvas from './HandwritingCanvas';
+import VoiceToMathModal from './VoiceToMathModal';
+import { parseSolutionMethods, isMathSolution, parseMathResponse } from '../services/solutionParser';
 import { geminiService } from '../services/geminiService';
+import { casService, matrixToPmatrix } from '../services/casService';
+import KatexBlock from './KatexBlock';
+import { cacheService, CacheKey } from '../services/cacheService';
 
+// We use MathLive custom element, define types to avoid TS errors
 const MathFieldTag = 'math-field' as any;
+declare const Desmos: any;
 
-type MathCategory = 'General' | 'Algebra' | 'Geometry' | 'Calculus' | 'Stats' | 'Physics';
+type MathCategory = 'General' | 'Algebra' | 'Geometry' | 'Calculus' | 'Stats' | 'Physics' | 'Matrix' | 'Number' | 'Graphs';
 
 const CATEGORIES: Record<MathCategory, { icon: string; tools: { label: string, cmd: string, type: 'insert' | 'action' }[] }> = {
-  'General': { icon: 'fa-calculator', tools: [
-    { label: 'Simplify', cmd: 'simplify', type: 'action' },
-    { label: 'Fraction', cmd: '\\frac{\\placeholder}{\\placeholder}', type: 'insert' },
-    { label: 'Sqrt', cmd: '\\sqrt{\\placeholder}', type: 'insert' },
-    { label: 'Power', cmd: '^\\placeholder', type: 'insert' },
-  ]},
-  'Algebra': { icon: 'fa-x', tools: [
-    { label: 'Solve', cmd: 'solve', type: 'action' },
-    { label: 'Factor', cmd: 'factor', type: 'action' },
-    { label: 'Expand', cmd: 'expand', type: 'action' },
-  ]},
-  'Geometry': { icon: 'fa-shapes', tools: [
-    { label: 'Area', cmd: 'calculate area', type: 'action' },
-    { label: 'Volume', cmd: 'calculate volume', type: 'action' },
-    { label: 'Pi', cmd: '\\pi', type: 'insert' },
-  ]},
-  'Calculus': { icon: 'fa-infinity', tools: [
-    { label: 'Derivative', cmd: 'find derivative', type: 'action' },
-    { label: 'Integral', cmd: 'find integral', type: 'action' },
-    { label: 'Limit', cmd: '\\lim_{x \\to \\infty}', type: 'insert' },
-  ]},
-  'Stats': { icon: 'fa-chart-bar', tools: [
-    { label: 'Mean', cmd: 'calculate mean', type: 'action' },
-    { label: 'Median', cmd: 'calculate median', type: 'action' },
-    { label: 'Std Dev', cmd: 'standard deviation', type: 'action' },
-  ]},
-  'Physics': { icon: 'fa-atom', tools: [
-    { label: 'Evaluate', cmd: 'evaluate', type: 'action' },
-    { label: 'Force', cmd: 'F = ma', type: 'insert' },
-    { label: 'Energy', cmd: 'E = mc^2', type: 'insert' },
-  ]},
+  'General': {
+    icon: 'fa-calculator',
+    tools: [
+      { label: 'Simplify', cmd: 'simplify', type: 'action' },
+      { label: 'Fraction', cmd: '\\frac{\\placeholder}{\\placeholder}', type: 'insert' },
+      { label: 'Sqrt', cmd: '\\sqrt{\\placeholder}', type: 'insert' },
+      { label: 'Power', cmd: '^\\placeholder', type: 'insert' },
+    ]
+  },
+  'Algebra': {
+    icon: 'fa-x',
+    tools: [
+      { label: 'Solve x', cmd: 'solve for x', type: 'action' },
+      { label: 'Factor', cmd: 'factor', type: 'action' },
+      { label: 'Expand', cmd: 'expand', type: 'action' },
+    ]
+  },
+  'Geometry': {
+    icon: 'fa-shapes',
+    tools: [
+      { label: 'Area', cmd: 'calculate area', type: 'action' },
+      { label: 'Volume', cmd: 'calculate volume', type: 'action' },
+      { label: 'Pi', cmd: '\\pi', type: 'insert' },
+    ]
+  },
+  'Calculus': {
+    icon: 'fa-infinity',
+    tools: [
+      { label: 'Derive', cmd: 'find derivative', type: 'action' },
+      { label: 'Integrate', cmd: 'find integral', type: 'action' },
+      { label: 'Limit', cmd: '\\lim_{x \\to \\infty}', type: 'insert' },
+    ]
+  },
+  'Stats': {
+    icon: 'fa-chart-bar',
+    tools: [
+      { label: 'Mean', cmd: 'calculate mean', type: 'action' },
+      { label: 'Median', cmd: 'calculate median', type: 'action' },
+      { label: 'Std Dev', cmd: 'standard deviation', type: 'action' },
+    ]
+  },
+  'Physics': {
+    icon: 'fa-atom',
+    tools: [
+      { label: 'Evaluate', cmd: 'evaluate with units', type: 'action' },
+      { label: 'Force', cmd: 'F = ma', type: 'insert' },
+      { label: 'Energy', cmd: 'E = mc^2', type: 'insert' },
+      { label: 'Explain', cmd: 'explain physics concept', type: 'action' },
+    ]
+  },
+  'Matrix': {
+    icon: 'fa-table-cells',
+    tools: [
+      { label: 'Determinant', cmd: 'matrix det', type: 'action' },
+      { label: 'Inverse', cmd: 'matrix inv', type: 'action' },
+      { label: 'Eigenvalues', cmd: 'matrix eigs', type: 'action' },
+      { label: 'Rank', cmd: 'matrix rank', type: 'action' },
+      { label: 'RREF', cmd: 'matrix rref', type: 'action' },
+    ]
+  },
+  'Number': {
+    icon: 'fa-hashtag',
+    tools: [
+      { label: 'Prime factors', cmd: 'number prime', type: 'action' },
+      { label: 'GCD', cmd: 'number gcd', type: 'action' },
+      { label: 'LCM', cmd: 'number lcm', type: 'action' },
+      { label: 'a mod m', cmd: 'number mod', type: 'action' },
+      { label: 'To binary', cmd: 'number to binary', type: 'action' },
+      { label: 'To hex', cmd: 'number to hex', type: 'action' },
+      { label: 'To octal', cmd: 'number to octal', type: 'action' },
+      { label: 'To decimal', cmd: 'number to decimal', type: 'action' },
+    ]
+  },
+  'Graphs': {
+    icon: 'fa-chart-line',
+    tools: [
+      { label: 'Open Graphs', cmd: 'open graphs', type: 'action' },
+    ]
+  }
 };
-
-const MATHLIVE_SCRIPT = 'https://unpkg.com/mathlive';
 
 interface MathsModeProps {
   onClose: () => void;
@@ -53,65 +108,151 @@ interface MathsModeProps {
   isTyping: boolean;
 }
 
-interface AiMessage { id: string; content: string; isAI: boolean; }
+const MATHLIVE_SCRIPT = 'https://unpkg.com/mathlive';
+const DESMOS_SCRIPT = 'https://www.desmos.com/api/v1.11/calculator.js?apiKey=b3a6bd693b2740f9a2fff51731e27d61';
 
-function parseMethodBlocks(text: string): { name: string; steps: string[] }[] {
-  const re = /---METHOD:\s*(.+?)\s*---\n([\s\S]*?)---ENDMETHOD---/gi;
-  const out: { name: string; steps: string[] }[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text))) {
-    out.push({ name: m[1].trim(), steps: m[2].trim().split('\n').filter(l => l.trim()) });
-  }
-  if (!out.length && text.trim()) {
-    out.push({ name: 'Solution', steps: text.trim().split('\n').filter(l => l.trim()) });
-  }
-  return out;
-}
+// ─── Solution display components (unchanged) ─────────────────────────────────
 
-const MathResultCard: React.FC<{ content: string }> = ({ content }) => {
-  const methods = parseMethodBlocks(content);
-  const [active, setActive] = useState(0);
-  const m = methods[active];
+const MathSolutionCard: React.FC<{ content: string }> = ({ content }) => {
+  const parsed = parseMathResponse(content);
+  const [openMethod, setOpenMethod] = useState(0);
+
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-[20px] border border-indigo-500/20 shadow-lg overflow-hidden w-full">
-      {methods.length > 1 && (
-        <div className="flex gap-2 p-3 border-b border-black/5 dark:border-white/5 flex-wrap">
-          {methods.map((mm, i) => (
-            <button key={i} onClick={() => setActive(i)}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${active === i ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-indigo-50'}`}>
-              {mm.name}
+    <div className="space-y-4 w-full">
+      {parsed.preamble && (
+        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">{parsed.preamble}</p>
+      )}
+      {parsed.methods.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {parsed.methods.map((m, i) => (
+            <button key={i} onClick={() => setOpenMethod(i)}
+              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${
+                openMethod === i ? 'bg-indigo-600 text-white' : 'bg-slate-100 dark:bg-white/5 text-slate-500 hover:bg-indigo-50'
+              }`}>
+              {m.name}
             </button>
           ))}
         </div>
       )}
-      <div className="p-5 space-y-2">
-        <div className="text-[10px] font-black uppercase tracking-widest text-indigo-500 flex items-center gap-2 mb-3">
-          <i className="fa-solid fa-list-check" />{m.name}
-        </div>
-        {m.steps.map((step, i) => {
-          const isFinal = /^final answer/i.test(step);
-          return (
-            <div key={i} className={`flex gap-3 items-start ${isFinal ? 'pt-3 border-t border-indigo-200 dark:border-indigo-800 mt-2' : ''}`}>
-              {!isFinal && <span className="text-[9px] font-black text-indigo-400 mt-0.5 shrink-0 w-5">{i + 1}.</span>}
-              <span className={`text-sm leading-relaxed font-mono ${isFinal ? 'font-black text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>{step}</span>
+      {parsed.methods[openMethod] && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-indigo-500/20 p-5 space-y-3">
+          <h4 className="text-[10px] font-black uppercase tracking-widest text-indigo-600">{parsed.methods[openMethod].name}</h4>
+          {parsed.methods[openMethod].steps.split('\n').filter(l => l.trim()).map((step, i) => (
+            <div key={i} className="flex gap-3 items-start">
+              <span className="text-[9px] font-black text-indigo-400 mt-1 shrink-0 min-w-[20px]">{i + 1}.</span>
+              <span className="text-sm font-medium text-slate-800 dark:text-slate-200 leading-relaxed font-mono">{step.trim()}</span>
             </div>
-          );
-        })}
-      </div>
+          ))}
+        </div>
+      )}
+      {parsed.verification && (
+        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-500/20 rounded-2xl p-4">
+          <p className="text-[9px] font-black uppercase tracking-widest text-emerald-600 mb-2">Verification</p>
+          <p className="text-sm text-slate-700 dark:text-slate-300 font-mono leading-relaxed whitespace-pre-wrap">{parsed.verification}</p>
+        </div>
+      )}
     </div>
   );
 };
 
+const SolutionMessageContent: React.FC<{ content: string }> = ({ content }) => {
+  const methods = parseSolutionMethods(content);
+  const [activeTab, setActiveTab] = useState(0);
+
+  if (isMathSolution(content)) return <MathSolutionCard content={content} />;
+
+  if (methods && methods.length > 1) {
+    return (
+      <div className="w-full">
+        <div className="flex flex-wrap gap-2 mb-4 border-b border-slate-200 dark:border-white/10 pb-2">
+          {methods.map((m, i) => (
+            <button key={i} onClick={() => setActiveTab(i)}
+              className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all ${
+                activeTab === i ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-indigo-500/50'
+              }`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(methods[activeTab].content) ? 'sinhala-text' : ''}`}>
+          {methods[activeTab].content}
+        </div>
+      </div>
+    );
+  }
+
+  const displayContent = methods?.length === 1 ? methods[0].content : content;
+  return (
+    <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(displayContent) ? 'sinhala-text' : ''}`}>
+      {displayContent}
+    </div>
+  );
+};
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
 const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, messages, onSend, isTyping }) => {
+  const t = translations[lang];
   const [activeCat, setActiveCat] = useState<MathCategory>('General');
   const [selectedFile, setSelectedFile] = useState<{ data: string; mimeType: string; name: string } | null>(null);
   const [mathLiveReady, setMathLiveReady] = useState(false);
+  const [desmosReady, setDesmosReady] = useState(false);
+  const [graphExpression, setGraphExpression] = useState<string | null>(null);
+  const [showGraphs, setShowGraphs] = useState(false);
+  const [graphSource, setGraphSource] = useState<'manual' | 'question' | null>(null);
+  const [currentGraph, setCurrentGraph] = useState<GraphDefinition | null>(null);
+  const [showHandwriting, setShowHandwriting] = useState(false);
+  const [handwritingRecognizing, setHandwritingRecognizing] = useState(false);
+  const [showVoiceMath, setShowVoiceMath] = useState(false);
+  const [equationCount, setEquationCount] = useState(1);
+  const [unitsMode, setUnitsMode] = useState(false);
+  const [matrixRows, setMatrixRows] = useState(2);
+  const [matrixCols, setMatrixCols] = useState(2);
+  const [matrixGrid, setMatrixGrid] = useState<number[][]>([[0, 0], [0, 0]]);
+  const [matrixResult, setMatrixResult] = useState<{
+    op: string; latex?: string; scalar?: number; text?: string; error?: string;
+  } | null>(null);
+  const [localStepsResult, setLocalStepsResult] = useState<{
+    kind: 'derivative' | 'integral' | 'solve' | 'units' | 'number';
+    title: string;
+    steps: string[];
+    result: string;
+    resultLatex?: string;
+    input: string;
+  } | null>(null);
+  const [inputMode, setInputMode] = useState<'math' | 'text'>('math');
+  const [textInput, setTextInput] = useState('');
+  const [mathHistory, setMathHistory] = useState<MathHistoryItem[]>(
+    () => cacheService.get<MathHistoryItem[]>(CacheKey.MATH_HISTORY, [])
+  );
   const [isSolving, setIsSolving] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [aiMessages, setAiMessages] = useState<AiMessage[]>([]);
-  const mfRef = useRef<any>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Track AI extraction status separately so UI can show a message
+  const [extractionStatus, setExtractionStatus] = useState<string | null>(null);
 
+  const equationRefs = useRef<(any)[]>([]);
+  const focusedMathFieldRef = useRef<any>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const desmosContainerRef = useRef<HTMLDivElement | null>(null);
+  const desmosCalcRef = useRef<any>(null);
+  const handwritingClosedByUserRef = useRef(false);
+
+  // Persist math history
+  useEffect(() => { cacheService.set(CacheKey.MATH_HISTORY, mathHistory); }, [mathHistory]);
+
+  const appendMathHistory = (item: Omit<MathHistoryItem, 'id' | 'createdAt'>) => {
+    const entry: MathHistoryItem = { id: `math-${Date.now()}-${Math.random().toString(16).slice(2)}`, createdAt: new Date().toISOString(), ...item };
+    setMathHistory(prev => [entry, ...prev].slice(0, 50));
+  };
+
+  // Resize matrix grid when rows/cols change
+  useEffect(() => {
+    if (activeCat !== 'Matrix') return;
+    setMatrixGrid(prev => Array.from({ length: matrixRows }, (_, r) =>
+      Array.from({ length: matrixCols }, (_, c) => prev[r]?.[c] ?? 0)
+    ));
+  }, [matrixRows, matrixCols, activeCat]);
+
+  // Load MathLive
   useEffect(() => {
     if (typeof document === 'undefined') return;
     if (customElements.get('math-field')) { setMathLiveReady(true); return; }
@@ -124,57 +265,433 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     document.head.appendChild(script);
   }, []);
 
+  // Load Desmos
   useEffect(() => {
-    if (!mathLiveReady || !mfRef.current) return;
-    mfRef.current.smartMode = true;
-    mfRef.current.virtualKeyboardMode = 'manual';
-    setTimeout(() => mfRef.current?.focus(), 300);
-  }, [mathLiveReady]);
+    if (typeof document === 'undefined') return;
+    if ((window as any).Desmos) { setDesmosReady(true); return; }
+    const existing = document.querySelector(`script[src="${DESMOS_SCRIPT}"]`) as HTMLScriptElement | null;
+    if (existing) { existing.addEventListener('load', () => setDesmosReady(true), { once: true }); return; }
+    const script = document.createElement('script');
+    script.src = DESMOS_SCRIPT; script.async = true;
+    script.onload = () => setDesmosReady(true);
+    script.onerror = () => setDesmosReady(false);
+    document.head.appendChild(script);
+  }, []);
 
-  const handleAction = async (command: string) => {
-    const rawLatex = mfRef.current?.value?.trim();
-    if (!rawLatex && !selectedFile) return;
-    setIsSolving(true);
-    setStatusMsg('Generating step-by-step solution…');
-    const fileData = selectedFile || undefined;
-    try {
-      let prompt: string;
-      if (fileData && !rawLatex) {
-        prompt = `Analyze this math problem image and ${command}. Show every step.`;
-      } else if (fileData && rawLatex) {
-        prompt = `Math image provided. Expression: ${rawLatex}. ${command}. Show every step.`;
-      } else {
-        prompt = `${command} the expression: ${rawLatex}`;
-      }
-      const result = await geminiService.solveMathWithAI({ prompt, fileData });
-      const id = `m-${Date.now()}`;
-      setAiMessages(prev => [...prev,
-        { id: `${id}-q`, content: rawLatex || '(image)', isAI: false },
-        { id: `${id}-a`, content: result, isAI: true },
-      ]);
-    } catch (err: any) {
-      // Fallback to main chat (e.g. plan limit reached)
-      const prompt = fileData ? `Solve this math problem. ${command}.` : `${command}: ${rawLatex}. Show full step-by-step working.`;
-      onSend(prompt, fileData);
-    } finally {
-      setIsSolving(false);
-      setStatusMsg(null);
-      if (selectedFile) setSelectedFile(null);
+  // Init inline Desmos (only when NOT showing the full Graphs panel)
+  useEffect(() => {
+    if (showGraphs) {
+      if (desmosCalcRef.current) { try { desmosCalcRef.current.destroy(); } catch {} desmosCalcRef.current = null; }
+      return;
     }
+    if (!desmosReady || !desmosContainerRef.current || desmosCalcRef.current) return;
+    try {
+      desmosCalcRef.current = (window as any).Desmos?.GraphingCalculator(desmosContainerRef.current, {
+        expressions: true, keypad: true, graphpaper: true,
+      }) ?? null;
+    } catch { desmosCalcRef.current = null; }
+    return () => {
+      if (desmosCalcRef.current) { try { desmosCalcRef.current.destroy(); } catch {} desmosCalcRef.current = null; }
+    };
+  }, [desmosReady, showGraphs]);
+
+  // Check for pending graph expression from other workspace modes
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.sessionStorage) return;
+    try {
+      const pending = window.sessionStorage.getItem('pendingGraphExpression');
+      if (pending?.trim()) {
+        setGraphExpression(pending.trim());
+        setCurrentGraph({ id: 'graph-from-question', type: 'function', expressionLatex: pending.trim(), xDomain: { min: -10, max: 10 } });
+        setGraphSource('question');
+        setShowGraphs(true);
+        window.sessionStorage.removeItem('pendingGraphExpression');
+      }
+    } catch {}
+  }, []);
+
+  // Plot expression on inline Desmos when expression changes
+  useEffect(() => {
+    if (!desmosCalcRef.current || !graphExpression) return;
+    try {
+      const calc = desmosCalcRef.current;
+      calc.setExpression({ id: 'main', latex: graphExpression });
+      if (graphExpression.includes('=')) {
+        const analysis = casService.functionAnalysis(graphExpression);
+        analysis.roots.forEach((x, i) => {
+          try { calc.setExpression({ id: `analysis_root_${i}`, latex: `(${x}, 0)`, showLabel: true, label: 'Root' }); } catch {}
+        });
+        if (analysis.yIntercept != null) {
+          try { calc.setExpression({ id: 'analysis_yint', latex: `(0, ${analysis.yIntercept})`, showLabel: true, label: 'y-intercept' }); } catch {}
+        }
+        analysis.criticalPoints.forEach((x, i) => {
+          const y = casService.evaluateRHSAt(graphExpression, x);
+          if (y != null) try { calc.setExpression({ id: `analysis_crit_${i}`, latex: `(${x}, ${y})`, showLabel: true, label: 'Extremum' }); } catch {}
+        });
+        analysis.verticalAsymptotes.forEach((x, i) => {
+          try { calc.setExpression({ id: `analysis_asymp_${i}`, latex: `x = ${x}` }); } catch {}
+        });
+      }
+    } catch {}
+  }, [graphExpression]);
+
+  useEffect(() => {
+    if (!mathLiveReady) return;
+    const first = equationRefs.current[0];
+    if (first) {
+      // Apply settings after a tick to ensure the element is fully upgraded
+      setTimeout(() => {
+        try {
+          if (first.mathfield) first.mathfield.focus();
+          else first.focus?.();
+        } catch {}
+      }, 300);
+    }
+  }, [mathLiveReady, equationCount]);
+
+  const getEquations = (): string[] => {
+    if (inputMode === 'text') {
+      const s = textInput.trim();
+      return s ? [s] : [];
+    }
+    return equationRefs.current
+      .slice(0, equationCount)
+      .map(r => r?.value?.trim())
+      .filter((s): s is string => Boolean(s));
   };
 
   const insertSymbol = (cmd: string) => {
-    if (mfRef.current) { mfRef.current.executeCommand(['insert', cmd]); mfRef.current.focus(); }
+    const target = focusedMathFieldRef.current ?? equationRefs.current[0];
+    if (target) {
+      target.executeCommand(['insert', cmd]);
+      target.focus();
+    }
+  };
+
+  const clearInput = () => {
+    if (inputMode === 'text') {
+      setTextInput('');
+    } else {
+      equationRefs.current.slice(0, equationCount).forEach(mf => { if (mf) mf.value = ''; });
+    }
+    setSelectedFile(null);
+  };
+
+  // ─── Symbolab-style pipeline ────────────────────────────────────────────────
+  // 1. Get input (text paragraph / image / LaTeX field)
+  // 2. If text or image → Gemini extracts clean expression + operation
+  // 3. Feed extracted expression to local CAS for step-by-step
+  // 4. If CAS can't handle → fallback to Gemini AI with structured prompt
+
+  /** Extract expression via Gemini from text or image, then route to local CAS. */
+  const runWithExtraction = async (command: string, rawText: string | undefined, fileData?: { data: string; mimeType: string; name: string }) => {
+    setIsSolving(true);
+    setExtractionStatus(fileData ? 'Reading image with AI…' : 'Extracting math from text…');
+    try {
+      const extracted = await geminiService.extractMathFromInput(rawText, fileData);
+
+      if (extracted.unreadable) {
+        // Can't extract — send directly to AI
+        setExtractionStatus(null);
+        const prompt = fileData
+          ? `Analyze this math problem. ${command}. Show all steps.`
+          : `${command}: ${rawText}. Show step-by-step working.`;
+        onSend(prompt, fileData);
+        return;
+      }
+
+      const expr = (typeof extracted.latexExpression === 'string' && extracted.latexExpression.trim())
+        ? extracted.latexExpression.trim()
+        : String(Array.isArray(extracted.expression) ? extracted.expression[0] : extracted.expression || '').trim();
+
+      if (!expr) {
+        setExtractionStatus(null);
+        onSend(rawText ? `${command}: ${rawText}` : command, fileData);
+        return;
+      }
+
+      setExtractionStatus(`Solving: ${expr}`);
+
+      const op: MathOperation = extracted.operation ?? commandToOperation(command);
+      const variable = extracted.variable || 'x';
+
+      let solved = false;
+
+      if (op === 'differentiate') {
+        const out = casService.derivativeWithSteps(expr, variable);
+        if (out && out.steps.length > 1) {
+          setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input: expr });
+          appendMathHistory({ kind: 'expression', inputLatex: expr, result: out.result, graph: null });
+          solved = true;
+        }
+      } else if (op === 'integrate') {
+        const out = casService.integralWithSteps(expr, variable);
+        let resultTex = '';
+        try {
+          const nerd = (await import('nerdamer')).default;
+          await import('nerdamer/Calculus');
+          resultTex = nerd(`integrate(${expr}, ${variable})`).toTeX();
+        } catch {}
+        if (out && (out.steps.length > 1 || resultTex)) {
+          const steps = [...(out.steps || [])];
+          if (resultTex && !steps.some(s => s.includes(resultTex))) steps.push(`Result: $${resultTex}$`);
+          const result = resultTex || out.result || '';
+          setLocalStepsResult({ kind: 'integral', title: 'Integral — Step by Step', steps, result, input: expr });
+          appendMathHistory({ kind: 'expression', inputLatex: expr, result, graph: null });
+          solved = true;
+        }
+      } else if (op === 'solve') {
+        const out = casService.solveEquationWithSteps(expr, variable);
+        if (out && out.steps.length > 1) {
+          const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
+          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input: expr });
+          appendMathHistory({ kind: 'expression', inputLatex: expr, result, graph: null });
+          solved = true;
+        }
+      } else if (op === 'simplify') {
+        try {
+          const simplified = casService.simplify(expr);
+          setLocalStepsResult({ kind: 'solve', title: 'Simplification', steps: [`Input: ${expr}`, `Simplified: ${simplified}`], result: simplified, input: expr });
+          appendMathHistory({ kind: 'expression', inputLatex: expr, result: simplified, graph: null });
+          solved = true;
+        } catch {}
+      }
+
+      if (!solved) {
+        // CAS couldn't handle it — send to Gemini AI with the extracted expression
+        setExtractionStatus(null);
+        const multiMethodInstruction = `Show ALL steps clearly numbered. If multiple methods exist, use this format:
+---METHOD: [Method Name] ---
+Step 1: ...
+...
+---ENDMETHOD---`;
+        const prompt = `${command} the expression: ${expr} (variable: ${variable})\n${multiMethodInstruction}`;
+        onSend(prompt, fileData);
+      }
+
+    } catch (e) {
+      setExtractionStatus(null);
+      const msg = e instanceof Error ? e.message : 'Extraction failed';
+      // Fallback: just send raw input to AI
+      const prompt = fileData
+        ? `Solve this math problem step by step. ${command}.`
+        : `${command}: ${rawText}. Show full step-by-step working.`;
+      onSend(prompt, fileData);
+    } finally {
+      setIsSolving(false);
+      setExtractionStatus(null);
+    }
+  };
+
+  // ─── Main action handler ──────────────────────────────────────────────────
+
+  const handleAction = async (command: string) => {
+
+    // ── TEXT MODE: extract via AI then feed to CAS ──
+    if (inputMode === 'text') {
+      const rawText = textInput.trim();
+      if (!rawText && !selectedFile) return;
+      await runWithExtraction(command, rawText || undefined, selectedFile || undefined);
+      if (selectedFile) setSelectedFile(null);
+      return;
+    }
+
+    const equations = getEquations();
+    const rawLatex = equations.length === 1 ? equations[0] : equations.join(' ; ');
+
+    // ── IMAGE ATTACHED: extract expression via Gemini then solve locally ──
+    if (selectedFile && !rawLatex) {
+      await runWithExtraction(command, undefined, selectedFile);
+      setSelectedFile(null);
+      return;
+    }
+
+    // ── IMAGE + LATEX: use AI with both ──
+    if (selectedFile && rawLatex) {
+      const prompt = `Image contains a math problem. Also given expression: ${rawLatex}. ${command}. Show all steps.`;
+      onSend(prompt, selectedFile);
+      setSelectedFile(null);
+      return;
+    }
+
+    // ── MATRIX OPERATIONS ──
+    if (/matrix\s+(det|inv|eigs|rank|rref)/i.test(command)) {
+      const grid = matrixGrid.map(row => row.map(Number));
+      const op = command.replace(/matrix\s+/i, '').toLowerCase();
+      if (op === 'det') {
+        const out = casService.matrixDet(grid);
+        if (out.error) setMatrixResult({ op: 'Determinant', error: out.error });
+        else { setMatrixResult({ op: 'Determinant', scalar: out.value, latex: matrixToPmatrix(grid) }); appendMathHistory({ kind: 'expression', inputLatex: `det(${matrixToPmatrix(grid)})`, result: String(out.value), graph: null }); }
+        return;
+      }
+      if (op === 'inv') {
+        const out = casService.matrixInv(grid);
+        if (out.error) setMatrixResult({ op: 'Inverse', error: out.error });
+        else { const latex = matrixToPmatrix(out.matrix!); setMatrixResult({ op: 'Inverse', latex }); appendMathHistory({ kind: 'expression', inputLatex: 'A⁻¹', result: latex, graph: null }); }
+        return;
+      }
+      if (op === 'eigs') {
+        const out = casService.matrixEigs(grid);
+        if (out.error) setMatrixResult({ op: 'Eigenvalues', error: out.error });
+        else { const vals = out.values!.map(v => Math.abs(v) < 1e-10 ? 0 : v); setMatrixResult({ op: 'Eigenvalues', text: `\\lambda = ${vals.join(', ')}`, latex: matrixToPmatrix(grid) }); appendMathHistory({ kind: 'expression', inputLatex: matrixToPmatrix(grid), result: `λ = ${vals.join(', ')}`, graph: null }); }
+        return;
+      }
+      if (op === 'rank') {
+        const out = casService.matrixRank(grid);
+        if (out.error) setMatrixResult({ op: 'Rank', error: out.error });
+        else { setMatrixResult({ op: 'Rank', scalar: out.rank, latex: matrixToPmatrix(grid) }); }
+        return;
+      }
+      if (op === 'rref') {
+        const out = casService.matrixRref(grid);
+        if (out.error) setMatrixResult({ op: 'RREF', error: out.error });
+        else { const latex = matrixToPmatrix(out.matrix!); setMatrixResult({ op: 'RREF', latex }); }
+        return;
+      }
+    }
+
+    // ── NUMBER THEORY (local CAS, no AI needed) ──
+    if (/^number\s+/i.test(command) && equations.length >= 1) {
+      const raw = (equations[0] || '').replace(/\\cdot|\\times/g, '').replace(/\\mod|\\bmod/g, ' mod ').replace(/\s+/g, ' ').trim();
+      const cmd = command.replace(/^number\s+/i, '').toLowerCase();
+      let title = '', result = '', error: string | undefined;
+      if (cmd === 'prime') { const n = parseInt(raw.replace(/,/g, ''), 10); const out = casService.primeFactors(n); title = 'Prime Factorisation'; if (out.error) error = out.error; else result = out.result!; }
+      else if (cmd === 'gcd') { const parts = raw.split(/[,;\s]+/).map(s => parseInt(s.trim(), 10)).filter(Number.isFinite); const out = parts.length >= 2 ? casService.gcd(parts[0], parts[1]) : { error: 'Enter two integers (e.g. 12, 18)' }; title = 'GCD'; if (out.error) error = out.error; else result = String((out as any).value); }
+      else if (cmd === 'lcm') { const parts = raw.split(/[,;\s]+/).map(s => parseInt(s.trim(), 10)).filter(Number.isFinite); const out = parts.length >= 2 ? casService.lcm(parts[0], parts[1]) : { error: 'Enter two integers' }; title = 'LCM'; if (out.error) error = out.error; else result = String((out as any).value); }
+      else if (cmd === 'mod') { const modMatch = raw.match(/^(.+?)\s+mod\s+(\d+)$/i) || raw.split(/[,;\s]+/).map(s => s.trim()); const a = modMatch[2] != null ? parseFloat(modMatch[1]) : parseFloat(modMatch[0]); const m = modMatch[2] != null ? parseInt(modMatch[2], 10) : parseInt(modMatch[1], 10); const out = Number.isFinite(a) && Number.isFinite(m) ? casService.mod(a, m) : { error: 'Enter a mod m (e.g. 17 mod 5)' }; title = 'a mod m'; if (out.error) error = out.error; else result = String((out as any).value); }
+      else if (/^to\s+(binary|hex|octal|decimal)$/i.test(cmd)) { const toBase = cmd.includes('binary') ? 2 : cmd.includes('hex') ? 16 : cmd.includes('octal') ? 8 : 10; const out = casService.baseConvert(raw, toBase as 2 | 8 | 10 | 16); title = `Base → ${toBase === 2 ? 'Binary' : toBase === 16 ? 'Hex' : toBase === 8 ? 'Octal' : 'Decimal'}`; if (out.error) error = out.error; else result = out.value!; }
+      if (title) { setLocalStepsResult({ kind: 'number', title, steps: error ? [error] : [], result: error ? '' : result, input: raw }); if (!error) appendMathHistory({ kind: 'expression', inputLatex: raw, result, graph: null }); return; }
+    }
+
+    if (command === 'open graphs') { setGraphSource('manual'); setShowGraphs(true); return; }
+
+    // ── PHYSICS UNITS (local CAS) ──
+    if (/evaluate with units/i.test(command) && equations.length >= 1) {
+      const input = (equations[0] || '').trim();
+      if (input) {
+        const out = casService.evaluateWithUnits(input);
+        setLocalStepsResult({ kind: 'units', title: 'Unit Calculation', steps: out.error ? [`Error: ${out.error}`] : [], result: out.result || '', input });
+        if (!out.error) appendMathHistory({ kind: 'expression', inputLatex: input, result: out.result || '', graph: null });
+        return;
+      }
+    }
+
+    // ── LATEX MATH FIELD MODE: try local CAS first ──
+    if (!rawLatex && !selectedFile) return;
+
+    const isDerivativeCommand = /derivative|derive|differentiat/i.test(command);
+    const isIntegralCommand = /integral|integrate/i.test(command);
+    const isSolveCommand = /solve|Solve/i.test(command);
+
+    let casHandled = false;
+
+    if (!selectedFile && equations.length === 1 && equations[0]?.trim()) {
+      const input = equations[0].trim();
+
+      if (isDerivativeCommand) {
+        const out = casService.derivativeWithSteps(input, 'x');
+        if (out && out.steps.length > 1) {
+          setLocalStepsResult({ kind: 'derivative', title: 'Derivative — Step by Step', steps: out.steps, result: out.result, resultLatex: out.resultLatex, input });
+          appendMathHistory({ kind: 'expression', inputLatex: input, result: out.result, graph: null });
+          casHandled = true;
+        }
+      }
+      if (!casHandled && isIntegralCommand) {
+        const out = casService.integralWithSteps(input, 'x');
+        if (out && out.steps.length > 1) {
+          let resultTex = '';
+          try {
+            const nerd = (await import('nerdamer')).default;
+            await import('nerdamer/Calculus');
+            resultTex = nerd(`integrate(${input}, x)`).toTeX();
+          } catch {}
+          const steps = [...(out.steps || [])];
+          if (resultTex && steps.length > 0) steps.push(`Result: $${resultTex}$`);
+          setLocalStepsResult({ kind: 'integral', title: 'Integral — Step by Step', steps, result: resultTex || out.result, input });
+          appendMathHistory({ kind: 'expression', inputLatex: input, result: resultTex || out.result, graph: null });
+          casHandled = true;
+        }
+      }
+      if (!casHandled && isSolveCommand) {
+        const out = casService.solveEquationWithSteps(input, 'x');
+        if (out && out.steps.length > 1) {
+          const result = out.roots?.length ? out.roots.map(r => typeof r === 'number' ? r.toFixed(4) : r).join(', ') : out.steps[out.steps.length - 1] || '';
+          setLocalStepsResult({ kind: 'solve', title: 'Solution — Step by Step', steps: out.steps, result, input });
+          appendMathHistory({ kind: 'expression', inputLatex: input, result, graph: null });
+          casHandled = true;
+        }
+      }
+
+      // System of equations via nerdamer
+      if (!casHandled && equations.length > 1 && isSolveCommand) {
+        try {
+          const result = casService.solveEquations(equations);
+          if (result.solution) {
+            setLocalStepsResult({ kind: 'solve', title: 'System of Equations', steps: equations.map((e, i) => `Equation ${i + 1}: ${e}`), result: result.solution, input: rawLatex });
+            casHandled = true;
+          }
+        } catch {}
+      }
+    }
+
+    if (casHandled) return;
+
+    // ── FALLBACK: send to Gemini AI with Symbolab-style prompt ──
+    const multiMethodInstruction = `
+Show ALL steps clearly. If multiple methods exist, use this EXACT format:
+---METHOD: [Short method name] ---
+Step 1: ...
+Step 2: ...
+Final Answer: ...
+---ENDMETHOD---`;
+
+    let prompt = '';
+    if (selectedFile) {
+      prompt = `Analyze this math problem image and ${command}. ${multiMethodInstruction}`;
+    } else {
+      prompt = `Mathematical request: ${command}.\nExpression: ${rawLatex}.\n${multiMethodInstruction}`;
+    }
+    onSend(prompt, selectedFile || undefined);
+    setSelectedFile(null);
+  };
+
+  const commandToOperation = (cmd: string): MathOperation => {
+    const l = cmd.toLowerCase();
+    if (l.includes('deriv') || l.includes('diff')) return 'differentiate';
+    if (l.includes('integr')) return 'integrate';
+    if (l.includes('simplif')) return 'simplify';
+    if (l.includes('factor')) return 'factor';
+    if (l.includes('expand')) return 'expand';
+    return 'solve';
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { alert('Image too large (max 10MB).'); return; }
+    const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+    if (file.size > MAX_IMAGE_BYTES) { alert('Image too large. Please upload under 10MB.'); e.target.value = ''; return; }
     const r = new FileReader();
     r.onload = () => setSelectedFile({ data: (r.result as string).split(',')[1], mimeType: file.type, name: file.name });
     r.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  const handleHandwritingRecognize = async (imageDataUrl: string, mimeType: string, base64Data: string) => {
+    setHandwritingRecognizing(true);
+    try {
+      const res = await geminiService.chat('This image shows a handwritten mathematical equation. Extract it and return ONLY the LaTeX code, nothing else. No explanation, no markdown, no backticks—just the raw LaTeX.', {
+        fileData: { data: base64Data, mimeType, name: 'handwriting.png' },
+        history: [],
+      });
+      let latex = (res.text || '').trim().replace(/^```(?:latex|math)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      const target = focusedMathFieldRef.current ?? equationRefs.current[0];
+      if (latex && target) { target.value = latex; target.focus(); }
+      setShowHandwriting(false);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Recognition failed. Try again.');
+    } finally {
+      setHandwritingRecognizing(false);
+    }
   };
 
   const containerClass = embedded
@@ -200,11 +717,15 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         </header>
       )}
 
+      {/* Sidebar Categories */}
       <nav className="w-full md:w-56 bg-slate-50 dark:bg-slate-900/50 border-b md:border-b-0 md:border-r border-black/5 dark:border-white/5 p-2 flex md:flex-col gap-2 overflow-x-auto md:overflow-y-auto no-scrollbar shrink-0">
         {(Object.keys(CATEGORIES) as MathCategory[]).map(cat => (
-          <button key={cat} onClick={() => setActiveCat(cat)}
+          <button key={cat}
+            onClick={() => { if (cat === 'Graphs') { setGraphSource('manual'); setShowGraphs(true); } else { setActiveCat(cat); } }}
             className={`flex items-center gap-3 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all min-w-max md:w-full border ${
-              activeCat === cat ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'text-slate-500 hover:bg-white dark:hover:bg-white/5 border-transparent'
+              activeCat === cat
+                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                : 'text-slate-500 hover:bg-white dark:hover:bg-white/5 border-transparent'
             }`}>
             <i className={`fa-solid ${CATEGORIES[cat].icon} text-sm w-5 text-center`} />
             {cat}
@@ -212,108 +733,406 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
         ))}
       </nav>
 
+      {/* Main Workspace */}
       <main className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 space-y-6">
         <div className="max-w-3xl mx-auto space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-1 border border-indigo-500/20 shadow-xl relative transition-all ring-0 focus-within:ring-2 ring-indigo-500/20">
+
+          {/* Input Area */}
+          <div className="bg-white dark:bg-slate-900 rounded-[24px] p-1 border border-indigo-500/20 shadow-xl relative">
             <div className="flex items-center justify-between px-4 py-2 border-b border-black/5 dark:border-white/5">
               <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <i className="fa-solid fa-pen-to-square" />Equation Editor
+                <i className={`fa-solid ${activeCat === 'Matrix' ? 'fa-table-cells' : 'fa-pen-to-square'}`} />
+                {activeCat === 'Matrix' ? 'Matrix Editor' : 'Equation Editor'}
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => { if (mfRef.current) mfRef.current.value = ''; setSelectedFile(null); }}
-                  className="w-6 h-6 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors" title="Clear">
+              <div className="flex gap-2 flex-wrap items-center">
+                <button onClick={() => { setGraphSource('manual'); setShowGraphs(true); }}
+                  className="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border border-indigo-500/40 text-indigo-600 dark:text-indigo-300 bg-indigo-50/60 dark:bg-indigo-500/10 hover:bg-indigo-100">
+                  <i className="fa-solid fa-chart-line mr-1" />Graphs
+                </button>
+                <button onClick={() => { handwritingClosedByUserRef.current = false; setShowHandwriting(true); }}
+                  className="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2">
+                  <i className="fa-solid fa-pencil" />Draw
+                </button>
+                <button onClick={() => setShowVoiceMath(true)}
+                  className="px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border border-slate-200 dark:border-white/10 text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2">
+                  <i className="fa-solid fa-microphone" />Voice
+                </button>
+                <button onClick={clearInput}
+                  className="w-6 h-6 rounded-full bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 flex items-center justify-center transition-colors" title="Clear Input">
                   <i className="fa-solid fa-trash text-[10px]" />
                 </button>
                 <button onClick={() => fileInputRef.current?.click()}
                   className={`px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-widest border transition-all flex items-center gap-2 ${selectedFile ? 'bg-emerald-500 text-white border-emerald-500' : 'text-slate-500 border-slate-200 dark:border-white/10 hover:bg-slate-50'}`}>
-                  <i className="fa-solid fa-camera" />{selectedFile ? 'Image ✓' : 'Photo'}
+                  <i className="fa-solid fa-camera" />{selectedFile ? 'Image Added' : 'Photo'}
                 </button>
+                {activeCat === 'Physics' && (
+                  <label className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/50 cursor-pointer hover:bg-slate-100 dark:hover:bg-white/5">
+                    <input type="checkbox" checked={unitsMode} onChange={e => setUnitsMode(e.target.checked)} className="rounded border-slate-300 text-indigo-600" />
+                    <span className="text-[9px] font-bold uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                      <i className="fa-solid fa-ruler-combined mr-1" />Units
+                    </span>
+                  </label>
+                )}
+                {/* Input mode toggle */}
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => setInputMode('math')}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center border text-xs ${inputMode === 'math' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'}`} title="Math input">
+                    <i className="fa-solid fa-superscript" />
+                  </button>
+                  <button type="button" onClick={() => setInputMode('text')}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center border text-xs ${inputMode === 'text' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-white/10'}`} title="Text input (sentences, paragraphs)">
+                    <i className="fa-solid fa-align-left" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            {statusMsg && (
-              <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800 flex items-center gap-2">
-                <i className="fa-solid fa-circle-notch fa-spin text-indigo-500 text-xs" />
-                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">{statusMsg}</span>
-              </div>
-            )}
-
-            {selectedFile && (
+            {/* File preview */}
+            {selectedFile && activeCat !== 'Matrix' && (
               <div className="p-4 bg-slate-50 dark:bg-black/20">
-                <div className="relative w-fit">
-                  <button onClick={() => setSelectedFile(null)} className="absolute -top-2 -right-2 z-10 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90">
-                    <i className="fa-solid fa-xmark text-[8px]" />
-                  </button>
-                  <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="h-24 rounded-lg border border-black/10 dark:border-white/10 shadow-sm" alt="Attached" />
+                <div className="relative group w-fit">
+                  <div className="absolute -top-2 -right-2 z-10">
+                    <button onClick={() => setSelectedFile(null)} className="w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg active:scale-90">
+                      <i className="fa-solid fa-xmark text-[8px]" />
+                    </button>
+                  </div>
+                  <img src={`data:${selectedFile.mimeType};base64,${selectedFile.data}`} className="h-24 rounded-lg border border-black/10 dark:border-white/10 shadow-sm" alt="Attached math problem" />
                 </div>
               </div>
             )}
 
-            {mathLiveReady ? (
-              <MathFieldTag ref={mfRef}
-                className="w-full text-xl md:text-3xl p-6 bg-transparent text-slate-900 dark:text-white outline-none min-h-[80px]"
-                style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' }}
-              />
-            ) : (
-              <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 text-sm">Loading math input…</div>
+            {/* AI extraction status indicator */}
+            {extractionStatus && (
+              <div className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 border-b border-indigo-100 dark:border-indigo-800 flex items-center gap-2">
+                <i className="fa-solid fa-circle-notch fa-spin text-indigo-500 text-xs" />
+                <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">{extractionStatus}</span>
+              </div>
             )}
+
+            {/* Matrix grid input */}
+            {activeCat === 'Matrix' && inputMode === 'math' && (
+              <div className="p-4 space-y-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Size</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-600 dark:text-slate-300">Rows</label>
+                    <select value={matrixRows} onChange={e => setMatrixRows(Math.max(1, Math.min(6, Number(e.target.value))))}
+                      className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-sm px-2 py-1">
+                      {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                  <span className="text-slate-400">×</span>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-slate-600 dark:text-slate-300">Cols</label>
+                    <select value={matrixCols} onChange={e => setMatrixCols(Math.max(1, Math.min(6, Number(e.target.value))))}
+                      className="rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-sm px-2 py-1">
+                      {[2, 3, 4, 5, 6].map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="border-collapse">
+                    <tbody>
+                      {matrixGrid.map((row, r) => (
+                        <tr key={r}>
+                          {row.map((val, c) => (
+                            <td key={c} className="p-0.5">
+                              <input type="number" value={matrixGrid[r][c]}
+                                onChange={e => {
+                                  const v = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                  setMatrixGrid(prev => prev.map((row, ri) => row.map((cell, ci) => ri === r && ci === c ? (Number.isFinite(v) ? v : cell) : cell)));
+                                }}
+                                className="w-14 h-9 text-center rounded border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                                step="any"
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase">Preview</span>
+                  <div className="min-h-[40px] flex items-center">
+                    <KatexBlock latex={matrixToPmatrix(matrixGrid)} className="text-lg text-slate-700 dark:text-slate-200" />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Text mode: paragraph/sentence input */}
+            {inputMode === 'text' && activeCat !== 'Matrix' && (
+              <div className="p-3">
+                <textarea value={textInput} onChange={e => setTextInput(e.target.value)}
+                  placeholder="Type your math problem in plain text — e.g. 'find the derivative of x squared plus 5x' or 'solve 2x + 3 = 7' or paste an equation paragraph. AI will extract and solve it."
+                  className="w-full min-h-[96px] text-sm md:text-base p-4 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white resize-y outline-none focus:border-indigo-500"
+                />
+                <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 px-1">
+                  <i className="fa-solid fa-wand-magic-sparkles mr-1 text-indigo-400" />
+                  AI will extract the mathematical expression and solve it step by step
+                </p>
+              </div>
+            )}
+
+            {/* Math (MathLive) mode */}
+            {inputMode === 'math' && activeCat !== 'Matrix' && (
+              mathLiveReady ? (
+                <div className="w-full space-y-2 p-2">
+                  {Array.from({ length: equationCount }, (_, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <MathFieldTag
+                        ref={(el: any) => { equationRefs.current[i] = el; }}
+                        onFocus={() => { focusedMathFieldRef.current = equationRefs.current[i]; }}
+                        className="flex-1 text-xl md:text-2xl p-4 bg-transparent text-slate-900 dark:text-white outline-none min-h-[56px] rounded-lg border border-slate-200 dark:border-white/10 focus:border-indigo-500 dark:focus:border-indigo-400"
+                        style={{ '--caret-color': '#4f46e5', '--selection-background-color': '#4f46e550' } as React.CSSProperties}
+                      />
+                      {equationCount > 1 && i === equationCount - 1 && (
+                        <button type="button" onClick={() => setEquationCount(c => Math.max(1, c - 1))}
+                          className="shrink-0 w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-red-500 flex items-center justify-center" title="Remove equation">
+                          <i className="fa-solid fa-minus text-[10px]" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setEquationCount(c => c + 1)}
+                    className="w-full py-2 rounded-lg border border-dashed border-slate-300 dark:border-white/20 text-slate-500 dark:text-slate-400 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 hover:border-indigo-400 transition-colors flex items-center justify-center gap-2">
+                    <i className="fa-solid fa-plus" /> Add equation
+                  </button>
+                </div>
+              ) : (
+                <div className="w-full min-h-[80px] p-6 rounded-xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-white/10 text-slate-500 dark:text-slate-400 text-sm m-2">
+                  Loading math input…
+                </div>
+              )
+            )}
+
             <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
           </div>
 
+          {/* Dynamic Toolbar */}
           <div className="flex flex-wrap gap-2 animate-reveal">
             {CATEGORIES[activeCat].tools.map((tool, i) => (
               <button key={i}
                 onClick={() => tool.type === 'action' ? handleAction(tool.cmd) : insertSymbol(tool.cmd)}
                 disabled={isTyping || isSolving}
-                className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 disabled:opacity-50 ${
-                  tool.type === 'action' ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/5 hover:border-indigo-500/50'
+                className={`flex-1 min-w-[100px] px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border shadow-sm active:scale-95 disabled:opacity-50 flex flex-col items-center justify-center gap-1 ${
+                  tool.type === 'action'
+                    ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-500'
+                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-white/5 hover:border-indigo-500/50'
                 }`}>
                 {tool.label}
               </button>
             ))}
-            <button onClick={() => handleAction('Solve and show all steps for')} disabled={isTyping || isSolving}
+            {/* Global Solve Button */}
+            <button onClick={() => handleAction('solve for x')} disabled={isTyping || isSolving}
               className="flex-1 min-w-[120px] px-4 py-3 rounded-xl bg-cyan-600 text-white font-black text-[10px] uppercase tracking-widest hover:bg-cyan-500 shadow-lg active:scale-95 transition-all disabled:opacity-50">
-              {isSolving ? <><i className="fa-solid fa-circle-notch fa-spin mr-2" />Solving…</> : 'Solve With AI'}
+              {isSolving ? <><i className="fa-solid fa-circle-notch fa-spin mr-2" />Solving…</> : 'Solve'}
             </button>
           </div>
         </div>
 
+        {/* Results Area */}
         <div className="max-w-3xl mx-auto space-y-6 pb-12">
-          {aiMessages.length > 0 && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 flex items-center gap-2">
-                  <i className="fa-solid fa-wand-magic-sparkles" />Step-by-Step Solution
+
+          {/* Math History */}
+          {mathHistory.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-slate-900/70 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 flex items-center gap-2">
+                  <i className="fa-solid fa-clock-rotate-left" />Math History
                 </span>
-                <button onClick={() => setAiMessages([])} className="text-[9px] px-2 py-1 rounded-full border border-slate-200 dark:border-white/10 text-slate-400 hover:text-red-500">Clear</button>
+                <button type="button" onClick={() => setMathHistory([])}
+                  className="text-[9px] px-2 py-1 rounded-full border border-slate-200 dark:border-white/10 text-slate-500 hover:text-red-500 hover:border-red-300">
+                  Clear
+                </button>
               </div>
-              {aiMessages.map(msg => (
-                <div key={msg.id} className={`flex flex-col ${msg.isAI ? 'items-start' : 'items-end'} animate-reveal`}>
-                  {msg.isAI
-                    ? <MathResultCard content={msg.content} />
-                    : <div className="bg-indigo-600 text-white px-5 py-3 rounded-[18px] rounded-tr-none text-sm font-mono max-w-full">{msg.content}</div>
-                  }
-                </div>
-              ))}
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {mathHistory.map(item => (
+                  <button key={item.id} type="button"
+                    onClick={() => {
+                      if (item.kind === 'graph' && item.graph) { setCurrentGraph(item.graph); setGraphSource('manual'); setShowGraphs(true); }
+                      else { setActiveCat('General'); setEquationCount(1); if (equationRefs.current[0]) { equationRefs.current[0].value = item.inputLatex; equationRefs.current[0].focus(); } }
+                    }}
+                    className="w-full flex items-center justify-between gap-2 px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-left text-[11px]">
+                    <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                      <i className={`fa-solid ${item.kind === 'graph' ? 'fa-chart-line' : 'fa-calculator'} text-[10px]`} />
+                      <span className="truncate max-w-[180px]">{item.inputLatex || '(graph)'}</span>
+                    </span>
+                    {item.result && item.result !== '' && (
+                      <span className="text-[10px] text-slate-400 truncate max-w-[80px]">{item.result}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
-          {messages.map(msg => (
+          {/* Matrix Result */}
+          {matrixResult && (
+            <div className="w-full p-6 rounded-2xl border-2 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 shadow-lg space-y-4">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
+                  <i className="fa-solid fa-table-cells" />{matrixResult.op}
+                </span>
+                <button type="button" onClick={() => setMatrixResult(null)}
+                  className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-500 flex items-center justify-center" title="Dismiss">
+                  <i className="fa-solid fa-xmark text-xs" />
+                </button>
+              </div>
+              {matrixResult.error ? (
+                <p className="text-sm text-red-600 dark:text-red-400 font-medium">{matrixResult.error}</p>
+              ) : (
+                <div className="space-y-3">
+                  {(matrixResult.op === 'Determinant' || matrixResult.op === 'Rank' || matrixResult.op === 'Eigenvalues') && matrixResult.latex != null && (
+                    <div><span className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase mr-2">A = </span><KatexBlock latex={matrixResult.latex} className="inline-block text-lg text-slate-800 dark:text-slate-200" /></div>
+                  )}
+                  {matrixResult.scalar != null && (
+                    <div className="text-xl font-bold text-slate-900 dark:text-white">
+                      {matrixResult.op === 'Determinant' && 'det(A) = '}{matrixResult.op === 'Rank' && 'rank(A) = '}{matrixResult.scalar}
+                    </div>
+                  )}
+                  {(matrixResult.op === 'Inverse' || matrixResult.op === 'RREF') && matrixResult.latex != null && (
+                    <KatexBlock latex={(matrixResult.op === 'Inverse' ? 'A^{-1} = ' : '\\mathrm{RREF}(A) = ') + matrixResult.latex} className="text-lg text-slate-800 dark:text-slate-200" />
+                  )}
+                  {matrixResult.op === 'Eigenvalues' && matrixResult.text != null && (
+                    <KatexBlock latex={matrixResult.text} className="text-lg text-slate-800 dark:text-slate-200" />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Graphs panel */}
+          {showGraphs && (
+            <div className="space-y-3">
+              <Graphs
+                mode={graphSource === 'manual' ? 'manual' : 'fromQuestion'}
+                initialGraph={currentGraph}
+                onGraphsChange={g => {
+                  setCurrentGraph(g);
+                  if (g?.expressionLatex) appendMathHistory({ kind: 'graph', inputLatex: g.expressionLatex, result: '', graph: g });
+                }}
+                onExplainWithAi={summary => {
+                  const expr = summary.expression || currentGraph?.expressionLatex || '';
+                  const domain = summary.xDomain || currentGraph?.xDomain;
+                  const domainText = domain ? ` on domain [${domain.min}, ${domain.max}]` : '';
+                  onSend(`Explain this graph in simple steps. Function: ${expr || 'N/A'}${domainText}.`);
+                }}
+                onClose={() => setShowGraphs(false)}
+                lang={lang}
+              />
+            </div>
+          )}
+
+          {/* Local step-by-step result */}
+          {localStepsResult && (
+            <div className={`w-full p-6 rounded-2xl border-2 shadow-lg space-y-4 ${
+              localStepsResult.kind === 'units' || localStepsResult.kind === 'number'
+                ? 'border-violet-200 dark:border-violet-800 bg-violet-50/80 dark:bg-violet-950/50'
+                : 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/80 dark:bg-emerald-950/50'
+            }`}>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-2 ${
+                  localStepsResult.kind === 'units' || localStepsResult.kind === 'number' ? 'text-violet-700 dark:text-violet-300' : 'text-emerald-700 dark:text-emerald-300'
+                }`}>
+                  <i className={localStepsResult.kind === 'units' ? 'fa-solid fa-ruler-combined' : localStepsResult.kind === 'number' ? 'fa-solid fa-hashtag' : 'fa-solid fa-list-check'} />
+                  {localStepsResult.title}
+                </span>
+                <div className="flex items-center gap-2">
+                  {localStepsResult.kind !== 'units' && localStepsResult.kind !== 'number' && (
+                    <button type="button" disabled={isTyping}
+                      onClick={() => {
+                        const text = [`Input: ${localStepsResult.input}`, '', 'Steps:', ...localStepsResult.steps.map((s, i) => `${i + 1}. ${s}`), '', `Result: ${localStepsResult.result}`].join('\n');
+                        onSend(`Explain this step-by-step solution in simple terms:\n\n${text}`);
+                        setLocalStepsResult(null);
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-600 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-cyan-500 disabled:opacity-50">
+                      Explain with AI
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setLocalStepsResult(null)}
+                    className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-500 flex items-center justify-center" title="Dismiss">
+                    <i className="fa-solid fa-xmark text-xs" />
+                  </button>
+                </div>
+              </div>
+              {(localStepsResult.kind === 'units' || localStepsResult.kind === 'number') ? (
+                <>
+                  {localStepsResult.result ? <div className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white font-mono">{localStepsResult.result}</div> : null}
+                  {localStepsResult.steps.length > 0 && <p className="text-sm text-red-600 dark:text-red-400 font-medium">{localStepsResult.steps[0]}</p>}
+                </>
+              ) : (
+                <>
+                  <ol className="list-decimal list-inside space-y-2 text-sm text-slate-800 dark:text-slate-200 font-medium">
+                    {localStepsResult.steps.map((step, i) => (
+                      <li key={i} className="pl-1 leading-relaxed">{step}</li>
+                    ))}
+                  </ol>
+                  {localStepsResult.result && (
+                    <div className="pt-2 border-t border-emerald-200 dark:border-emerald-800">
+                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">Result: </span>
+                      <span className="font-bold text-slate-900 dark:text-white font-mono">{localStepsResult.result}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Inline Desmos graph (from detected graph expressions) */}
+          {graphExpression && !showGraphs && (
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase tracking-widest">
+                <i className="fa-solid fa-chart-line text-xs" />Auto Graphed From Question
+              </div>
+              <div className="w-full h-64 md:h-80 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 overflow-hidden">
+                <div ref={desmosContainerRef} className="w-full h-full" />
+              </div>
+            </div>
+          )}
+
+          {/* AI response messages */}
+          {messages.length > 0 && messages.map(msg => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-reveal`}>
-              <div className={`max-w-full p-6 rounded-[24px] shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+              <div className={`max-w-full p-6 rounded-[24px] shadow-sm border ${
+                msg.role === 'user'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none'
+                  : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'
+              }`}>
+                {msg.role === 'assistant'
+                  ? <SolutionMessageContent content={msg.content} />
+                  : <div className={`text-sm md:text-base leading-relaxed whitespace-pre-wrap font-medium ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                }
               </div>
             </div>
           ))}
 
           {isTyping && (
             <div className="flex items-center gap-3 bg-white/80 dark:bg-white/5 px-6 py-3 rounded-full animate-pulse border border-slate-200 dark:border-white/5 w-fit shadow-sm">
-              <div className="flex gap-1">{[0,150,300].map(d => <div key={d} className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}</div>
+              <div className="flex gap-1">
+                {[0, 150, 300].map(delay => <div key={delay} className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: `${delay}ms` }} />)}
+              </div>
               <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">Calculating...</span>
             </div>
           )}
         </div>
       </main>
+
+      {/* Modals */}
+      {showHandwriting && (
+        <HandwritingCanvas
+          onRecognize={handleHandwritingRecognize}
+          onClose={() => { handwritingClosedByUserRef.current = true; setShowHandwriting(false); }}
+          isRecognizing={handwritingRecognizing}
+        />
+      )}
+      {showVoiceMath && (
+        <VoiceToMathModal
+          onInsert={latex => { const target = focusedMathFieldRef.current ?? equationRefs.current[0]; if (target) { target.value = latex; target.focus(); } }}
+          onClose={() => setShowVoiceMath(false)}
+        />
+      )}
     </div>
   );
 };

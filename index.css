@@ -2,199 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── Base ──────────────────────────────────────────────────────────────────── */
 @layer base {
   html { scroll-behavior: smooth; }
   :focus-visible { outline: 2px solid rgb(99 102 241 / 0.6); outline-offset: 2px; }
   ::selection { background-color: rgb(99 102 241 / 0.15); }
-
-  body {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-  }
+  body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 }
 
-/* ─── Scrollbars ─────────────────────────────────────────────────────────────── */
-.custom-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: rgb(148 163 184 / 0.3) transparent;
-}
+.custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.3) transparent; }
 .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgb(148 163 184 / 0.3);
-  border-radius: 99px;
-}
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgb(148 163 184 / 0.3); border-radius: 99px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgb(148 163 184 / 0.5); }
-
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
-
-/* ─── Mobile safe area ────────────────────────────────────────────────────── */
 .safe-pb { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
-
-/* ─── Touch targets ──────────────────────────────────────────────────────── */
+.safe-pt { padding-top: max(0px, env(safe-area-inset-top)); }
 .tap-target { min-width: 44px; min-height: 44px; }
-
-/* ─── Typography ─────────────────────────────────────────────────────────── */
 .sinhala-text { font-family: 'Noto Sans Sinhala', sans-serif; line-height: 1.8; }
-.tamil-text   { font-family: 'Noto Sans Tamil',   sans-serif; line-height: 1.8; }
+.tamil-text { font-family: 'Noto Sans Tamil', sans-serif; line-height: 1.8; }
 
-/* ─── Glass morphism ─────────────────────────────────────────────────────── */
 .glass {
   background: rgb(255 255 255 / 0.7);
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(180%);
   border: 1px solid rgb(255 255 255 / 0.2);
 }
-.dark .glass {
-  background: rgb(15 23 42 / 0.7);
-  border-color: rgb(255 255 255 / 0.08);
-}
+.dark .glass { background: rgb(15 23 42 / 0.7); border-color: rgb(255 255 255 / 0.08); }
 
-/* ─── Gradient text ──────────────────────────────────────────────────────── */
 .gradient-text {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
 }
 
-/* ─── Code blocks ────────────────────────────────────────────────────────── */
-pre, code {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
-  font-size: 0.85em;
-}
-pre {
-  overflow-x: auto;
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  background: rgb(15 23 42 / 0.05);
-  border: 1px solid rgb(15 23 42 / 0.08);
-}
-.dark pre {
-  background: rgb(255 255 255 / 0.04);
-  border-color: rgb(255 255 255 / 0.08);
-}
+pre, code { font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size: 0.85em; }
+pre { overflow-x: auto; border-radius: 12px; padding: 1rem 1.25rem; background: rgb(15 23 42 / 0.05); border: 1px solid rgb(15 23 42 / 0.08); }
+.dark pre { background: rgb(255 255 255 / 0.04); border-color: rgb(255 255 255 / 0.08); }
 
-/* ─── Chat message prose ─────────────────────────────────────────────────── */
-.chat-prose {
-  line-height: 1.65;
-}
+.chat-prose { line-height: 1.65; }
 .chat-prose p { margin-bottom: 0.6em; }
 .chat-prose p:last-child { margin-bottom: 0; }
 .chat-prose ul, .chat-prose ol { padding-left: 1.4em; margin-bottom: 0.6em; }
 .chat-prose li { margin-bottom: 0.25em; }
-.chat-prose strong { font-weight: 700; }
-.chat-prose code {
-  background: rgb(99 102 241 / 0.08);
-  border-radius: 4px;
-  padding: 0.1em 0.35em;
-  font-size: 0.82em;
-}
+.chat-prose code { background: rgb(99 102 241 / 0.08); border-radius: 4px; padding: 0.1em 0.35em; font-size: 0.82em; }
 
-/* ─── Input glow ─────────────────────────────────────────────────────────── */
-.input-glow:focus-within {
-  box-shadow: 0 0 0 3px rgb(99 102 241 / 0.12), 0 4px 16px rgb(0 0 0 / 0.06);
-}
+.input-glow:focus-within { box-shadow: 0 0 0 3px rgb(99 102 241 / 0.12), 0 4px 16px rgb(0 0 0 / 0.06); }
+.card-lift { transition: transform 0.2s cubic-bezier(0.16,1,0.3,1), box-shadow 0.2s cubic-bezier(0.16,1,0.3,1); }
+.card-lift:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgb(0 0 0 / 0.1); }
+.dark .card-lift:hover { box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); }
 
-/* ─── Card hover lift ────────────────────────────────────────────────────── */
-.card-lift {
-  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.card-lift:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.1);
-}
-.dark .card-lift:hover {
-  box-shadow: 0 12px 40px rgb(0 0 0 / 0.3);
-}
-
-/* ─── Plan badge colours ─────────────────────────────────────────────────── */
-.badge-free    { background: rgb(241 245 249); color: rgb(100 116 139); border: 1px solid rgb(226 232 240); }
-.badge-basic   { background: rgb(239 246 255); color: rgb(37 99 235);   border: 1px solid rgb(191 219 254); }
-.badge-pro     { background: linear-gradient(135deg, rgb(99 102 241 / 0.12), rgb(139 92 246 / 0.12)); color: rgb(109 40 217); border: 1px solid rgb(196 181 253 / 0.6); }
-.dark .badge-free  { background: rgb(30 41 59); color: rgb(148 163 184); border-color: rgb(51 65 85); }
+.badge-free { background: rgb(241 245 249); color: rgb(100 116 139); border: 1px solid rgb(226 232 240); }
+.badge-basic { background: rgb(239 246 255); color: rgb(37 99 235); border: 1px solid rgb(191 219 254); }
+.badge-pro { background: linear-gradient(135deg, rgb(99 102 241 / 0.12), rgb(139 92 246 / 0.12)); color: rgb(109 40 217); border: 1px solid rgb(196 181 253 / 0.6); }
+.dark .badge-free { background: rgb(30 41 59); color: rgb(148 163 184); border-color: rgb(51 65 85); }
 .dark .badge-basic { background: rgb(23 37 84 / 0.5); color: rgb(147 197 253); border-color: rgb(29 78 216 / 0.4); }
-.dark .badge-pro   { background: rgb(76 29 149 / 0.2); color: rgb(196 181 253); border-color: rgb(109 40 217 / 0.4); }
+.dark .badge-pro { background: rgb(76 29 149 / 0.2); color: rgb(196 181 253); border-color: rgb(109 40 217 / 0.4); }
 
-/* ─── Feature pill (mode tabs) ───────────────────────────────────────────── */
-.mode-pill {
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
-}
-.mode-pill.active {
-  box-shadow: 0 2px 8px rgb(99 102 241 / 0.25);
-}
+.mode-pill { transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
+.mode-pill.active { box-shadow: 0 2px 8px rgb(99 102 241 / 0.25); }
 
-/* ─── Typing dots ────────────────────────────────────────────────────────── */
 @keyframes typingDot {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-  30%            { transform: translateY(-4px); opacity: 1; }
+  30% { transform: translateY(-4px); opacity: 1; }
 }
 .typing-dot { animation: typingDot 1.2s ease-in-out infinite; }
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
-/* ─── Shimmer skeleton ────────────────────────────────────────────────────── */
 @keyframes skeletonShimmer {
-  0%   { background-position: -400px 0; }
-  100% { background-position: 400px 0; }
+  0% { background-position: -400px 0; } 100% { background-position: 400px 0; }
 }
 .skeleton {
   background: linear-gradient(90deg, rgb(241 245 249) 25%, rgb(226 232 240) 50%, rgb(241 245 249) 75%);
-  background-size: 800px 100%;
-  animation: skeletonShimmer 1.6s ease-in-out infinite;
-  border-radius: 8px;
+  background-size: 800px 100%; animation: skeletonShimmer 1.6s ease-in-out infinite; border-radius: 8px;
 }
 .dark .skeleton {
   background: linear-gradient(90deg, rgb(30 41 59) 25%, rgb(51 65 85) 50%, rgb(30 41 59) 75%);
   background-size: 800px 100%;
 }
 
-/* ─── Math KaTeX ─────────────────────────────────────────────────────────── */
 .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.25rem 0; }
 .katex { font-size: 1.05em !important; }
 
-/* ─── Agent / Tool call chips ────────────────────────────────────────────── */
 .tool-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 10px; border-radius: 99px; font-size: 10px;
-  font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
-  background: rgb(99 102 241 / 0.08); color: rgb(99 102 241);
-  border: 1px solid rgb(99 102 241 / 0.2);
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px;
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
+  background: rgb(99 102 241 / 0.08); color: rgb(99 102 241); border: 1px solid rgb(99 102 241 / 0.2);
 }
 .dark .tool-chip { background: rgb(99 102 241 / 0.12); border-color: rgb(99 102 241 / 0.3); color: rgb(165 180 252); }
 
-/* ─── Stripe / Pricing cards ─────────────────────────────────────────────── */
-.pricing-card {
-  position: relative; overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-.pricing-card:hover { transform: translateY(-3px); }
-.pricing-card.featured::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: linear-gradient(135deg, rgb(99 102 241 / 0.06) 0%, rgb(139 92 246 / 0.06) 100%);
-  pointer-events: none;
-}
-
-/* ─── Smooth page transitions ────────────────────────────────────────────── */
-.page-enter { animation: reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-/* ─── Mobile bottom nav safe area ────────────────────────────────────────── */
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-}
-/* ─── Safe area top ──────────────────────────────────────────────────────── */
-.safe-pt { padding-top: max(0px, env(safe-area-inset-top)); }
-
-/* ─── View transitions ───────────────────────────────────────────────────── */
 .view-enter { animation: reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-
-/* ─── Upgrade modal backdrop ─────────────────────────────────────────────── */
-.modal-backdrop {
-  background: rgb(0 0 0 / 0.45);
-  backdrop-filter: blur(4px);
-}
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }

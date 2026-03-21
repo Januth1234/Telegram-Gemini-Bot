@@ -190,7 +190,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
         )}
 
         {lastCalls.length > 0 && (
-          <div className="p-4 rounded-2xl bg-cyan-500/10 border border-cyan-500/20">
+          <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20">
             <p className="text-[10px] font-black text-cyan-700 dark:text-indigo-400 uppercase tracking-widest mb-2">{t.agentSuggestedActions}</p>
             <ul className="space-y-2">
               {lastCalls.map((fc, i) => (
@@ -218,7 +218,7 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
               onChange={e => setTask(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && startAgent()}
               placeholder={t.agentTaskPlaceholder}
-              className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/50"
+              className="flex-1 min-w-0 px-4 py-3 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
             />
             <button
               onClick={startAgent}

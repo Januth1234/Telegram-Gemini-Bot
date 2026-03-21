@@ -1,6 +1,8 @@
+import packageJson from './package.json';
 
+/** Single source of truth for app version: package.json. Used by Downloads, footer, etc. */
 export const APP_CONFIG = {
-  version: "4.0.1",
+  version: (packageJson as { version?: string }).version ?? '0.0.0',
   branding: "© 2026 JN Productions • Orin AI",
   isWhiteLabel: false,
   releaseYear: 2026,
@@ -10,5 +12,5 @@ export const APP_CONFIG = {
   owner: "JN Productions",
   legalEntity: "JN Productions Global",
   deploymentLink: "https://www.orinai.org",
-  githubRepo: "nimnal-januth/aura-neural-workspace"
+  githubRepo: "Januth1234/Telegram-Gemini-Bot"  // Used by releases page & download links
 };

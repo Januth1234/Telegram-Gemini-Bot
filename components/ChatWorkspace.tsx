@@ -393,8 +393,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ) : (
             currentMessages.map((msg, i) => (
               <div key={msg.id || i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                 <div className={`max-w-[88%] md:max-w-[78%] p-4 md:p-5 rounded-2xl shadow-sm border text-sm md:text-base leading-relaxed ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-sm border-transparent' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-sm border-slate-200/70 dark:border-white/[0.08]'}`}>
-                  <div className={`chat-prose whitespace-pre-wrap ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                 <div className={`max-w-[92%] p-5 md:p-6 rounded-2xl shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                  <div className={`whitespace-pre-wrap text-sm md:text-base leading-relaxed ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
                   {msg.links && msg.links.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-200/50 dark:border-white/10">
                       {msg.links.slice(0, 5).map((link, j) => (
@@ -437,14 +437,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 animate-fade" onClick={() => setShowUpgradeModal(false)}>
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-white/10" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
               <i className="fa-solid fa-crown text-cyan-500 text-xl" aria-hidden />
             </div>
             <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Upgrade to continue</h3>
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
           <div className="flex gap-3">
-          <button type="button" onClick={() => { setShowUpgradeModal(false); window.location.hash = 'pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors shadow-sm">
+          <button type="button" onClick={() => { setShowUpgradeModal(false); window.location.hash = 'pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
               View plans
             </button>
             <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
@@ -459,14 +459,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {/* Sidebar Overlay */}
       {isHistoryOpen && <div className="fixed inset-0 bg-black/50 z-[140]" onClick={() => setIsHistoryOpen(false)} />}
       
-      <div className={`fixed inset-y-0 left-0 z-[150] w-72 md:w-80 bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-white/[0.06] transition-transform duration-300 ease-in-out flex flex-col shadow-2xl ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="p-4 border-b border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
+      <div className={`fixed inset-y-0 left-0 z-[150] w-72 md:w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-white/5 transition-transform flex flex-col ${isHistoryOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="p-4 border-b border-slate-200 dark:border-white/5 flex justify-between items-center shrink-0">
             <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">History</span>
             <button onClick={() => setIsHistoryOpen(false)} className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5" aria-label="Close"><i className="fa-solid fa-xmark" /></button>
         </div>
         <div className="p-3 space-y-2 shrink-0">
             <button onClick={() => { onNewConv(); setIsHistoryOpen(false); }} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest transition-colors shadow-sm">+ New Chat</button>
-            <button onClick={() => { togglePrivate(); setIsHistoryOpen(false); }} className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border ${isPrivate ? 'bg-red-500 text-white border-red-500' : 'bg-slate-50 dark:bg-white/5 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-white/10'}`}>
+            <button onClick={() => { togglePrivate(); setIsHistoryOpen(false); }} className={`w-full py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest border ${isPrivate ? 'bg-red-500 text-white border-red-500' : 'bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10'}`}>
                {isPrivate ? 'Turn Off Private' : 'Private Mode'}
             </button>
         </div>
@@ -476,15 +476,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by meaning..."
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 text-slate-900 dark:text-white text-xs placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 outline-none"
               aria-label="Semantic search conversations"
             />
             {isSearching && <p className="text-[9px] text-slate-400 mt-1">Searching...</p>}
-            {searchQuery.trim() && semanticOrder && !isSearching && <p className="text-[9px] text-cyan-600 dark:text-cyan-400 mt-1">Sorted by relevance</p>}
+            {searchQuery.trim() && semanticOrder && !isSearching && <p className="text-[9px] text-indigo-600 dark:text-indigo-400 mt-1">Sorted by relevance</p>}
         </div>
         <div className="overflow-y-auto flex-1 min-h-0 p-2">
             {(semanticOrder ? semanticOrder.map((id) => conversations.find((c) => c.id === id)).filter(Boolean) as Conversation[] : [...conversations].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())).map(c => (
-                <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-50 dark:hover:bg-white/[0.04]'}`}>
+                <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                     <button 
                         onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 
                         className={`w-full text-left p-3 pr-9 text-xs font-bold flex items-center gap-1.5 min-w-0 ${activeConvId === c.id ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}
@@ -532,7 +532,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           {progress > 0 && (
             <div className="absolute left-0 right-0 bottom-0 h-0.5 bg-slate-200/40 dark:bg-slate-800/80 overflow-hidden">
               <div
-                className="h-full bg-indigo-500 transition-[width] duration-200 rounded-full"
+                className="h-full bg-indigo-500 transition-[width] duration-200"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -565,7 +565,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                              key={i} 
                              type="button"
                              onClick={() => { setLocalInput(s); onInputChange(s); inputRef.current?.focus(); }}
-                             className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-cyan-600 whitespace-nowrap"
+                             className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-full text-[10px] font-bold text-slate-500 hover:text-indigo-600 whitespace-nowrap"
                            >
                              {s}
                            </button>
@@ -573,7 +573,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      </div>
                   )}
 
-                  <div className={`input-glow p-2 rounded-2xl shadow-md border flex flex-wrap items-center gap-2 transition-all ${isPrivate ? 'bg-slate-900/95 border-slate-700/60' : 'bg-white/95 dark:bg-slate-900/95 border-slate-200/80 dark:border-white/[0.08]'}`}>
+                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 backdrop-blur-xl ${isPrivate ? 'bg-slate-900/70 border-slate-600/50' : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/10'}`}>
                      <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach file or image"><i className="fa-solid fa-paperclip" /></button>
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf,.txt,application/pdf,text/plain" onChange={(e) => {
                        const file = e.target.files?.[0];
@@ -623,7 +623,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                            title="Deeper reasoning"
                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-colors ${
                              thinkingMode
-                               ? 'bg-cyan-600 text-white border-cyan-600'
+                               ? 'bg-indigo-600 text-white border-cyan-600'
                                : 'bg-transparent text-slate-400 border-slate-300/50 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/20'
                            }`}
                          >
@@ -635,7 +635,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                            title="More detailed answers"
                            className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border transition-colors ${
                              descriptiveMode
-                               ? 'bg-cyan-600 text-white border-cyan-600'
+                               ? 'bg-indigo-600 text-white border-cyan-600'
                                : 'bg-transparent text-slate-400 border-slate-300/50 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/20'
                            }`}
                          >

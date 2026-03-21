@@ -1,6 +1,10 @@
 /**
  * Push notifications service using Firebase Cloud Messaging (FCM).
  * Handles permission, FCM token, saving token to Firestore, and foreground messages.
+ *
+ * Production: Generate a VAPID key pair (e.g. `npx web-push generate-vapid-keys`) and set
+ * VAPID_KEY or VITE_VAPID_KEY in your environment (e.g. Vercel). If the key is empty,
+ * isSupported() is false and push is silently disabled.
  */
 
 import { getApp } from "firebase/app";
@@ -9,6 +13,21 @@ import { firebaseService } from "./firebaseService";
 
 const VAPID_KEY =
   (typeof process !== "undefined" && process.env?.VAPID_KEY) || (import.meta as any).env?.VITE_VAPID_KEY || "";
+
+const VAPID_WARNED_KEY = "orin_vapid_warned";
+function warnIfNoVapid(): void {
+  if (VAPID_KEY.length > 0) return;
+  if (typeof window !== "undefined" && sessionStorage?.getItem(VAPID_WARNED_KEY)) return;
+  try {
+    console.warn(
+      "[Orin] Push notifications are disabled: VAPID_KEY (or VITE_VAPID_KEY) is not set. " +
+        "Generate a key pair (e.g. npx web-push generate-vapid-keys) and add it to your environment."
+    );
+    sessionStorage?.setItem(VAPID_WARNED_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
 
 const FCM_SW_PATH = "/firebase-messaging-sw.js";
 
@@ -31,15 +50,16 @@ class NotificationService {
     }
   }
 
-  /** Check if push is supported (HTTPS, SW, notifications). */
+  /** Check if push is supported (HTTPS, SW, notifications, and VAPID key set). */
   isSupported(): boolean {
-    return (
+    const ok =
       typeof window !== "undefined" &&
       "serviceWorker" in navigator &&
       "PushManager" in window &&
       "Notification" in window &&
-      !!VAPID_KEY
-    );
+      !!VAPID_KEY;
+    if (typeof window !== "undefined" && !VAPID_KEY) warnIfNoVapid();
+    return ok;
   }
 
   /** Current permission state. */

@@ -326,13 +326,12 @@ const App: React.FC = () => {
         .filter((c: any) => (c.messages || []).some((m: { role: string }) => m.role === 'user'));
     } catch { return []; }
   });
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
-  // Always open a fresh chat on page load — restoring mid-conversation is confusing.
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(null); // always fresh on load
 
   const saveTimeoutRef = useRef<number | null>(null);
   const bootstrappedConvRef = useRef(false);
 
-  // Auto-delete empty chats (no user messages) whenever active conv changes or on mount
+  // Drop conversations with no user messages when switching away
   useEffect(() => {
     setConversations(prev => {
       const keep = prev.filter(c => c.id === activeConversationId || conversationHasUserMessage(c));
@@ -340,15 +339,16 @@ const App: React.FC = () => {
     });
   }, [activeConversationId]);
 
-  // Also clean up empties when conversations list changes (catches newly-abandoned chats)
+  // Also sweep empties 500ms after any conversation count change (catches abandoned chats)
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const t = setTimeout(() => {
       setConversations(prev => {
         const keep = prev.filter(c => c.id === activeConversationId || conversationHasUserMessage(c));
         return keep.length === prev.length ? prev : keep;
       });
     }, 500);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations.length]);
 
   useEffect(() => {
@@ -864,7 +864,7 @@ const App: React.FC = () => {
         </div>
       )}
       {view !== 'admin-portal' && (
-        <header className="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 z-[100] border-b border-black/[0.06] dark:border-white/[0.06] bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl safe-pt relative">
+        <header className="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 z-[100] border-b border-black/[0.06] dark:border-white/[0.06] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl safe-pt relative">
           <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>
             <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-200 group-hover/logo:scale-105" />
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
@@ -896,7 +896,7 @@ const App: React.FC = () => {
                 setTheme(next);
                 cacheService.set(CacheKey.THEME, next);
               }}
-              className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
+              className="w-9 h-9 flex items-center justify-center text-slate-500"
               aria-label={theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'Auto (by time)'}
               title={theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'Auto'}
             >

@@ -5,9 +5,6 @@ export default {
   theme: {
     extend: {
       screens: { xs: '320px', tiny: '380px' },
-      spacing: {
-        'safe-top': 'env(safe-area-inset-top)',
-      },
       fontFamily: {
         sans: ['Plus Jakarta Sans', 'Noto Sans Sinhala', 'Noto Sans Tamil', 'sans-serif'],
       },
@@ -20,7 +17,6 @@ export default {
         'glow-pulse': 'glowPulse 3s ease-in-out infinite',
         'shimmer': 'shimmer 2s ease-in-out infinite',
         'scale-in': 'scaleIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-        'view-enter': 'reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards',
         'theme-classic': 'themeClassic 6s ease-in-out infinite',
         'theme-midnight': 'themeMidnight 8s ease-in-out infinite',
         'theme-aurora': 'themeAurora 12s ease-in-out infinite',

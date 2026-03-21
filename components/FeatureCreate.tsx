@@ -1,16 +1,41 @@
 
-import React, { useState, useEffect } from 'react';
-import { geminiService } from '../services/geminiService';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { geminiService, AppError } from '../services/geminiService';
+import { cacheService, CacheKey } from '../services/cacheService';
 import { AspectRatio, ImageSize } from '../types';
+import MusicStudio from './MusicStudio';
 
 interface GeneratedAsset {
   url: string;
   prompt: string;
   timestamp: number;
-  type: 'image' | 'video';
+  type: 'image' | 'video' | 'audio';
+  /** For video assets: aspect ratio used (needed for Extend). */
+  videoAspectRatio?: '16:9' | '9:16';
+  /** For image assets: embedding for semantic search (Gemini Embedding 2). */
+  embedding?: number[];
 }
 
-type StudioTab = 'image' | 'video';
+function cosineSimilarity(a: number[], b: number[]): number {
+  if (a.length !== b.length || a.length === 0) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i]! * b[i]!;
+    na += a[i]! * a[i]!;
+    nb += b[i]! * b[i]!;
+  }
+  const norm = Math.sqrt(na) * Math.sqrt(nb);
+  return norm === 0 ? 0 : dot / norm;
+}
+
+type StudioTab = 'image' | 'video' | 'music' | 'narration';
+
+const TTS_VOICES = [
+  'Zephyr', 'Puck', 'Charon', 'Kore', 'Fenrir', 'Leda', 'Orus', 'Aoede', 'Callirrhoe',
+  'Autonoe', 'Enceladus', 'Iapetus', 'Umbriel', 'Algieba', 'Despina', 'Erinome', 'Algenib', 'Rasalgethi',
+  'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Gacrux', 'Pulcherrima', 'Achird', 'Zubenelgenubi', 'Vindemiatrix',
+  'Sadachbia', 'Sadaltager', 'Sulafat',
+] as const;
 
 const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<StudioTab>('image');
@@ -18,10 +43,38 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('1:1');
   const [imageSize, setImageSize] = useState<ImageSize>('1K');
   const [videoResolution, setVideoResolution] = useState<'720p' | '1080p'>('720p');
+  const [videoMode, setVideoMode] = useState<'text' | 'image' | 'frames'>('text');
+  const [videoImage, setVideoImage] = useState<{ imageBytes: string; mimeType: string } | null>(null);
+  const [videoFirstFrame, setVideoFirstFrame] = useState<{ imageBytes: string; mimeType: string } | null>(null);
+  const [videoLastFrame, setVideoLastFrame] = useState<{ imageBytes: string; mimeType: string } | null>(null);
+  const [extendingTimestamp, setExtendingTimestamp] = useState<number | null>(null);
+  const [extendPrompt, setExtendPrompt] = useState('');
+  // Studio history is kept in-memory only; persisting large data URLs to localStorage quickly hits quota.
   const [history, setHistory] = useState<GeneratedAsset[]>([]);
+  const [imageSearchQuery, setImageSearchQuery] = useState('');
+  const [imageSearchOrder, setImageSearchOrder] = useState<number[] | null>(null);
+  const [isImageSearching, setIsImageSearching] = useState(false);
+  const imageSearchDebounceRef = useRef<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeModalMessage, setUpgradeModalMessage] = useState("");
+  const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
+
+  // Narration (TTS) state
+  const [narrationText, setNarrationText] = useState('');
+  const [narrationStyle, setNarrationStyle] = useState('');
+  const [narrationVoice, setNarrationVoice] = useState<string>(TTS_VOICES[0]);
+  const [narrationModel, setNarrationModel] = useState<'flash' | 'pro'>('flash');
+  const [narrationDialogue, setNarrationDialogue] = useState(false);
+  const [dialogueSpeaker1, setDialogueSpeaker1] = useState('Speaker1');
+  const [dialogueVoice1, setDialogueVoice1] = useState<string>(TTS_VOICES[0]);
+  const [dialogueSpeaker2, setDialogueSpeaker2] = useState('Speaker2');
+  const [dialogueVoice2, setDialogueVoice2] = useState<string>(TTS_VOICES[1]);
+
+  // NOTE: We intentionally do NOT persist full studio history (data URLs) to localStorage.
+  // A few 4K base64 images can exceed typical 5–10MB quotas and break storage for the whole app.
 
   // Reset aspect ratio when switching tabs to ensure valid state for the selected mode
   useEffect(() => {
@@ -31,16 +84,152 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setAspectRatio('16:9');
       }
     }
+    // Intentionally omit aspectRatio: we only normalize when switching TO video tab, not on every aspect ratio change on video (which would re-run unnecessarily).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
 
+  // Image semantic search: embed query and sort image assets by similarity
+  useEffect(() => {
+    const q = imageSearchQuery.trim();
+    if (!q) {
+      setImageSearchOrder(null);
+      return;
+    }
+    if (imageSearchDebounceRef.current) clearTimeout(imageSearchDebounceRef.current);
+    imageSearchDebounceRef.current = window.setTimeout(async () => {
+      setIsImageSearching(true);
+      try {
+        const [queryVec] = await geminiService.embedText([q]);
+        if (!queryVec?.length) {
+          setImageSearchOrder(null);
+          return;
+        }
+        const images = history.filter((a) => a.type === 'image');
+        const indexed = images.filter((a): a is GeneratedAsset & { embedding: number[] } => Array.isArray(a.embedding) && a.embedding.length > 0);
+        if (!indexed.length) {
+          // No embeddings yet (e.g. user searched immediately after generation) – fall back to recency order.
+          setImageSearchOrder(images.map((a) => a.timestamp));
+          return;
+        }
+        const scored = indexed.map((a) => ({ timestamp: a.timestamp, score: cosineSimilarity(queryVec, a.embedding) }));
+        scored.sort((a, b) => b.score - a.score);
+        setImageSearchOrder(scored.map((x) => x.timestamp));
+      } catch {
+        setImageSearchOrder(null);
+      } finally {
+        setIsImageSearching(false);
+      }
+    }, 400);
+    return () => {
+      if (imageSearchDebounceRef.current) clearTimeout(imageSearchDebounceRef.current);
+    };
+  }, [imageSearchQuery, history]);
+
+  // For image tab: show only images, optionally sorted by search relevance
+  const displayHistory = useMemo(() => {
+    if (activeTab === 'image') {
+      const images = history.filter((a) => a.type === 'image');
+      if (imageSearchOrder && imageSearchOrder.length) {
+        const orderSet = new Set(imageSearchOrder);
+        const byOrder = imageSearchOrder.map((ts) => images.find((a) => a.timestamp === ts)).filter(Boolean) as GeneratedAsset[];
+        const rest = images.filter((a) => !orderSet.has(a.timestamp)).sort((a, b) => b.timestamp - a.timestamp);
+        return [...byOrder, ...rest];
+      }
+      return [...images].sort((a, b) => b.timestamp - a.timestamp);
+    }
+    return [...history].sort((a, b) => b.timestamp - a.timestamp);
+  }, [activeTab, history, imageSearchOrder]);
+
+  function buildWavFromPcmBase64(base64: string): string {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const pcm = new Int16Array(bytes.buffer);
+    const numSamples = pcm.length;
+    const dataLength = numSamples * 2;
+    const buffer = new ArrayBuffer(44 + dataLength);
+    const view = new DataView(buffer);
+    const write = (offset: number, value: number) => view.setUint32(offset, value, true);
+    const write16 = (offset: number, value: number) => view.setUint16(offset, value, true);
+    const writeStr = (offset: number, str: string) => str.split('').forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
+    const sampleRate = 24000;
+    const channels = 1;
+    writeStr(0, 'RIFF');
+    write(4, 36 + dataLength);
+    writeStr(8, 'WAVE');
+    writeStr(12, 'fmt ');
+    write(16, 16);
+    write16(20, 1);
+    write16(22, channels);
+    write(24, sampleRate);
+    write(28, sampleRate * channels * 2);
+    write16(32, channels * 2);
+    write16(34, 16);
+    writeStr(36, 'data');
+    write(40, dataLength);
+    new Int16Array(buffer, 44).set(pcm);
+    const blob = new Blob([buffer], { type: 'audio/wav' });
+    return URL.createObjectURL(blob);
+  }
+
   const handleGenerate = async (customPrompt?: string) => {
+    if (activeTab === 'narration') {
+      if (!narrationText.trim()) return;
+      setIsLoading(true);
+      setError(null);
+      const msgs = ["Preparing voice...", "Synthesizing speech...", "Encoding audio..."];
+      setLoadingMessage(msgs[0]);
+      let msgIdx = 0;
+      const msgInterval = setInterval(() => {
+        msgIdx = (msgIdx + 1) % msgs.length;
+        setLoadingMessage(msgs[msgIdx]);
+      }, 2500);
+      try {
+        const s1 = dialogueSpeaker1.trim() || 'Speaker1';
+        const s2 = dialogueSpeaker2.trim() || 'Speaker2';
+        const textForTts = narrationDialogue
+          ? `TTS the following conversation between ${s1} and ${s2}:\n\n${narrationText.trim()}`
+          : narrationText.trim();
+        const base64 = await geminiService.generateTts({
+          text: textForTts,
+          stylePrompt: narrationStyle.trim() || undefined,
+          voiceName: narrationDialogue ? undefined : narrationVoice,
+          multiSpeaker: narrationDialogue
+            ? [
+                { speaker: s1, voiceName: dialogueVoice1 },
+                { speaker: s2, voiceName: dialogueVoice2 },
+              ]
+            : undefined,
+          model: narrationModel,
+        });
+        const url = buildWavFromPcmBase64(base64);
+        const promptLabel = narrationStyle.trim() ? `${narrationStyle.slice(0, 40)}... — ${narrationText.slice(0, 30)}...` : narrationText.slice(0, 80);
+        setHistory(prev => [{ url, prompt: promptLabel, timestamp: Date.now(), type: 'audio' }, ...prev]);
+        setNarrationText('');
+      } catch (e: unknown) {
+        clearInterval(msgInterval);
+        setIsLoading(false);
+        const appErr = e as AppError;
+        if (appErr?.type === 'plan_required' || appErr?.type === 'limit_reached') {
+          setError(null);
+          setUpgradeModalMessage(appErr.type === 'plan_required' ? "This feature requires a Basic or Pro plan." : "You've reached your plan limit. Upgrade for more.");
+          setShowUpgradeModal(true);
+        } else {
+          setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+        }
+        return;
+      }
+      clearInterval(msgInterval);
+      setIsLoading(false);
+      return;
+    }
+
     const finalPrompt = customPrompt || prompt;
     if (!finalPrompt.trim()) return;
     
     setIsLoading(true);
     setError(null);
     
-    // Loading messages
     const imageMessages = ["Synthesizing pixels...", "Refining details...", "Applying aesthetics...", "Final polish..."];
     const videoMessages = ["Initializing Veo 3.1...", "Simulating physics...", "Rendering frames...", "Encoding stream..."];
     const msgs = activeTab === 'video' ? videoMessages : imageMessages;
@@ -57,55 +246,218 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       if (activeTab === 'image') {
         url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
       } else {
-        // Explicit cast for video generation, utilizing the mapped or default valid ratio
         const veoRatio = (aspectRatio === '9:16') ? '9:16' : '16:9';
-        url = await geminiService.generateVideo(finalPrompt, veoRatio, videoResolution);
+        const videoOpts: Parameters<typeof geminiService.generateVideo>[0] = { prompt: finalPrompt, aspectRatio: veoRatio, resolution: videoResolution };
+        if (videoMode === 'image' && videoImage) videoOpts.image = videoImage;
+        if (videoMode === 'frames') {
+          if (videoFirstFrame) videoOpts.image = videoFirstFrame;
+          if (videoLastFrame) videoOpts.lastFrame = videoLastFrame;
+        }
+        url = await geminiService.generateVideo(videoOpts);
       }
 
+      const ts = Date.now();
       const newAsset: GeneratedAsset = {
         url,
         prompt: finalPrompt,
-        timestamp: Date.now(),
-        type: activeTab
+        timestamp: ts,
+        type: activeTab,
+        ...(activeTab === 'video' && { videoAspectRatio: (aspectRatio === '9:16' ? '9:16' : '16:9') as '16:9' | '9:16' }),
       };
       setHistory(prev => [newAsset, ...prev]);
-      setPrompt(''); 
-    } catch (e: any) {
-      setError(e.message || "Something went wrong. Please try again.");
+      setPrompt('');
+      if (activeTab === 'video') {
+        setVideoImage(null);
+        setVideoFirstFrame(null);
+        setVideoLastFrame(null);
+      }
+      // Generate embedding for new images (same vector space as text for search)
+      if (activeTab === 'image' && url.startsWith('data:image')) {
+        const base64 = url.split(',')[1];
+        if (base64) {
+          geminiService.embedImage(base64, 'image/png').then((vec) => {
+            if (vec.length) setHistory(prev => prev.map(a => a.timestamp === ts && a.type === 'image' ? { ...a, embedding: vec } : a));
+          });
+        }
+      }
+    } catch (e: unknown) {
+      const appErr = e as AppError;
+      if (appErr?.type === 'plan_required' || appErr?.type === 'limit_reached') {
+        setError(null);
+        setUpgradeModalMessage(appErr.type === 'plan_required'
+          ? "This feature requires a Basic or Pro plan."
+          : "You've reached your plan limit. Upgrade for more.");
+        setShowUpgradeModal(true);
+      } else {
+        setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      }
     } finally {
       clearInterval(msgInterval);
       setIsLoading(false);
     }
   };
 
+  /** Get a Blob from a URL that may be a data: URI (fetch of data: fails in Firefox/Safari). */
+  const urlToBlob = async (url: string): Promise<Blob> => {
+    if (url.startsWith('data:')) {
+      const comma = url.indexOf(',');
+      const base64 = comma >= 0 ? url.slice(comma + 1) : '';
+      const header = url.slice(0, comma >= 0 ? comma : url.length);
+      const mimeMatch = header.match(/data:([^;]+)/);
+      const mime = (mimeMatch?.[1]?.trim() || 'image/png').replace(/;base64$/i, '');
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.blob();
+  };
+
   const handleDownload = async (asset: GeneratedAsset) => {
     try {
-      const response = await fetch(asset.url);
-      const blob = await response.blob();
+      const blob = await urlToBlob(asset.url);
       const blobUrl = window.URL.createObjectURL(blob);
-      
       const link = document.createElement('a');
       link.href = blobUrl;
-      link.download = `orin-${asset.type}-${asset.timestamp}.${asset.type === 'video' ? 'mp4' : 'png'}`;
+      link.download = `orin-${asset.type}-${asset.timestamp}.${asset.type === 'video' ? 'mp4' : asset.type === 'audio' ? 'wav' : 'png'}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       window.URL.revokeObjectURL(blobUrl);
-    } catch {
-      // Download failed (e.g. blocked by browser)
+    } catch (e) {
+      setError('Download failed. Try again or use a different browser.');
     }
   };
 
   const handleClearHistory = () => {
-    if (confirm("Are you sure you want to clear your generation history? This will delete all temporary assets.")) {
-        setHistory([]);
+    setShowClearHistoryConfirm(true);
+  };
+
+  const readFileAsBase64 = (file: File): Promise<{ imageBytes: string; mimeType: string }> => {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => {
+        const dataUrl = r.result as string;
+        const [header, base64] = dataUrl.split(',');
+        const mimeType = (header?.match(/data:([^;]+)/)?.[1] || 'image/png').trim();
+        resolve({ imageBytes: base64 || '', mimeType });
+      };
+      r.onerror = () => reject(new Error('Failed to read file'));
+      r.readAsDataURL(file);
+    });
+  };
+
+  const handleExtendVideo = async (asset: GeneratedAsset) => {
+    if (asset.type !== 'video') return;
+    const aspect = asset.videoAspectRatio ?? '16:9';
+    const promptToUse = extendPrompt.trim() || 'Continue the scene naturally.';
+    setExtendingTimestamp(asset.timestamp);
+    setError(null);
+    setIsLoading(true);
+    setLoadingMessage('Extending video...');
+    try {
+      let base64: string;
+      if (asset.url.startsWith('data:')) {
+        const comma = asset.url.indexOf(',');
+        base64 = comma >= 0 ? asset.url.slice(comma + 1) : '';
+      } else {
+        const res = await fetch(asset.url);
+        const blob = await res.blob();
+        base64 = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => { const d = (r.result as string).split(',')[1]; resolve(d || ''); };
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+      }
+      const url = await geminiService.generateVideo({
+        prompt: promptToUse,
+        aspectRatio: asset.videoAspectRatio,
+        video: { videoBytes: base64, mimeType: 'video/mp4' },
+      });
+      setHistory(prev => [{ url, prompt: promptToUse, timestamp: Date.now(), type: 'video', videoAspectRatio: asset.videoAspectRatio }, ...prev]);
+      setExtendPrompt('');
+      setExtendingTimestamp(null);
+    } catch (e: unknown) {
+      const appErr = e as AppError;
+      if (appErr?.type === 'plan_required' || appErr?.type === 'limit_reached') {
+        setError(null);
+        setUpgradeModalMessage(appErr.type === 'plan_required' ? "This feature requires a Basic or Pro plan." : "You've reached your plan limit. Upgrade for more.");
+        setShowUpgradeModal(true);
+      } else {
+        setError(e instanceof Error ? e.message : "Video extension failed.");
+      }
+    } finally {
+      setIsLoading(false);
+      setExtendingTimestamp(null);
     }
   };
 
   const inputStyle = "w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
 
+  const goToPricing = () => {
+    setShowUpgradeModal(false);
+    window.location.hash = 'pricing';
+    onClose();
+  };
+
   return (
+    <>
+    {showUpgradeModal && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 animate-fade" onClick={() => setShowUpgradeModal(false)}>
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-white/10" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+              <i className="fa-solid fa-crown text-indigo-500 text-xl"></i>
+            </div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter">Upgrade to continue</h3>
+          </div>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
+          <div className="flex gap-3">
+            <button type="button" onClick={goToPricing} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
+              View plans
+            </button>
+            <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {showClearHistoryConfirm && (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/50 animate-fade" onClick={() => setShowClearHistoryConfirm(false)}>
+        <div
+          className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-white/10"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">
+            Clear studio history?
+          </h3>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+            This will remove all generated images, videos, and audio from this session. Files you've downloaded are not affected.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setShowClearHistoryConfirm(false)}
+              className="px-4 py-2 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                setHistory([]);
+                setShowClearHistoryConfirm(false);
+              }}
+              className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-black uppercase tracking-widest hover:bg-red-500 transition-colors"
+            >
+              Clear history
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
     <div className="max-w-7xl mx-auto space-y-4 animate-reveal pb-12 px-2 sm:px-6 lg:px-8 pt-4 h-full flex flex-col">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 pb-4 shrink-0">
@@ -120,13 +472,25 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 onClick={() => setActiveTab('image')}
                 className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'image' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               >
-                Images
+                🍌 Nano Banana
               </button>
               <button 
                 onClick={() => setActiveTab('video')}
                 className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'video' ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
               >
                 Veo
+              </button>
+              <button 
+                onClick={() => setActiveTab('music')}
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'music' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+              >
+                Music
+              </button>
+              <button 
+                onClick={() => setActiveTab('narration')}
+                className={`text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full transition-all border ${activeTab === 'narration' ? 'bg-indigo-600 text-white border-cyan-600 shadow-md' : 'text-slate-500 dark:text-slate-400 border-transparent hover:bg-black/5 dark:hover:bg-white/5'}`}
+              >
+                Narration
               </button>
             </div>
           </div>
@@ -138,20 +502,192 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
       </div>
 
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {activeTab === 'music' ? (
+          <MusicStudio />
+        ) : activeTab === 'narration' ? (
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-6 items-start overflow-hidden">
+            <div className="space-y-4 lg:overflow-y-auto custom-scrollbar h-full lg:pr-2">
+              <div className="glass-panel p-6 rounded-[32px] border border-slate-200 dark:border-white/10 shadow-xl relative bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
+                <div className="space-y-6 relative z-10">
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
+                      <i className="fa-solid fa-align-left text-indigo-500" /> Script / text to read
+                    </label>
+                    <textarea
+                      value={narrationText}
+                      onChange={(e) => setNarrationText(e.target.value)}
+                      placeholder="Paste essay, article, or dialogue. For multi-speaker use: Speaker1: Hello. Speaker2: Hi there."
+                      className={`${inputStyle} h-32 resize-none leading-relaxed text-sm`}
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Style (optional)</label>
+                    <input
+                      type="text"
+                      value={narrationStyle}
+                      onChange={(e) => setNarrationStyle(e.target.value)}
+                      placeholder="e.g. Read like a BBC news anchor / Sri Lankan English accent / slowly for notes"
+                      className={inputStyle}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="checkbox" id="dialogue" checked={narrationDialogue} onChange={(e) => setNarrationDialogue(e.target.checked)} className="rounded accent-cyan-500" />
+                    <label htmlFor="dialogue" className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest">Dialogue (two speakers)</label>
+                  </div>
+                  {!narrationDialogue ? (
+                    <div className="space-y-2">
+                      <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Voice</label>
+                      <select value={narrationVoice} onChange={(e) => setNarrationVoice(e.target.value)} className={`${inputStyle} pr-8 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}>
+                        {TTS_VOICES.map((v) => <option key={v} value={v} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{v}</option>)}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Speaker 1 name</label>
+                        <input type="text" value={dialogueSpeaker1} onChange={(e) => setDialogueSpeaker1(e.target.value)} className={inputStyle} placeholder="e.g. Joe" />
+                        <select value={dialogueVoice1} onChange={(e) => setDialogueVoice1(e.target.value)} className={`${inputStyle} pr-8 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}>
+                          {TTS_VOICES.map((v) => <option key={v} value={v} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{v}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Speaker 2 name</label>
+                        <input type="text" value={dialogueSpeaker2} onChange={(e) => setDialogueSpeaker2(e.target.value)} className={inputStyle} placeholder="e.g. Jane" />
+                        <select value={dialogueVoice2} onChange={(e) => setDialogueVoice2(e.target.value)} className={`${inputStyle} pr-8 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}>
+                          {TTS_VOICES.map((v) => <option key={v} value={v} className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">{v}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Model</label>
+                    <select value={narrationModel} onChange={(e) => setNarrationModel(e.target.value as 'flash' | 'pro')} className={`${inputStyle} pr-8 appearance-none cursor-pointer bg-slate-50/50 dark:bg-black/40`}>
+                      <option value="flash" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">Fast (Flash)</option>
+                      <option value="pro" className="text-slate-900 dark:text-white bg-white dark:bg-slate-900">Quality (Pro)</option>
+                    </select>
+                  </div>
+                  <button
+                    onClick={() => handleGenerate()}
+                    disabled={isLoading || !narrationText.trim()}
+                    className="w-full py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-3"
+                  >
+                    {isLoading ? <><i className="fa-solid fa-waveform-lines animate-pulse" /><span>Generating...</span></> : <><i className="fa-solid fa-microphone" /><span>Generate audio</span></>}
+                  </button>
+                  {error && (
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl animate-reveal">
+                      <p className="text-[9px] text-red-500 font-black uppercase tracking-widest text-center leading-relaxed">{error}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            {/* Narration preview reuses same right panel as image/video; history includes audio */}
+            <div className="min-h-[500px] h-full glass-panel rounded-[40px] overflow-hidden flex flex-col items-center justify-start p-6 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950 shadow-inner overflow-y-auto custom-scrollbar">
+              <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+              {isLoading && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
+                  <div className="text-center space-y-6 animate-reveal">
+                    <div className="w-24 h-24 rounded-full border-2 border-indigo-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
+                      <i className="fa-solid fa-waveform-lines text-2xl text-indigo-500/40" />
+                    </div>
+                    <p className="text-[9px] text-slate-500 dark:text-slate-400 uppercase tracking-[0.4em] font-black animate-pulse">{loadingMessage}</p>
+                  </div>
+                </div>
+              )}
+              {history.filter((a) => a.type === 'audio').length > 0 ? (
+                <div className="w-full space-y-8 relative z-10 py-6">
+                  {history.filter((a) => a.type === 'audio').map((asset) => (
+                    <div key={asset.timestamp} className="w-full flex flex-col items-center gap-6 animate-scale-in max-w-2xl mx-auto">
+                      <div className="relative w-full rounded-[32px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 p-6">
+                        <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                          <i className="fa-solid fa-headphones" /> audio
+                        </div>
+                        <audio src={asset.url} controls className="w-full mt-8" />
+                        <div className="mt-4 flex justify-center">
+                          <button onClick={() => { const a = document.createElement('a'); a.href = asset.url; a.download = `orin-narration-${asset.timestamp}.wav`; a.click(); }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
+                            <i className="fa-solid fa-download mr-2" /> Download WAV
+                          </button>
+                        </div>
+                        <p className="text-[8px] text-slate-400 dark:text-slate-500 mt-2 line-clamp-2">"{asset.prompt}"</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 relative z-10 opacity-40">
+                  <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-[32px] flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-inner">
+                    <i className="fa-solid fa-microphone-slash text-4xl" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.6em] text-slate-400 dark:text-slate-500">Narration & podcast studio</p>
+                  <p className="text-xs font-bold text-slate-400/80 dark:text-slate-600 max-w-xs mx-auto">Paste text, set style and voice, then generate. 24kHz WAV.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-6 items-start overflow-hidden">
           {/* Left Control Panel */}
           <div className="space-y-4 lg:overflow-y-auto custom-scrollbar h-full lg:pr-2">
             <div className="glass-panel p-6 rounded-[32px] border border-slate-200 dark:border-white/10 shadow-xl relative bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
               <div className="space-y-6 relative z-10">
+                {activeTab === 'image' && (
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Search images by meaning</label>
+                    <input
+                      type="text"
+                      value={imageSearchQuery}
+                      onChange={(e) => setImageSearchQuery(e.target.value)}
+                      placeholder="e.g. beach, sunset, diagrams..."
+                      className={inputStyle}
+                      aria-label="Search generated images by description"
+                    />
+                    {isImageSearching && <p className="text-[9px] text-slate-400">Searching...</p>}
+                    {imageSearchQuery.trim() && imageSearchOrder && !isImageSearching && <p className="text-[9px] text-indigo-600 dark:text-indigo-400">Sorted by relevance</p>}
+                  </div>
+                )}
+                {activeTab === 'video' && (
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Mode</label>
+                    <div className="flex flex-wrap gap-2">
+                      {(['text', 'image', 'frames'] as const).map((m) => (
+                        <button key={m} type="button" onClick={() => setVideoMode(m)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${videoMode === m ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 dark:border-white/10 text-slate-500 hover:bg-black/5 dark:hover:bg-white/5'}`}>
+                          {m === 'text' ? 'Text to video' : m === 'image' ? 'Image to video' : 'First & last frame'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {activeTab === 'video' && videoMode === 'image' && (
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Reference image</label>
+                    <input type="file" accept="image/*" className="text-[10px] w-full" onChange={(e) => { const f = e.target.files?.[0]; if (f) readFileAsBase64(f).then(setVideoImage); e.target.value = ''; }} />
+                    {videoImage && <p className="text-[9px] text-emerald-600 dark:text-emerald-400">Image loaded</p>}
+                  </div>
+                )}
+                {activeTab === 'video' && videoMode === 'frames' && (
+                  <div className="space-y-2 grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">First frame</label>
+                      <input type="file" accept="image/*" className="text-[10px] w-full mt-1" onChange={(e) => { const f = e.target.files?.[0]; if (f) readFileAsBase64(f).then(setVideoFirstFrame); e.target.value = ''; }} />
+                      {videoFirstFrame && <p className="text-[8px] text-emerald-600 mt-1">Loaded</p>}
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-widest px-1">Last frame</label>
+                      <input type="file" accept="image/*" className="text-[10px] w-full mt-1" onChange={(e) => { const f = e.target.files?.[0]; if (f) readFileAsBase64(f).then(setVideoLastFrame); e.target.value = ''; }} />
+                      {videoLastFrame && <p className="text-[8px] text-emerald-600 mt-1">Loaded</p>}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
                     <i className="fa-solid fa-terminal text-indigo-500"></i>
-                    {activeTab === 'video' ? 'Motion Prompt' : 'Neural Input Prompt'}
+                    {activeTab === 'video' ? (videoMode === 'image' ? 'How to animate' : videoMode === 'frames' ? 'Scene description' : 'Motion Prompt') : 'Neural Input Prompt'}
                   </label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={activeTab === 'video' ? "Describe the motion, camera angle, and scene..." : "Describe your vision in high detail..."}
+                    placeholder={activeTab === 'video' ? (videoMode === 'image' ? "e.g. The person in this photo starts walking towards the camera" : videoMode === 'frames' ? "Describe what happens between first and last frame..." : "Describe the motion, camera angle, and scene...") : "Describe your vision in high detail..."}
                     className={`${inputStyle} h-32 resize-none leading-relaxed text-sm`}
                   />
                 </div>
@@ -209,7 +745,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
                 <button 
                   onClick={() => handleGenerate()}
-                  disabled={isLoading || !prompt.trim()}
+                  disabled={isLoading || (activeTab === 'video' ? (videoMode === 'image' ? !prompt.trim() || !videoImage : videoMode === 'frames' ? !prompt.trim() || !videoFirstFrame : !prompt.trim()) : !prompt.trim())}
                   className="w-full py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-3 group relative overflow-hidden"
                 >
                   {isLoading ? (
@@ -264,7 +800,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             )}
 
-            {history.length > 0 ? (
+            {displayHistory.length > 0 ? (
               <div className="w-full space-y-20 relative z-10 py-6">
                 
                 {/* Clear History Button */}
@@ -275,27 +811,48 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </button>
                 </div>
 
-                {history.map((asset, idx) => (
+                {displayHistory.map((asset, idx) => (
                   <div key={asset.timestamp} className="w-full flex flex-col items-center gap-8 animate-scale-in max-w-4xl mx-auto group/item">
                     <div className="relative group/img w-full">
-                      <div className="absolute -inset-4 bg-gradient-to-tr from-cyan-500/10 to-indigo-500/10 rounded-[48px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
+                      <div className="absolute -inset-4 bg-gradient-to-tr from-indigo-500/10 to-indigo-500/10 rounded-[48px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
                       <div className="relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700 min-h-[300px]">
                         
                         {/* Type Badge */}
                         <div className="absolute top-6 left-6 z-20 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
-                           <i className={`fa-solid ${asset.type === 'video' ? 'fa-video' : 'fa-image'}`}></i>
+                           <i className={`fa-solid ${asset.type === 'video' ? 'fa-video' : asset.type === 'audio' ? 'fa-headphones' : 'fa-image'}`}></i>
                            {asset.type}
                         </div>
 
                         {asset.type === 'video' ? (
-                            <video 
-                                src={asset.url} 
-                                controls 
-                                loop
-                                playsInline
-                                className="max-w-full max-h-[70vh] object-contain"
-                                poster={asset.url + "#t=0.5"} 
-                            />
+                            <>
+                              <video 
+                                  src={asset.url} 
+                                  controls 
+                                  loop
+                                  playsInline
+                                  className="max-w-full max-h-[70vh] object-contain"
+                                  poster={asset.url + "#t=0.5"} 
+                              />
+                              {asset.type === 'video' && (
+                                <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-2">
+                                  {extendingTimestamp === asset.timestamp ? (
+                                    <div className="flex flex-col gap-2 p-2 bg-black/60 rounded-xl">
+                                      <input type="text" value={extendPrompt} onChange={(e) => setExtendPrompt(e.target.value)} placeholder="Continue the scene..." className="w-full px-3 py-2 rounded-lg text-xs bg-white/10 border border-white/20 text-white placeholder:text-white/60" />
+                                      <div className="flex gap-2">
+                                        <button onClick={() => handleExtendVideo(asset)} disabled={isLoading} className="flex-1 py-2 rounded-lg bg-indigo-600 text-white text-[10px] font-black uppercase disabled:opacity-50">Extend</button>
+                                        <button onClick={() => { setExtendingTimestamp(null); setExtendPrompt(''); }} className="px-3 py-2 rounded-lg bg-white/10 text-[10px] font-bold">Cancel</button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <button onClick={() => { setExtendingTimestamp(asset.timestamp); setExtendPrompt(''); }} className="py-2 px-4 rounded-lg bg-indigo-600/90 text-white text-[10px] font-black uppercase hover:bg-indigo-500 transition-colors">Extend (+8s)</button>
+                                  )}
+                                </div>
+                              )}
+                            </>
+                        ) : asset.type === 'audio' ? (
+                            <div className="flex flex-col items-center justify-center p-8 w-full">
+                              <audio src={asset.url} controls className="w-full max-w-md" />
+                            </div>
                         ) : (
                             <img 
                                 src={asset.url} 
@@ -323,7 +880,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-2">{asset.type.toUpperCase()}</p>
                       </div>
                     </div>
-                    {idx < history.length - 1 && <div className="w-24 h-[1px] bg-slate-200 dark:bg-white/5 rounded-full mt-8"></div>}
+                    {idx < displayHistory.length - 1 && <div className="w-24 h-[1px] bg-slate-200 dark:bg-white/5 rounded-full mt-8"></div>}
                   </div>
                 ))}
               </div>
@@ -346,7 +903,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             <div className="absolute bottom-8 right-8 w-12 h-12 border-b border-r border-slate-200 dark:border-white/5 rounded-br-[32px] pointer-events-none"></div>
           </div>
       </div>
+        )}
+      </div>
     </div>
+    </>
   );
 };
 

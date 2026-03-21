@@ -1,6 +1,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { geminiService } from '../services/geminiService';
+import { cacheService, CacheKey } from '../services/cacheService';
 import { Language } from '../types';
 import { translations } from '../translations';
 import { LiveServerMessage } from '@google/genai';
@@ -42,13 +43,35 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const [isActive, setIsActive] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
-  // Settings
+  // Settings (persisted via cacheService so they survive tab switch / unmount)
   const [showSettings, setShowSettings] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState('Zephyr');
-  const [selectedTone, setSelectedTone] = useState('neutral');
-  
+  const [settingsSavedFeedback, setSettingsSavedFeedback] = useState(false);
+  const [modeSwitchBlockedFeedback, setModeSwitchBlockedFeedback] = useState(false);
+  const [selectedVoice, setSelectedVoice] = useState(() => cacheService.get(CacheKey.VOICE_NAME, 'Zephyr'));
+  const [selectedTone, setSelectedTone] = useState(() => cacheService.get(CacheKey.VOICE_TONE, 'neutral'));
+  const [proactiveAudio, setProactiveAudio] = useState(() => cacheService.get(CacheKey.VOICE_PROACTIVE_AUDIO, true));
+  const [affectiveDialog, setAffectiveDialog] = useState(() => cacheService.get(CacheKey.VOICE_AFFECTIVE_DIALOG, true));
+
+  const handleVoiceChange = useCallback((voice: string) => {
+    setSelectedVoice(voice);
+    cacheService.set(CacheKey.VOICE_NAME, voice);
+  }, []);
+  const handleToneChange = useCallback((tone: string) => {
+    setSelectedTone(tone);
+    cacheService.set(CacheKey.VOICE_TONE, tone);
+  }, []);
+  const handleProactiveAudioChange = useCallback((v: boolean) => {
+    setProactiveAudio(v);
+    cacheService.set(CacheKey.VOICE_PROACTIVE_AUDIO, v);
+  }, []);
+  const handleAffectiveDialogChange = useCallback((v: boolean) => {
+    setAffectiveDialog(v);
+    cacheService.set(CacheKey.VOICE_AFFECTIVE_DIALOG, v);
+  }, []);
+
   const [langA, setLangA] = useState(LANGUAGES.find(l => l.code === 'en') || LANGUAGES[0]);
   const [langB, setLangB] = useState(LANGUAGES.find(l => l.code === 'si') || LANGUAGES[1]);
 
@@ -60,22 +83,38 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
   const [transcription, setTranscription] = useState<{ role: 'user' | 'model', text: string }[]>([]);
   const scrollTranscriptionRef = useRef<HTMLDivElement>(null);
+  const prevTranscriptionLengthRef = useRef(0);
+  const MAX_TRANSCRIPTION_ENTRIES = 100;
 
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const audioInputNodeRef = useRef<ScriptProcessorNode | AudioWorkletNode | null>(null);
+  const inputBufferRef = useRef<Float32Array[]>([]);
+  const INPUT_BATCH_SAMPLES = 4096;
+
+  const isActiveRef = useRef(isActive);
+  const isSpeakingRef = useRef(isSpeaking);
+  const isMutedRef = useRef(isMuted);
+  isActiveRef.current = isActive;
+  isSpeakingRef.current = isSpeaking;
+  isMutedRef.current = isMuted;
 
   const updateVisualizer = useCallback(() => {
-    if (!isActive) return;
+    const active = isActiveRef.current;
+    if (!active) return;
     const dataArray = new Uint8Array(BAR_COUNT);
     let hasSignal = false;
+    const speaking = isSpeakingRef.current;
 
-    if (isSpeaking && analyserRef.current) {
+    if (speaking && analyserRef.current) {
       analyserRef.current.getByteFrequencyData(dataArray);
       hasSignal = true;
-    } else if (isActive && inputAnalyserRef.current) {
+    } else if (active && inputAnalyserRef.current) {
       inputAnalyserRef.current.getByteFrequencyData(dataArray);
       hasSignal = true;
     }
@@ -96,7 +135,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         });
     }
     animationFrameRef.current = requestAnimationFrame(updateVisualizer);
-  }, [isActive, isSpeaking]);
+  }, []);
 
   useEffect(() => {
     animationFrameRef.current = requestAnimationFrame(updateVisualizer);
@@ -125,6 +164,73 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     return btoa(b);
   }
 
+  // Preview a given voice without starting a full live session.
+  const previewVoice = useCallback(async (voiceId: string) => {
+    if (isActive || isConnecting) return; // avoid clashing with live session
+    try {
+      const base64 = await geminiService.generateTts({
+        text: `Hi, this is the ${voiceId} voice preview.`,
+        voiceName: voiceId,
+        model: 'flash',
+      });
+
+      const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!audioContextRef.current) {
+        audioContextRef.current = new AudioCtx();
+        analyserRef.current = audioContextRef.current.createAnalyser();
+        analyserRef.current.fftSize = 64;
+        analyserRef.current.connect(audioContextRef.current.destination);
+        nextStartTimeRef.current = audioContextRef.current.currentTime;
+      }
+
+      const ctx = audioContextRef.current!;
+      const buf = await decodeAudioData(decodeBase64(base64), ctx);
+      const s = ctx.createBufferSource();
+      s.buffer = buf;
+      s.connect(analyserRef.current!);
+      const now = ctx.currentTime;
+      if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
+      s.start(nextStartTimeRef.current);
+      nextStartTimeRef.current += buf.duration;
+      sourcesRef.current.add(s);
+      setIsSpeaking(true);
+      s.onended = () => {
+        sourcesRef.current.delete(s);
+        if (sourcesRef.current.size === 0) setIsSpeaking(false);
+      };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Voice preview failed';
+      setErrorMessage(msg);
+    }
+  }, [isActive, isConnecting]);
+
+  // Resample arbitrary input sample rate down to 16kHz mono PCM16.
+  function toPcm16At16k(source: Float32Array, sourceSampleRate: number): Int16Array {
+    const targetRate = 16000;
+    if (!sourceSampleRate || sourceSampleRate === targetRate) {
+      const out = new Int16Array(source.length);
+      for (let i = 0; i < source.length; i++) {
+        const s = Math.max(-1, Math.min(1, source[i] || 0));
+        out[i] = s * 32767;
+      }
+      return out;
+    }
+    const ratio = sourceSampleRate / targetRate;
+    const targetLength = Math.floor(source.length / ratio);
+    const out = new Int16Array(targetLength);
+    for (let i = 0; i < targetLength; i++) {
+      const srcIndex = i * ratio;
+      const i0 = Math.floor(srcIndex);
+      const i1 = Math.min(i0 + 1, source.length - 1);
+      const frac = srcIndex - i0;
+      const s0 = source[i0] || 0;
+      const s1 = source[i1] || 0;
+      const s = Math.max(-1, Math.min(1, s0 + (s1 - s0) * frac));
+      out[i] = s * 32767;
+    }
+    return out;
+  }
+
   const stopAiSpeaking = useCallback(() => {
     sourcesRef.current.forEach(s => { try { s.stop(); } catch(e) {} });
     sourcesRef.current.clear();
@@ -132,14 +238,29 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     setIsSpeaking(false);
   }, []);
 
+  const isStoppingRef = useRef(false);
+
   const stopSession = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
     stopAiSpeaking();
     if (sessionRef.current) { try { sessionRef.current.close(); } catch(e) {} sessionRef.current = null; }
+    audioSourceRef.current?.disconnect();
+    audioInputNodeRef.current?.disconnect();
+    audioInputNodeRef.current = null;
+    audioSourceRef.current = null;
+    inputBufferRef.current = [];
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') { try { audioContextRef.current.close(); } catch(e) {} }
     if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') { try { inputAudioContextRef.current.close(); } catch(e) {} }
     setIsActive(false);
     setIsConnecting(false);
+    setIsMuted(false);
     setTranscription([]);
+    isStoppingRef.current = false;
   }, [stopAiSpeaking]);
 
   const getSessionContext = (): { timezone: string; localTime: string; country: string; currency: string; locale: string } => {
@@ -169,15 +290,21 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      // FIX: Use system default sample rate to prevent crashes on incompatible hardware
-      audioContextRef.current = new AudioCtx(); 
+      // Close any existing contexts (e.g. from previewVoice) so we don't orphan them.
+      const prevOut = audioContextRef.current;
+      if (prevOut && prevOut.state !== 'closed') { try { prevOut.close(); } catch {} }
+      const prevIn = inputAudioContextRef.current;
+      if (prevIn && prevIn.state !== 'closed') { try { prevIn.close(); } catch {} }
+      // Use system default for output; input sample rate is read dynamically and resampled to 16kHz.
+      audioContextRef.current = new AudioCtx();
       inputAudioContextRef.current = new AudioCtx(); 
-      const inputSampleRate = inputAudioContextRef.current.sampleRate;
+      const inputSampleRate = inputAudioContextRef.current.sampleRate || 44100;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
-      
+      streamRef.current = stream;
+
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 64; 
       analyserRef.current.connect(audioContextRef.current.destination);
@@ -186,35 +313,71 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       inputAnalyserRef.current.fftSize = 64;
 
       const callbacks = {
-        onopen: () => {
+        onopen: async () => {
           setIsConnecting(false);
           setIsActive(true);
-          const src = inputAudioContextRef.current!.createMediaStreamSource(stream);
-          const proc = inputAudioContextRef.current!.createScriptProcessor(4096, 1, 1);
+          const ctx = inputAudioContextRef.current!;
+          const src = ctx.createMediaStreamSource(stream);
+          audioSourceRef.current = src;
           src.connect(inputAnalyserRef.current!);
-          proc.onaudioprocess = (e) => {
-            if (!sessionRef.current) return;
-            const data = e.inputBuffer.getChannelData(0);
-            const int16 = new Int16Array(data.length);
-            for (let i = 0; i < data.length; i++) int16[i] = data[i] * 32768;
-            
-            sessionRef.current.sendRealtimeInput({ 
-                media: { 
-                    data: encodeBase64(new Uint8Array(int16.buffer)), 
-                    mimeType: `audio/pcm;rate=${inputSampleRate}`
-                } 
-            });
+
+          const sampleRate = inputSampleRate;
+          const flushBuffer = () => {
+            const chunks = inputBufferRef.current;
+            if (chunks.length === 0) return;
+            const total = chunks.reduce((n, c) => n + c.length, 0);
+            const merged = new Float32Array(total);
+            let offset = 0;
+            for (const c of chunks) { merged.set(c, offset); offset += c.length; }
+            inputBufferRef.current = [];
+            if (!sessionRef.current || isMutedRef.current) return;
+            const pcm16 = toPcm16At16k(merged, sampleRate);
+            sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
           };
-          src.connect(proc);
-          proc.connect(inputAudioContextRef.current!.destination);
+
+          try {
+            await ctx.audioWorklet.addModule('/voice-input-processor.js');
+            const workletNode = new AudioWorkletNode(ctx, 'voice-input-processor', { processorOptions: { sampleRate } });
+            audioInputNodeRef.current = workletNode;
+            workletNode.port.onmessage = (e: MessageEvent<{ samples: ArrayBuffer; sampleRate: number }>) => {
+              if (isMutedRef.current) return;
+              const { samples } = e.data;
+              inputBufferRef.current.push(new Float32Array(samples));
+              let total = 0;
+              for (const c of inputBufferRef.current) total += c.length;
+              if (total >= INPUT_BATCH_SAMPLES) flushBuffer();
+            };
+            src.connect(workletNode);
+          } catch {
+            // Fallback for browsers without AudioWorklet.
+            // We only process input and DO NOT connect to destination to avoid microphone feedback.
+            const proc = ctx.createScriptProcessor(4096, 1, 1);
+            audioInputNodeRef.current = proc;
+            proc.onaudioprocess = (e) => {
+              if (!sessionRef.current || isMutedRef.current) return;
+              const data = e.inputBuffer.getChannelData(0);
+              const pcm16 = toPcm16At16k(data, sampleRate);
+              sessionRef.current.sendRealtimeInput({ media: { data: encodeBase64(new Uint8Array(pcm16.buffer)), mimeType: 'audio/pcm;rate=16000' } });
+            };
+            src.connect(proc);
+          }
         },
         onmessage: async (msg: LiveServerMessage) => {
           if (msg.serverContent?.inputTranscription) {
             const txt = msg.serverContent.inputTranscription.text;
-            setTranscription(prev => [...prev, { role: 'user', text: txt }]);
+            setTranscription(prev => {
+              const next = [...prev, { role: 'user', text: txt }];
+              return next.length > MAX_TRANSCRIPTION_ENTRIES ? next.slice(-MAX_TRANSCRIPTION_ENTRIES) : next;
+            });
           } else if (msg.serverContent?.outputTranscription) {
             const txt = msg.serverContent.outputTranscription.text;
-            setTranscription(prev => [...prev, { role: 'model', text: txt }]);
+            setTranscription(prev => {
+              const last = prev[prev.length - 1];
+              const next = last?.role === 'model'
+                ? [...prev.slice(0, -1), { role: 'model', text: last.text + txt }]
+                : [...prev, { role: 'model', text: txt }];
+              return next.length > MAX_TRANSCRIPTION_ENTRIES ? next.slice(-MAX_TRANSCRIPTION_ENTRIES) : next;
+            });
           }
 
           const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
@@ -243,8 +406,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       };
 
       const p = mode === 'translator' 
-        ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label })
-        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext });
+        ? geminiService.connectTranslator(callbacks, { source: langA.label, target: langB.label, proactiveAudio, enableAffectiveDialog: affectiveDialog })
+        : geminiService.connectLive(callbacks, { voiceName: selectedVoice, tone: selectedTone, sessionContext, proactiveAudio, enableAffectiveDialog: affectiveDialog });
 
       sessionRef.current = await p;
     } catch (e: unknown) {
@@ -254,7 +417,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   };
 
   useEffect(() => {
-    if (scrollTranscriptionRef.current) scrollTranscriptionRef.current.scrollTop = scrollTranscriptionRef.current.scrollHeight;
+    const prevLen = prevTranscriptionLengthRef.current;
+    const currLen = transcription.length;
+    prevTranscriptionLengthRef.current = currLen;
+    // Only scroll when a new message is added (new bubble), not on every streaming chunk to the last model message.
+    if (currLen > prevLen && scrollTranscriptionRef.current) {
+      scrollTranscriptionRef.current.scrollTop = scrollTranscriptionRef.current.scrollHeight;
+    }
   }, [transcription]);
 
   const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
@@ -267,8 +436,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     if (isActive) {
         stopSession();
         setTimeout(() => startSession(), 500);
+    } else {
+        setSettingsSavedFeedback(true);
     }
   };
+
+  useEffect(() => {
+    if (!settingsSavedFeedback) return;
+    const t = setTimeout(() => setSettingsSavedFeedback(false), 2500);
+    return () => clearTimeout(t);
+  }, [settingsSavedFeedback]);
+
+  useEffect(() => {
+    if (!modeSwitchBlockedFeedback) return;
+    const t = setTimeout(() => setModeSwitchBlockedFeedback(false), 2500);
+    return () => clearTimeout(t);
+  }, [modeSwitchBlockedFeedback]);
 
   return (
     <div className={inline ? "h-full w-full flex flex-col items-center justify-center min-h-0" : "fixed inset-0 z-[150] flex items-center justify-center p-4 safe-pt safe-pb bg-black/40 backdrop-blur-md overflow-y-auto"}>
@@ -286,16 +469,28 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
              
              <div className="flex-1 overflow-y-auto space-y-8">
                 <div className="space-y-4">
-                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice Model</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voice Model</label>
                    <div className="grid grid-cols-1 gap-2">
                       {VOICES.map(v => (
                          <button 
                            key={v.id}
-                           onClick={() => setSelectedVoice(v.id)}
+                           onClick={() => { setSelectedVoice(v.id); cacheService.set(CacheKey.VOICE_NAME, v.id); }}
                            className={`p-4 rounded-2xl text-left flex justify-between items-center transition-all ${selectedVoice === v.id ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-white/5 text-slate-500'}`}
                          >
-                            <span className="text-xs font-bold">{v.label}</span>
-                            {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
+                            <div className="flex items-center justify-between w-full gap-3">
+                              <span className="text-xs font-bold">{v.label}</span>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={(e) => { e.stopPropagation(); previewVoice(v.id); }}
+                                  className="w-7 h-7 rounded-full bg-white/20 text-white flex items-center justify-center text-[10px] hover:bg-white/30 transition-colors"
+                                  aria-label={`Preview ${v.label}`}
+                                >
+                                  <i className="fa-solid fa-play"></i>
+                                </button>
+                                {selectedVoice === v.id && <i className="fa-solid fa-check text-xs"></i>}
+                              </div>
+                            </div>
                          </button>
                       ))}
                    </div>
@@ -307,12 +502,28 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                       {TONES.map(t => (
                          <button 
                            key={t.id}
-                           onClick={() => setSelectedTone(t.id)}
+                           onClick={() => handleToneChange(t.id)}
                            className={`p-3 rounded-xl text-xs font-bold text-center transition-all border ${selectedTone === t.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}`}
                          >
                             {t.label}
                          </button>
                       ))}
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Native audio</label>
+                   <div className="space-y-3">
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 cursor-pointer">
+                         <input type="checkbox" checked={proactiveAudio} onChange={(e) => handleProactiveAudioChange(e.target.checked)} className="rounded accent-cyan-500" />
+                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Proactive Audio</span>
+                         <span className="text-[10px] text-slate-500">Only respond when relevant; ignore background noise &amp; TV.</span>
+                      </label>
+                      <label className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 cursor-pointer">
+                         <input type="checkbox" checked={affectiveDialog} onChange={(e) => handleAffectiveDialogChange(e.target.checked)} className="rounded accent-cyan-500" />
+                         <span className="text-xs font-bold text-slate-700 dark:text-slate-200">Affective Dialog</span>
+                         <span className="text-[10px] text-slate-500">Adapt tone to your emotion (e.g. frustration, excitement).</span>
+                      </label>
                    </div>
                 </div>
              </div>
@@ -329,9 +540,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               <span className={`text-[9px] font-black uppercase tracking-widest animate-beta-pulse ${isActive ? 'text-slate-400' : `text-${activeColor}-600`}`}>BETA v5.0</span>
            </div>
            
-           <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 border border-black/5 dark:border-white/5">
-               <button onClick={() => { if(!isActive) setMode('assistant'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.assistant}</button>
-               <button onClick={() => { if(!isActive) setMode('translator'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.interpreter}</button>
+           <div className="flex flex-col items-end gap-1">
+             <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 border border-black/5 dark:border-white/5">
+               <button onClick={() => { if (isActive && mode !== 'assistant') setModeSwitchBlockedFeedback(true); else if (!isActive) setMode('assistant'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.assistant}</button>
+               <button onClick={() => { if (isActive && mode !== 'translator') setModeSwitchBlockedFeedback(true); else if (!isActive) setMode('translator'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.interpreter}</button>
+             </div>
+             {modeSwitchBlockedFeedback && (
+               <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest animate-fade">{t.voiceMode.stopSessionToChangeMode}</span>
+             )}
            </div>
         </div>
 
@@ -344,6 +560,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                     {isActive && <div className={`absolute -inset-4 rounded-full border-2 border-current opacity-10 ${isSpeaking ? 'animate-ping' : ''}`}></div>}
                     <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl`}></i>
                     
+                    {isActive && (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setIsMuted(m => !m); }}
+                        className={`absolute -bottom-1 -left-1 w-12 h-12 rounded-full flex items-center justify-center hover:scale-110 active:scale-95 transition-transform shadow-2xl border-4 border-slate-50 dark:border-slate-950 animate-reveal ${isMuted ? 'bg-red-500 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+                        title={isMuted ? 'Unmute mic' : 'Mute mic'}
+                      >
+                        <i className={`fa-solid ${isMuted ? 'fa-microphone-slash' : 'fa-microphone'}`}></i>
+                      </button>
+                    )}
                     {isSpeaking && (
                       <button 
                         onClick={(e) => { e.stopPropagation(); stopAiSpeaking(); }}
@@ -357,10 +582,15 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
                
                {/* Config Button (When Idle) */}
                {!isActive && mode === 'assistant' && (
-                  <button onClick={() => setShowSettings(true)} className="mt-4 flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-full text-[9px] font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
-                     <i className="fa-solid fa-sliders"></i>
-                     <span>{selectedVoice} • {selectedTone}</span>
-                  </button>
+                  <div className="mt-4 flex flex-col items-center gap-2">
+                    <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-white/5 rounded-full text-[9px] font-bold text-slate-500 uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-all">
+                       <i className="fa-solid fa-sliders"></i>
+                       <span>{selectedVoice} • {selectedTone}</span>
+                    </button>
+                    {settingsSavedFeedback && (
+                      <span className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest animate-fade">Settings saved</span>
+                    )}
+                  </div>
                )}
                
                {/* Language Selectors (Only in Translator Mode) */}
@@ -392,7 +622,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
                <div className="mt-6 text-center space-y-1">
                   <h2 className={`text-xl font-black uppercase tracking-tight transition-colors ${isActive ? 'text-slate-900 dark:text-white' : 'text-slate-400'}`}>
-                      {isActive ? (isSpeaking ? "Speaking" : "Listening") : (mode === 'translator' ? "AI Interpreter" : t.voice)}
+                      {isActive ? (isSpeaking ? "Speaking" : isMuted ? "Muted" : "Listening") : (mode === 'translator' ? "AI Interpreter" : t.voice)}
                   </h2>
                   {isActive && mode === 'translator' && (
                      <div className="flex justify-center gap-2 mt-2">

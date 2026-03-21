@@ -128,24 +128,6 @@ export class GeminiService {
     }
   }
 
-  /** Chat model chain by plan. Free → 2.0-flash, Basic → 2.5-flash, Pro → 2.5-pro */
-  private getModelsToTry(user: typeof this.currentUser): string[] {
-    const plan = user?.plan?.toLowerCase() ?? 'free';
-    if (plan === 'pro' || plan === 'pro_yearly')
-      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.0-flash'];
-    if (plan === 'basic' || plan === 'basic_yearly')
-      return ['gemini-2.5-flash', 'gemini-2.0-flash'];
-    return ['gemini-2.0-flash', 'gemini-2.5-flash'];
-  }
-
-  /** Context window depth by plan. Free=5, Basic=10, Pro=20 */
-  private getContextLimit(user: typeof this.currentUser): number {
-    const plan = user?.plan?.toLowerCase() ?? 'free';
-    if (plan === 'pro' || plan === 'pro_yearly') return 20;
-    if (plan === 'basic' || plan === 'basic_yearly') return 10;
-    return 5;
-  }
-
   private async getApiKey(): Promise<string> {
     const envKey = process.env.API_KEY;
     if (envKey && envKey.trim()) return envKey.trim();
@@ -169,6 +151,28 @@ export class GeminiService {
     }
   }
 
+  /** Chat model fallback chain by plan. Matches pricing: Free=2.0-flash, Basic=2.5-flash, Pro=3.1-pro. */
+  private getModelsToTry(user: UserAccount | null): string[] {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+
+    if (plan === 'pro' || plan === 'pro_yearly') {
+      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.5-flash'];
+    }
+    if (plan === 'basic' || plan === 'basic_yearly') {
+      return ['gemini-2.5-flash', 'gemini-2.0-flash'];
+    }
+    // Free: keep a single, valid model to avoid silent fallbacks to non-existent names.
+    return ['gemini-2.0-flash'];
+  }
+
+  /** Context window size by plan (last N messages). Matches pricing: Free=5, Basic=10, Pro=20. */
+  private getContextMessageLimit(user: UserAccount | null): number {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+    if (plan === 'pro' || plan === 'pro_yearly') return 20;
+    if (plan === 'basic' || plan === 'basic_yearly') return 10;
+    return 5;
+  }
+
   async chat(prompt: string, options: { 
     useThinking?: boolean; 
     descriptive?: boolean;
@@ -180,15 +184,18 @@ export class GeminiService {
     signal?: AbortSignal;
     isPrivate?: boolean;
     /** Internal/system calls (e.g. release summaries) should not consume user quota. */
+    internal?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     
-    if (this.currentUser) {
-      const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
-      if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
-    } else {
-      this.resetGuestWindows();
+    if (!options.internal) {
+      if (this.currentUser) {
+        const limitReached = await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'text');
+        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
+      } else {
+        this.resetGuestWindows();
       if (this.guestUsage.textCount >= this.guestUsage.textMax) {
-        throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
+          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
+        }
       }
     }
 
@@ -215,7 +222,7 @@ EXPLANATION STYLE:
     const promptText = (prompt || "Continue.").trim();
 
     try {
-      const contextLimit = this.getContextLimit(this.currentUser);
+      const contextLimit = this.getContextMessageLimit(this.currentUser);
       const contents: { role: 'user' | 'model'; parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] }[] = [];
       if (options.history && options.history.length > 0) {
         for (const msg of options.history.slice(-contextLimit)) {
@@ -382,7 +389,7 @@ EXPLANATION STYLE:
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
     if (this.currentUser) {
-       if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
+       if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
        this.resetGuestWindows();
        if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
@@ -394,7 +401,7 @@ EXPLANATION STYLE:
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
       const imageModel = this.currentUser?.plan?.toLowerCase().includes('pro')
-        ? 'gemini-3-pro-image-preview'
+        ? 'gemini-2.0-flash-preview-image-generation'
         : 'gemini-2.0-flash-preview-image-generation';
       const response = await ai.models.generateContent({
         model: imageModel,
@@ -437,7 +444,7 @@ EXPLANATION STYLE:
       if (!hasVideoPlan) {
         throw new AppError("Video generation requires a Basic or Pro plan. Upgrade to continue.", "plan_required");
       }
-      if (await firebaseService.checkLimit(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
+      if (await firebaseService.checkAndIncrementUsage(this.currentUser.id, 'videos')) throw new AppError("Video limit reached.", "limit_reached");
     } else {
       this.resetGuestWindows();
       if (this.guestUsage.uploadCount >= this.guestUsage.uploadMax) {
@@ -603,15 +610,9 @@ EXPLANATION STYLE:
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
       const firstMsg = (messages[0]?.content || '').slice(0, 120);
-      const prompt = `Reply with ONLY a 2-4 word title for this chat. No punctuation, no quotes, no explanation — just the title words.
-Chat: "${firstMsg}"`;
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash-lite',
-        contents: prompt,
-        config: { maxOutputTokens: 12 },
-      });
+      const prompt = `Reply with ONLY a 2-4 word title for this chat. No punctuation, no quotes, no explanation — just the title words.\nChat: "${firstMsg}"`;
+      const response = await ai.models.generateContent({ model: 'gemini-2.0-flash-lite', contents: prompt, config: { maxOutputTokens: 12 } });
       const raw = ((response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "").trim();
-      // Strip any surrounding quotes, bullets, or "Title:" prefixes the model might add
       const clean = raw.replace(/^["'`*•\-–—]|["'`*•]$/g, '').replace(/^title[:\s]*/i, '').trim();
       return clean.slice(0, 40) || "New Chat";
     } catch { return "New Chat"; }
@@ -879,10 +880,11 @@ If the speech is unclear or too short to translate, output nothing.`,
     await session.play();
     return session;
   }
+}
 
   /**
-   * Dedicated math solver — own Symbolab-style system instruction, bypasses
-   * the anti-chain-of-thought instruction in chat(). Plan-based model routing.
+   * Dedicated math solver with Symbolab-style system instruction.
+   * Bypasses anti-chain-of-thought in chat(). Uses plan-based model routing.
    */
   async solveMathWithAI(options: {
     prompt: string;
@@ -942,6 +944,5 @@ If multiple methods, add a second block. Steps ARE the answer.`;
 
     return text || 'No solution returned. Try again.';
   }
-}
 
 export const geminiService = new GeminiService();
