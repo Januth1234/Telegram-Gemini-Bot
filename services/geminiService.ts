@@ -782,66 +782,46 @@ When the user asks about time, date, weather, or prices, use this context. For w
 
   /** Live audio models — try native audio first (best quality), fall back to stable. */
   // SDK-documented model for Gemini API (non-Vertex) live sessions
+  // SDK-documented live model for Gemini API (not Vertex AI)
   private static readonly LIVE_MODEL = 'gemini-live-2.5-flash-preview';
 
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
-    // Always use stable v1 — v1alpha causes connection rejection with current live models
     const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-
-    // Minimal, clean config — only proven-valid fields for Gemini Live API
-    const liveConfig: Record<string, unknown> = {
+    const finalConfig = {
       responseModalities: [Modality.AUDIO],
-      speechConfig: {
-        voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } },
-      },
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
+      ...(config.enableAffectiveDialog ? { enableAffectiveDialog: true } : {}),
+      ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
-    // Only add optional features if explicitly enabled (don't send empty objects)
-    if (config.enableAffectiveDialog === true) liveConfig.enableAffectiveDialog = true;
-    if (config.proactiveAudio === true) liveConfig.proactivity = { proactiveAudio: true };
-
-    const { __setSessionPromise, ...passThroughCallbacks } = callbacks as {
-      __setSessionPromise?: (p: Promise<unknown>) => void;
-      [k: string]: unknown;
-    };
-
-    const sessionPromise = ai.live.connect({
-      model: GeminiService.LIVE_MODEL,
-      callbacks: passThroughCallbacks as any,
-      config: liveConfig,
-    });
-    __setSessionPromise?.(sessionPromise);
-    return sessionPromise;
-  }
-
-  /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */
-  async connectLiveMath(callbacks: any) {
-    return this.connectLive(callbacks, {
-      systemInstruction: `You are a math speech-to-LaTeX converter. The user will speak a mathematical expression or equation in plain English (e.g. "x squared plus 5x minus 6 equals zero"). Respond with ONLY the LaTeX equivalent, nothing else. No explanation, no words—just the raw LaTeX. Examples: "x squared plus 1" -> x^2+1, "five x minus two equals zero" -> 5x-2=0, "square root of 2" -> \\sqrt{2}. Output only valid LaTeX.`,
-    });
+    return ai.live.connect({ model: GeminiService.LIVE_MODEL, callbacks, config: finalConfig });
   }
 
   async connectTranslator(callbacks: any, options: any) {
     return this.connectLive(callbacks, {
       voiceName: 'Zephyr',
-      systemInstruction: `You are a real-time interpreter. The user will speak in either ${options.source} or ${options.target}.
-Detect the language automatically. If they speak ${options.source}, output the translation in ${options.target}.
-If they speak ${options.target}, output in ${options.source}.
-Output ONLY the translation. Do not add commentary, greetings, or explanations.
-If the speech is unclear or too short to translate, output nothing.`,
-      proactiveAudio: options.proactiveAudio,
-      enableAffectiveDialog: options.enableAffectiveDialog,
+      systemInstruction: `You are a real-time interpreter between ${options.source} and ${options.target}.
+Detect the language automatically and translate to the other language.
+Output ONLY the translation — no commentary, greetings, or explanations.`,
     });
   }
 
   async connectMultimodal(callbacks: any, config: any) {
     return this.connectLive(callbacks, {
       voiceName: config.voiceName || 'Zephyr',
-      systemInstruction: `${getToneInstruction(config.tone)}. You are viewing a live video feed. Describe what you see and answer questions about the video in real time.`,
+      systemInstruction: `${getToneInstruction(config.tone || 'neutral')}
+You are processing a live video feed. Describe what you see, answer questions about the video, and respond naturally to the user's voice. Be concise and conversational.`,
+    });
+  }
+
+    /** Voice-to-math: same connectLive flow, system instruction asks for LaTeX-only output. */
+  async connectLiveMath(callbacks: any) {
+    return this.connectLive(callbacks, {
+      systemInstruction: `You are a math speech-to-LaTeX converter. The user will speak a mathematical expression or equation in plain English (e.g. "x squared plus 5x minus 6 equals zero"). Respond with ONLY the LaTeX equivalent, nothing else. No explanation, no words—just the raw LaTeX. Examples: "x squared plus 1" -> x^2+1, "five x minus two equals zero" -> 5x-2=0, "square root of 2" -> \\sqrt{2}. Output only valid LaTeX.`,
     });
   }
 
