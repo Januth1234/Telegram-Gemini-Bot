@@ -339,9 +339,15 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     if (!mathLiveReady) return;
     const first = equationRefs.current[0];
     if (first) {
-      // Apply settings after a tick to ensure the element is fully upgraded
       setTimeout(() => {
         try {
+          // Move keyboard toggle + menu buttons to the right (trailing)
+          equationRefs.current.forEach(mf => {
+            if (!mf) return;
+            try { mf.setAttribute('virtual-keyboard-toggle', 'trailing'); } catch {}
+            // Also try the mathfield API directly
+            try { if (mf.menuToggle !== undefined) mf.menuToggle = 'trailing'; } catch {}
+          });
           if (first.mathfield) first.mathfield.focus();
           else first.focus?.();
         } catch {}

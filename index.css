@@ -93,3 +93,25 @@ pre { overflow-x: auto; border-radius: 12px; padding: 1rem 1.25rem; background: 
 
 .view-enter { animation: reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+
+/* ─── MathLive: move keyboard toggle + menu to far right ─────────────────── */
+/* MathLive renders its toolbar inside shadow DOM using a flex container.
+   Setting direction pushes the toggle buttons (first children) to the end. */
+math-field {
+  --keyboard-toggle-float: right;
+}
+/* Fallback: target the outer container MathLive adds via ::part */
+math-field::part(container) {
+  flex-direction: row-reverse;
+}
+/* The math content should still fill available space */
+math-field::part(content) {
+  flex: 1;
+}
+/* Keep the toggle buttons grouped on the right */
+math-field::part(virtual-keyboard-toggle),
+math-field::part(menu-toggle) {
+  order: 99;
+  margin-left: 4px;
+  margin-right: 0;
+}
