@@ -693,34 +693,45 @@ const App: React.FC = () => {
 
   // Refined base backgrounds: smooth gradients, cohesive palettes per theme.
   const themeBgByMode: Record<UserThemeId, { light: string; dark: string }> = {
-    classic: { light: 'bg-slate-50', dark: 'bg-slate-950' },
+    // Classic: warm off-white / deep charcoal (not pure black/white)
+    classic: {
+      light: 'bg-[#f7f7f5]',
+      dark:  'bg-[#1a1a1f]',
+    },
+    // Midnight: soft indigo-tinted
     midnight: {
-      light: 'bg-gradient-to-br from-indigo-50/80 via-slate-100 to-violet-100/90',
-      dark: 'bg-gradient-to-b from-[#0c0a1a] via-[#12102a] to-[#0f0d1f]',
+      light: 'bg-gradient-to-br from-[#eef0ff] via-[#f2f0ff] to-[#ece8ff]',
+      dark:  'bg-gradient-to-b from-[#10102a] via-[#13112a] to-[#0e0c22]',
     },
+    // Aurora: soft teal-green wash
     aurora: {
-      light: 'bg-gradient-to-br from-emerald-50/90 via-teal-50/70 to-cyan-50/90',
-      dark: 'bg-gradient-to-b from-slate-950 via-emerald-950/40 to-slate-950',
+      light: 'bg-gradient-to-br from-[#edfdf8] via-[#f0fdf9] to-[#e8faf5]',
+      dark:  'bg-gradient-to-b from-[#0d1a16] via-[#101f1b] to-[#0c1814]',
     },
+    // Terminal: deep forest green tinted
     terminal: {
-      light: 'bg-gradient-to-b from-slate-100 via-emerald-50/60 to-slate-50',
-      dark: 'bg-gradient-to-b from-[#0d1117] via-[#0a1410] to-[#0d1117]',
+      light: 'bg-gradient-to-b from-[#f0faf2] via-[#edf9ef] to-[#f0faf2]',
+      dark:  'bg-[#080f08]',
     },
+    // Paper: warm parchment / deep mahogany
     paper: {
-      light: 'bg-gradient-to-br from-stone-50 via-amber-50/80 to-stone-100',
-      dark: 'bg-gradient-to-br from-stone-950 via-amber-950/20 to-stone-900',
+      light: 'bg-gradient-to-br from-[#fdf8f0] via-[#fef6ec] to-[#fdf3e8]',
+      dark:  'bg-gradient-to-br from-[#1a1008] via-[#1f140a] to-[#1a100a]',
     },
+    // Ocean: pale arctic blue / deep ocean
     ocean: {
-      light: 'bg-gradient-to-br from-sky-50 via-blue-50/90 to-indigo-50/80',
-      dark: 'bg-gradient-to-b from-[#0a1628] via-[#0e2847] to-[#0a1a2e]',
+      light: 'bg-gradient-to-br from-[#eef9ff] via-[#eaf6ff] to-[#e8f4ff]',
+      dark:  'bg-gradient-to-b from-[#080f1c] via-[#0b1528] to-[#091220]',
     },
+    // Sunset: warm cream / deep ember
     sunset: {
-      light: 'bg-gradient-to-br from-amber-50/90 via-orange-50/70 to-rose-50/90',
-      dark: 'bg-gradient-to-b from-rose-950/80 via-amber-950/50 to-stone-950',
+      light: 'bg-gradient-to-br from-[#fff8f0] via-[#fff5ec] to-[#fff2e8]',
+      dark:  'bg-gradient-to-b from-[#1a0a00] via-[#200d00] to-[#1c0a00]',
     },
+    // Neon: pure dark (always)
     neon: {
-      light: 'bg-[#060012]',
-      dark: 'bg-[#060012]',
+      light: 'bg-[#0a0018]',
+      dark:  'bg-[#06000f]',
     },
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];

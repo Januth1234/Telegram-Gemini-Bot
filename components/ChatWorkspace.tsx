@@ -52,6 +52,131 @@ interface ChatWorkspaceProps {
   onReasoningModeChange: (opts: { thinking?: boolean; descriptive?: boolean }) => void;
 }
 
+// ─── Message renderer: markdown + inline URLs as pill buttons ──────────────
+const URL_RE = /https?:\/\/[^\s)"'<>\]]+/g;
+
+function renderInline(text: string, isUser: boolean): React.ReactNode[] {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+  let match: RegExpExecArray | null;
+  URL_RE.lastIndex = 0;
+  while ((match = URL_RE.exec(text)) !== null) {
+    if (match.index > last) parts.push(text.slice(last, match.index));
+    const url = match[0].replace(/[.,;:!?)]$/, '');
+    const label = (() => {
+      try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return url.slice(0,30); }
+    })();
+    parts.push(
+      <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
+        className={`inline-flex items-center gap-1 px-2.5 py-0.5 mx-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-colors no-underline
+          ${isUser
+            ? 'bg-white/20 text-white hover:bg-white/30 border border-white/30'
+            : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700 hover:bg-indigo-100 dark:hover:bg-indigo-800/40'
+          }`}>
+        <i className="fa-solid fa-link text-[8px]" />
+        {label}
+        <i className="fa-solid fa-arrow-up-right-from-square text-[8px]" />
+      </a>
+    );
+    last = match.index + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+  return parts;
+}
+
+function parseLine(line: string, isUser: boolean, key: number): React.ReactNode {
+  // Bold **text**
+  const segments: React.ReactNode[] = [];
+  const boldRe = /\*\*(.*?)\*\*/g;
+  let last = 0, m: RegExpExecArray | null;
+  while ((m = boldRe.exec(line)) !== null) {
+    if (m.index > last) segments.push(...renderInline(line.slice(last, m.index), isUser));
+    segments.push(<strong key={m.index}>{m[1]}</strong>);
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) segments.push(...renderInline(line.slice(last), isUser));
+  return <React.Fragment key={key}>{segments}</React.Fragment>;
+}
+
+const MessageContent: React.FC<{ content: string; isUser: boolean }> = ({ content, isUser }) => {
+  const hasSinhala = /[\u0D80-\u0DFF]/.test(content);
+  const hasTamil   = /[\u0B80-\u0BFF]/.test(content);
+  const langClass  = hasSinhala ? 'sinhala-text' : hasTamil ? 'tamil-text' : '';
+
+  const lines = content.split('\n');
+  const nodes: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // Heading
+    if (/^#{1,3} /.test(line)) {
+      const lvl = (line.match(/^#+/) || [''])[0].length;
+      const txt = line.replace(/^#+\s*/, '');
+      const cls = lvl === 1 ? 'text-base font-black mt-3 mb-1' : lvl === 2 ? 'text-sm font-black mt-2 mb-1 opacity-80' : 'text-xs font-black mt-1 opacity-70 uppercase tracking-wide';
+      nodes.push(<p key={i} className={cls}>{renderInline(txt, isUser)}</p>);
+    }
+    // Bullet
+    else if (/^[\-\*•] /.test(line)) {
+      const txt = line.replace(/^[\-\*•]\s*/, '');
+      nodes.push(
+        <div key={i} className="flex gap-2 my-0.5">
+          <span className="mt-1.5 w-1 h-1 rounded-full bg-current shrink-0 opacity-50"/>
+          <span>{parseLine(txt, isUser, i)}</span>
+        </div>
+      );
+    }
+    // Numbered list
+    else if (/^\d+\.\s/.test(line)) {
+      const num = (line.match(/^(\d+)/) || ['',''])[1];
+      const txt = line.replace(/^\d+\.\s*/, '');
+      nodes.push(
+        <div key={i} className="flex gap-2 my-0.5">
+          <span className="shrink-0 font-bold opacity-60 text-xs mt-0.5 min-w-[1.2rem]">{num}.</span>
+          <span>{parseLine(txt, isUser, i)}</span>
+        </div>
+      );
+    }
+    // Inline code or code block
+    else if (line.trimStart().startsWith('```')) {
+      const lang = line.replace(/```/, '').trim();
+      const codeLines: string[] = [];
+      i++;
+      while (i < lines.length && !lines[i].trimStart().startsWith('```')) {
+        codeLines.push(lines[i]);
+        i++;
+      }
+      nodes.push(
+        <pre key={`code-${i}`} className="my-2 p-3 rounded-xl bg-slate-900 text-green-400 dark:bg-black/60 text-xs overflow-x-auto font-mono leading-relaxed">
+          {lang && <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">{lang}</div>}
+          {codeLines.join('\n')}
+        </pre>
+      );
+    }
+    // Horizontal rule
+    else if (/^---+$/.test(line.trim())) {
+      nodes.push(<hr key={i} className="my-2 border-current opacity-10" />);
+    }
+    // Empty line
+    else if (!line.trim()) {
+      if (nodes.length > 0) nodes.push(<div key={i} className="h-1.5" />);
+    }
+    // Normal paragraph line
+    else {
+      nodes.push(<p key={i} className="leading-relaxed">{parseLine(line, isUser, i)}</p>);
+    }
+    i++;
+  }
+
+  return (
+    <div className={`text-sm md:text-base space-y-0.5 ${langClass}`}>
+      {nodes}
+    </div>
+  );
+};
+
+
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({ 
   onClose, initialPrompt, initialMode, autoSubmit, onInputChange, messages, setMessages, lang,
   conversations, onSwitchConv, onNewConv, onDeleteConv, activeConvId, onUpdateTitle, onModeSwitch, isSyncing = false,
@@ -397,7 +522,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             currentMessages.map((msg, i) => (
               <div key={msg.id || i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                  <div className={`max-w-[92%] p-5 md:p-6 rounded-2xl shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
-                  <div className={`whitespace-pre-wrap text-sm md:text-base leading-relaxed ${/[^\u0000-\u007F]/.test(msg.content) ? 'sinhala-text' : ''}`}>{msg.content}</div>
+                  <MessageContent content={msg.content} isUser={msg.role === 'user'} />
                   {msg.links && msg.links.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-200/50 dark:border-white/10">
                       {msg.links.slice(0, 5).map((link, j) => (

@@ -316,10 +316,15 @@ EXPLANATION STYLE:
 
       let text = (response as { text?: string }).text ?? "";
       if (!text && response.candidates?.[0]?.content?.parts) {
+        // Filter: skip executable_code and code_result parts (internal tool use)
+        // Only keep text parts that aren't thought/reasoning
         text = response.candidates[0].content.parts
-          .map((p: { text?: string }) => (p.text != null ? p.text : ""))
+          .filter((p: any) => p.text != null && !p.executableCode && !p.codeExecutionResult)
+          .map((p: any) => p.text as string)
           .join("");
       }
+      // Strip raw tool_code blocks the model sometimes wraps its python in
+      text = text.replace(/\`\`\`tool_code[\s\S]*?\`\`\`/g, '').replace(/\`\`\`python[\s\S]*?\`\`\`/gi, '').trim();
       if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
 
       if (this.currentUser && !options.isPrivate && memory !== undefined) {

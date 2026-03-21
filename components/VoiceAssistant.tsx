@@ -195,9 +195,10 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
       inputAnalyserRef.current.fftSize = 64;
 
-      // Capture refs at session start so callbacks use correct instances
-      const capturedAudioCtx = audioContextRef.current!;
-      const capturedAnalyser = analyserRef.current!;
+      // Capture AFTER audio context is initialized
+      const capturedAudioCtx = audioContextRef.current;
+      const capturedAnalyser = analyserRef.current;
+
       const callbacks = {
         onopen: () => {
           setIsConnecting(false);
