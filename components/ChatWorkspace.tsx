@@ -208,9 +208,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         setShowUpgradeModal(true);
       } else {
         const msg = e instanceof Error ? e.message : String(e);
-        // Blind-fix: permission errors should not scream at the user
-        if (msg && msg.includes('Missing or insufficient permissions')) {
-          setChatError('Your account does not have access to this feature right now.');
+        if (msg && (msg.includes('Missing or insufficient permissions') || msg.includes('PERMISSION_DENIED'))) {
+          // Firestore permission issue — non-fatal, still try to chat
+          setChatError(null);
+        } else if (msg && (msg.includes('API Key') || msg.includes('API_KEY') || msg.includes('api key'))) {
+          setChatError('AI service not configured. Contact support.');
+        } else if (msg && (msg.includes('quota') || msg.includes('QUOTA'))) {
+          setChatError('Rate limit reached. Try again in a moment.');
         } else {
           setChatError(msg || 'Something went wrong. Try again.');
         }
