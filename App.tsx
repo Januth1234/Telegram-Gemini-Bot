@@ -8,6 +8,12 @@ import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
+const DarkVeil = lazy(() => import('./components/backgrounds/DarkVeil').then(m => ({ default: m.default })));
+const PixelBlast = lazy(() => import('./components/backgrounds/PixelBlast').then(m => ({ default: m.default })));
+const Particles = lazy(() => import('./components/backgrounds/Particles').then(m => ({ default: m.default })));
+const LightRays = lazy(() => import('./components/backgrounds/LightRays').then(m => ({ default: m.default })));
+const Silk = lazy(() => import('./components/backgrounds/Silk').then(m => ({ default: m.default })));
+const Beams = lazy(() => import('./components/backgrounds/Beams').then(m => ({ default: m.default })));
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
@@ -720,100 +726,139 @@ const App: React.FC = () => {
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
+  // Mobile/low-power: skip WebGL, use CSS only
+  const isMobileDevice = typeof window !== 'undefined' && (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    window.innerWidth < 768 ||
+    (navigator as any).hardwareConcurrency <= 4
+  );
+
   const renderLandingBackground = () => {
-    // Pure CSS backgrounds — zero WebGL/Three.js/Canvas, works on all devices
-    switch (userTheme) {
-      case 'aurora':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className={`absolute inset-0 ${effectiveDark ? 'bg-slate-950' : 'bg-slate-100'}`} />
-            <div className="absolute inset-0 animate-theme-aurora bg-[length:400%_400%]"
-              style={{ backgroundImage: effectiveDark
-                ? 'linear-gradient(135deg,#1e1b4b,#312e81,#4c1d95,#1e1b4b,#0f172a,#312e81)'
-                : 'linear-gradient(135deg,#e0e7ff,#c7d2fe,#ddd6fe,#e0e7ff,#ede9fe,#c7d2fe)'
-              }} />
-            <div className="absolute inset-0 opacity-20 animate-theme-aurora bg-[length:300%_300%]"
-              style={{ backgroundImage: effectiveDark
-                ? 'radial-gradient(ellipse at 30% 50%,#6366f1 0%,transparent 60%),radial-gradient(ellipse at 70% 50%,#8b5cf6 0%,transparent 60%)'
-                : 'radial-gradient(ellipse at 30% 50%,#818cf8 0%,transparent 60%),radial-gradient(ellipse at 70% 50%,#a78bfa 0%,transparent 60%)'
-              }} />
-          </div>
-        );
-      case 'midnight':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className={`absolute inset-0 ${effectiveDark ? 'bg-slate-950' : 'bg-slate-50'}`} />
-            {Array.from({ length: 12 }).map((_, i) => (
-              <div key={i} className="absolute rounded-full opacity-[0.06] animate-hero-glow-breathe"
-                style={{
-                  width: `${120 + i * 40}px`, height: `${120 + i * 40}px`,
-                  left: `${(i * 37 + 10) % 90}%`, top: `${(i * 53 + 5) % 80}%`,
-                  background: i % 3 === 0 ? '#818cf8' : i % 3 === 1 ? '#38bdf8' : '#c084fc',
-                  animationDelay: `${i * 0.4}s`, animationDuration: `${4 + i * 0.5}s`,
-                  filter: 'blur(40px)',
-                }} />
-            ))}
-          </div>
-        );
-      case 'terminal':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className="absolute inset-0 bg-black" />
-            <div className="absolute inset-0 opacity-[0.07]"
-              style={{ backgroundImage: `repeating-linear-gradient(0deg,transparent,transparent 2px,${effectiveDark ? '#22c55e' : '#16a34a'} 2px,${effectiveDark ? '#22c55e' : '#16a34a'} 3px)`,
-              backgroundSize: '100% 4px' }} />
-            <div className="absolute inset-0 animate-theme-terminal-soft opacity-30"
-              style={{ backgroundImage: `linear-gradient(180deg,transparent 0%,${effectiveDark ? '#22c55e20' : '#16a34a15'} 50%,transparent 100%)`,
-              backgroundSize: '100% 200%' }} />
-          </div>
-        );
-      case 'ocean':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className={`absolute inset-0 ${effectiveDark ? 'bg-sky-950' : 'bg-sky-100'}`} />
-            <div className="absolute inset-0 animate-theme-ocean bg-[length:200%_100%]"
-              style={{ backgroundImage: effectiveDark
-                ? 'linear-gradient(90deg,#0c4a6e,#075985,#0369a1,#0284c7,#0369a1,#075985,#0c4a6e)'
-                : 'linear-gradient(90deg,#bae6fd,#7dd3fc,#38bdf8,#0ea5e9,#38bdf8,#7dd3fc,#bae6fd)'
-              }} />
-            <div className="absolute bottom-0 left-0 right-0 h-1/2 opacity-30"
-              style={{ backgroundImage: `radial-gradient(ellipse at 50% 100%,${effectiveDark ? '#0ea5e9' : '#38bdf8'} 0%,transparent 70%)` }} />
-          </div>
-        );
-      case 'sunset':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className={`absolute inset-0 ${effectiveDark ? 'bg-slate-950' : 'bg-amber-50'}`} />
-            <div className="absolute inset-0 animate-theme-sunset bg-[length:200%_200%]"
-              style={{ backgroundImage: effectiveDark
-                ? 'linear-gradient(135deg,#7c2d12,#9a3412,#c2410c,#7c2d12,#450a0a,#9a3412)'
-                : 'linear-gradient(135deg,#fef3c7,#fde68a,#fbbf24,#f59e0b,#fde68a,#fef3c7)'
-              }} />
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-96 rounded-full animate-hero-glow-warm opacity-40"
-              style={{ background: effectiveDark ? 'radial-gradient(#ea580c,transparent 70%)' : 'radial-gradient(#f97316,transparent 70%)', filter: 'blur(60px)' }} />
-          </div>
-        );
-      case 'paper':
-        return (
-          <div className="w-full h-full overflow-hidden" aria-hidden>
-            <div className={`absolute inset-0 ${effectiveDark ? 'bg-amber-950' : 'bg-amber-50'}`} />
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="absolute animate-theme-paper opacity-[0.12]"
-                style={{
-                  width: '2px', height: `${60 + i * 15}%`,
-                  left: `${10 + i * 11}%`, top: '0',
-                  background: effectiveDark ? `linear-gradient(180deg,transparent,#f97316,transparent)` : `linear-gradient(180deg,transparent,#ea580c,transparent)`,
-                  transform: `rotate(${-10 + i * 3}deg)`,
-                  filter: 'blur(8px)',
-                  animationDelay: `${i * 0.3}s`,
-                }} />
-            ))}
-          </div>
-        );
-      default:
-        return null;
+    // Mobile: CSS-only (zero GPU)
+    if (isMobileDevice) {
+      const mobileBg: Record<string, string> = {
+        aurora:   'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900',
+        midnight: 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900',
+        terminal: 'bg-black',
+        ocean:    'bg-gradient-to-br from-sky-900 via-cyan-950 to-slate-900',
+        sunset:   'bg-gradient-to-br from-orange-950 via-red-900 to-slate-900',
+        paper:    'bg-gradient-to-br from-amber-950 via-orange-900 to-slate-900',
+        classic:  '',
+      };
+      const cls = mobileBg[userTheme] || '';
+      return cls ? <div className={`w-full h-full ${cls}`} /> : null;
     }
-  };
+
+    // Desktop: original WebGL shaders — beautiful & performant at reduced settings
+    const content = (() => {
+      switch (userTheme) {
+        case 'aurora':
+          return (
+            <div className={effectiveDark ? 'w-full h-full opacity-[0.92]' : 'w-full h-full'}>
+              <DarkVeil
+                hueShift={effectiveDark ? 135 : 160}
+                noiseIntensity={effectiveDark ? 0.012 : 0.008}
+                scanlineIntensity={0}
+                scanlineFrequency={0}
+                speed={0.45}
+                warpAmount={0.06}
+                resolutionScale={0.4}
+              />
+            </div>
+          );
+        case 'midnight':
+          return (
+            <Particles
+              key={`midnight-${effectiveDark}`}
+              particleColors={effectiveDark ? ['#c7d2fe', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
+              particleCount={50}
+              particleSpread={10}
+              speed={0.10}
+              particleBaseSize={70}
+              moveParticlesOnHover={false}
+              particleHoverFactor={1.0}
+              alphaParticles={false}
+              sizeRandomness={1}
+              cameraDistance={22}
+              disableRotation={false}
+              pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.5)}
+              className="w-full h-full"
+            />
+          );
+        case 'terminal':
+          return (
+            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+              <PixelBlast
+                key={`terminal-${effectiveDark}`}
+                variant="square"
+                pixelSize={4}
+                color={effectiveDark ? '#22c55e' : '#059669'}
+                patternScale={2}
+                patternDensity={1}
+                pixelSizeJitter={0.15}
+                enableRipples
+                rippleSpeed={0.4}
+                rippleThickness={0.12}
+                rippleIntensityScale={1.4}
+                liquid={false}
+                speed={0.5}
+                edgeFade={0.3}
+                transparent
+              />
+            </div>
+          );
+        case 'ocean':
+          return (
+            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
+              <Silk
+                key={`ocean-${effectiveDark}`}
+                speed={2.5}
+                scale={1}
+                color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
+                noiseIntensity={0.6}
+                rotation={0.1}
+                dprMax={0.75}
+              />
+            </div>
+          );
+        case 'sunset':
+          return (
+            <LightRays
+              raysOrigin="top-center"
+              raysColor={effectiveDark ? '#fed7aa' : '#ea580c'}
+              raysSpeed={0.7}
+              lightSpread={effectiveDark ? 0.65 : 0.75}
+              rayLength={effectiveDark ? 3.0 : 3.4}
+              followMouse={false}
+              mouseInfluence={0}
+              noiseAmount={0.04}
+              distortion={0.07}
+              fadeDistance={1}
+              saturation={effectiveDark ? 1.0 : 1.1}
+              pulsating
+              className={effectiveDark ? 'opacity-90' : 'opacity-100'}
+            />
+          );
+        case 'paper':
+          return (
+            <div className={effectiveDark ? 'w-full h-full opacity-85' : 'w-full h-full'}>
+              <Beams
+                beamWidth={2}
+                beamHeight={16}
+                beamNumber={12}
+                lightColor={effectiveDark ? '#fdba74' : '#f97316'}
+                speed={1.8}
+                noiseIntensity={1.3}
+                scale={0.20}
+                rotation={20}
+              />
+            </div>
+          );
+        default:
+          return null;
+      }
+    })();
+    return <Suspense fallback={null}>{content}</Suspense>;  };
 
   const rootBgClass = themeBg;
 
