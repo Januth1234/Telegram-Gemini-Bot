@@ -180,18 +180,15 @@ export class GeminiService {
     signal?: AbortSignal;
     isPrivate?: boolean;
     /** Internal/system calls (e.g. release summaries) should not consume user quota. */
-    internal?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
     
-    if (!false  // internal flag removed) {
-      if (this.currentUser) {
-        const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
-        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
-      } else {
-        this.resetGuestWindows();
+    if (this.currentUser) {
+      const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
+      if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
+    } else {
+      this.resetGuestWindows();
       if (this.guestUsage.textCount >= this.guestUsage.textMax) {
-          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
-        }
+        throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
       }
     }
 

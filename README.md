@@ -1,31 +1,50 @@
+# Orin AI
 
-# Orin AI - Exam Assistant & Admin System
+**A sophisticated, bilingual smart workspace built for the modern Sri Lankan professional.**
 
-## 1. Setup
-- Ensure Firebase CLI is installed: `npm install -g firebase-tools`
-- Login: `firebase login`
-- Initialize functions if missing: `firebase init functions`
+Featuring high-speed neural reasoning (Sinhala/English/Tamil), creative synthesis, real-time voice, math solving, agent mode, and secure cloud synchronization — powered by the Gemini API.
 
-## 2. Configuration
-Set the owner UID and secret code:
+**Author:** Januth Nimnal — nimnaljanuth@gmail.com
+
+---
+
+## Features
+
+- **Chat** — Bilingual AI chat (Sinhala · English · Tamil) with memory, private mode, semantic search
+- **Math Solver** — Step-by-step solutions (Symbolab-style), image input, handwriting recognition
+- **Agent Mode** — Computer-use AI agent *(Pro plan)*
+- **Music Studio** — AI music generation with BPM, scale, and density controls
+- **Live Vision** — Real-time multimodal camera analysis
+- **Voice Assistant** — Native audio AI with translation
+- **Studio** — AI creative content generation
+
+## Plan Tiers
+
+| Feature | Free | Basic | Pro |
+|---|---|---|---|
+| Model | Gemini 2.0 Flash | Gemini 2.5 Flash | Gemini 2.5 Pro |
+| Context | 5 messages | 10 messages | 20 messages |
+| Agent mode | ✗ | ✗ | ✓ |
+
+## Setup
+
 ```bash
-firebase functions:config:set orina.owner_uid="<YOUR_ADMIN_UID>"
-firebase functions:config:set orina.secret_code="#"
+npm install
+npm run dev
 ```
 
-## 3. Deploy
-Deploy Firestore Rules and Cloud Functions:
-```bash
-firebase deploy --only functions,firestore
+## Environment Variables
+
+```
+VITE_FIREBASE_*        # Firebase config
+STRIPE_SECRET_KEY      # Stripe secret key
+STRIPE_WEBHOOK_SECRET  # Stripe webhook signing secret
+FIREBASE_SERVICE_ACCOUNT_JSON  # Firebase admin (for webhook)
+VITE_RECAPTCHA_SITE_KEY        # Optional App Check
 ```
 
-## 4. Admin Access
-1. Sign up on the frontend.
-2. Enter the secret code `#` in the reason field.
-3. Use the Owner account to approve the request via the Admin Portal.
+## Deploy
 
-## 5. Stripe payments (Pricing / Checkout)
-- **Local:** Copy `.env.local.example` to `.env.local` and set `STRIPE_SECRET_KEY` and (for webhook) `STRIPE_WEBHOOK_SECRET`. Keep these local only; do not commit `.env.local`.
-- **Production (Vercel):** Set the same env vars in the Vercel project (Settings → Environment Variables). For the webhook to update user plans, also set `FIREBASE_SERVICE_ACCOUNT_JSON` (stringified Firebase service account key from Project Settings → Service Accounts).
-- **Webhook:** In [Stripe Dashboard → Webhooks](https://dashboard.stripe.com/webhooks), add endpoint `https://your-domain.com/api/stripe-webhook`, event `checkout.session.completed`. Use the signing secret as `STRIPE_WEBHOOK_SECRET`.
-- **Products used:** Basic `prod_TqkoeMg8E0bPjg`, Pro `prod_TqqFGqkDNOzfU9`, Basic Yearly `prod_Tr7AD8al5JQCA1`, Pro Yearly `prod_Tr7ARTolkwQVoL`. Plans Basic and Pro (monthly/yearly) on the Pricing page map to Stripe Checkout; after payment the webhook updates Firestore `users/{uid}.plan`.
+Deployed on Vercel. Set env vars in Vercel project settings.
+
+For Stripe webhooks, add endpoint `https://your-domain.com/api/stripe-webhook` in Stripe Dashboard with events: `checkout.session.completed`, `customer.subscription.deleted`, `customer.subscription.updated`, `invoice.payment_failed`.
