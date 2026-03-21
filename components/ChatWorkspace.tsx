@@ -381,7 +381,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (activeTab === 'studio') return <div className="flex-1 overflow-hidden h-full"><FeatureCreate onClose={onClose} /></div>;
 
     return (
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-white/30 dark:bg-slate-950/60 backdrop-blur-xl border-t border-white/10 dark:border-white/5 pb-40 md:pb-48">
+      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 pt-20 md:p-10 relative bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-white/5 pb-40 md:pb-48">
         <div className="max-w-3xl mx-auto space-y-6 md:space-y-10">
           {currentMessages.length === 0 ? (
             <div className="py-24 text-center space-y-6 min-h-[400px] flex flex-col justify-center">
@@ -519,7 +519,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       </div>
 
       <div className="flex-1 flex flex-col min-w-0 relative h-full">
-        <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm relative">
+        <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white dark:bg-slate-950 relative">
           <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center" aria-label="History"><i className="fa-solid fa-bars" /></button>
           <div className="flex items-center gap-2">
             <button
@@ -576,7 +576,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      </div>
                   )}
 
-                  <div className={`glass-panel p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 backdrop-blur-xl ${isPrivate ? 'bg-slate-900/70 border-slate-600/50' : 'bg-white/60 dark:bg-slate-900/60 border-slate-200/80 dark:border-white/10'}`}>
+                  <div className={`p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 ${isPrivate ? 'bg-slate-900 border-slate-600/50' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10'}`}>
                      <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach file or image"><i className="fa-solid fa-paperclip" /></button>
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf,.txt,application/pdf,text/plain" onChange={(e) => {
                        const file = e.target.files?.[0];

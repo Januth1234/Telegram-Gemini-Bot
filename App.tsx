@@ -754,23 +754,20 @@ const renderLandingBackground = () => {
           {view === 'landing' ? (
             renderLandingBackground()
           ) : (
-            <div
-              className="absolute inset-0 w-full h-full scale-110"
-              style={{ filter: userTheme === 'ocean' ? 'blur(40px)' : 'blur(24px)' }}
-            >
+            <div className="absolute inset-0 w-full h-full scale-110 opacity-40">
               {renderLandingBackground()}
             </div>
           )}
         </div>
       )}
       {view !== 'admin-portal' && (
-        <header className="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 z-[100] border-b border-black/[0.06] dark:border-white/[0.06] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl safe-pt relative">
+        <header className="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 z-[100] border-b border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-slate-950 safe-pt relative">
           <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>
             <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-200 group-hover/logo:scale-105" />
             <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
           </div>
           {user && WORKSPACE_VIEWS.includes(view) && (
-            <div className="flex items-center bg-slate-100/80 dark:bg-slate-900/80 backdrop-blur-xl p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-sm border border-black/[0.06] dark:border-white/[0.06] z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
+            <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-sm border border-black/[0.06] dark:border-white/[0.06] z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
               <NavTab active={view === 'chat' || view === 'translator'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
               <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
               <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />

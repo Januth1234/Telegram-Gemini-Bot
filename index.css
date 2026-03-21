@@ -151,3 +151,25 @@ math-field::part(menu-toggle) {
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ─── Touch devices: zero animations, zero backdrop-filter ─────────────────── */
+@media (hover: none) {
+  /* Kill ALL CSS animations on touch devices */
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.1ms !important;
+  }
+  /* Remove backdrop-filter entirely (huge GPU cost) */
+  * {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* Replace glass panels with solid backgrounds */
+  .glass-panel {
+    background: rgba(255,255,255,0.98) !important;
+  }
+  .dark .glass-panel {
+    background: rgba(15,23,42,0.98) !important;
+  }
+}
