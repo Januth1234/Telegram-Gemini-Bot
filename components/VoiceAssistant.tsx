@@ -203,6 +203,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
 
       const callbacks = {
         onopen: () => {
+          console.log('[Orin Voice] onopen — session connected');
           setIsConnecting(false);
           setIsActive(true);
           const src = inputAudioContextRef.current!.createMediaStreamSource(stream);
@@ -270,9 +271,27 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           }
           if (msg.serverContent?.interrupted) stopAiSpeaking();
         },
-        onclose: () => { setIsActive(false); setIsConnecting(false); },
+        onclose: (e: unknown) => {
+          console.warn('[Orin Voice] onclose:', e);
+          // If session closed before we ever became active → show error not silent close
+          setIsActive((prev) => {
+            if (!prev) {
+              // Was still connecting — closed before onopen
+              setErrorMessage('Session closed before connecting. Check your API key or try again.');
+            }
+            return false;
+          });
+          setIsConnecting(false);
+        },
         onerror: (e: unknown) => {
-            setErrorMessage(e instanceof Error ? e.message : "Connection Error");
+            const raw = e instanceof Error ? e.message
+              : (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
+            // Surface the real error — strip unhelpful generic strings
+            const msg = raw.includes('{}') || !raw.trim()
+              ? 'WebSocket connection failed. Model unavailable or API key issue.'
+              : raw;
+            console.error('[Orin Voice] onerror:', raw, e);
+            setErrorMessage(msg);
             stopSession();
         }
       };

@@ -267,8 +267,17 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
              nextStartTimeRef.current = 0;
           }
         },
-        onclose: () => stopSession(),
-        onerror: () => { stopSession(); }
+        onclose: (e: unknown) => { console.warn("[Orin Camera] onclose:", e); stopSession(); },
+        onerror: (e: unknown) => {
+            const raw = e instanceof Error ? e.message
+              : (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
+            const msg = raw.includes('{}') || !raw.trim()
+              ? 'Camera connection failed. Check API key or try again.'
+              : raw;
+            console.error('[Orin Camera] onerror:', raw, e);
+            setConnError(msg);
+            stopSession();
+        }
       }, { voiceName: selectedVoice, tone: selectedTone });
       
       sessionPromise.then(session => {

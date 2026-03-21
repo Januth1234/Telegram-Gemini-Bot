@@ -248,7 +248,7 @@ EXPLANATION STYLE:
       contents.push({ role: 'user', parts: currentParts });
 
       const lowerPrompt = promptText.toLowerCase();
-      const looksTimeSensitive = /job|jobs|vacanc|career|internship|news|weather|stock|price|exchange rate|results|live/i.test(lowerPrompt);
+      const looksTimeSensitive = /job|jobs|vacanc|career|internship|news|weather|stock|price|exchange rate|results|live|current|latest|today|now|status of|what.s happening|middle east|ukraine|war|crisis|election|conflict/i.test(lowerPrompt);
 
       const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
 
@@ -315,17 +315,27 @@ EXPLANATION STYLE:
       }
 
       let text = (response as { text?: string }).text ?? "";
-      if (!text && response.candidates?.[0]?.content?.parts) {
-        // Filter: skip executable_code and code_result parts (internal tool use)
-        // Only keep text parts that aren't thought/reasoning
-        text = response.candidates[0].content.parts
-          .filter((p: any) => p.text != null && !p.executableCode && !p.codeExecutionResult)
+      if (response.candidates?.[0]?.content?.parts) {
+        const parts = response.candidates[0].content.parts as any[];
+        // Try to get clean text-only parts (skip thinking/code execution)
+        const textOnly = parts
+          .filter((p: any) => p.text != null && !p.thought && !p.executableCode && !p.codeExecutionResult)
           .map((p: any) => p.text as string)
           .join("");
+        if (textOnly.trim()) {
+          text = textOnly;
+        } else if (!text.trim()) {
+          // Fallback: extract code execution output if that's all we got
+          const codeOutput = parts
+            .filter((p: any) => p.codeExecutionResult?.output)
+            .map((p: any) => p.codeExecutionResult.output as string)
+            .join("\n").trim();
+          if (codeOutput) text = codeOutput;
+        }
       }
-      // Strip raw tool_code blocks the model sometimes wraps its python in
-      text = text.replace(/\`\`\`tool_code[\s\S]*?\`\`\`/g, '').replace(/\`\`\`python[\s\S]*?\`\`\`/gi, '').trim();
-      if (!text.trim()) text = "The model didn't return a reply. Try again or rephrase.";
+      // Strip raw tool_code fences the model sometimes wraps around Python
+      text = text.replace(/\`\`\`tool_code[\s\S]*?\`\`\`/g, '').trim();
+      if (!text.trim()) text = "I couldn't generate a response. Please try again.";
 
       if (this.currentUser && !options.isPrivate && memory !== undefined) {
         const uid = this.currentUser.id;
@@ -795,18 +805,45 @@ When the user asks about time, date, weather, or prices, use this context. For w
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
+
+    // Wrap callbacks to log onerror for debugging
+    const wrappedCallbacks = {
+      ...callbacks,
+      onerror: (e: unknown) => {
+        console.error('[Orin Live API] Connection error:', e);
+        if (callbacks.onerror) callbacks.onerror(e);
+      },
+      onclose: (e?: unknown) => {
+        console.log('[Orin Live API] Connection closed:', e);
+        if (callbacks.onclose) callbacks.onclose(e);
+      },
+    };
+
     const liveConfig = {
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
-      // Enable transcriptions so UI shows what user said and what AI said
       inputAudioTranscription: {},
       outputAudioTranscription: {},
       ...(config.enableAffectiveDialog ? { enableAffectiveDialog: true } : {}),
       ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
-    // gemini-live-2.5-flash-preview is the only current SDK-documented model for Gemini API
-    return ai.live.connect({ model: 'gemini-live-2.5-flash-preview', callbacks, config: liveConfig });
+
+    // Try primary model, fall back to stable model on immediate close
+    const MODELS = ['gemini-live-2.5-flash-preview', 'gemini-2.0-flash-live-001'];
+    let lastErr: unknown;
+    for (const model of MODELS) {
+      try {
+        console.log('[Orin Live API] Connecting with model:', model);
+        const session = await ai.live.connect({ model, callbacks: wrappedCallbacks, config: liveConfig });
+        console.log('[Orin Live API] Connected successfully:', model);
+        return session;
+      } catch (err) {
+        console.error('[Orin Live API] Failed with model', model, err);
+        lastErr = err;
+      }
+    }
+    throw lastErr ?? new Error('Live API connection failed');
   }
 
   async connectTranslator(callbacks: any, options: any) {
