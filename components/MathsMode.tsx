@@ -458,15 +458,16 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       }
 
       if (!solved) {
-        // CAS couldn't handle it — send to Gemini AI with the extracted expression
-        setExtractionStatus(null);
-        const multiMethodInstruction = `Show ALL steps clearly numbered. If multiple methods exist, use this format:
----METHOD: [Method Name] ---
-Step 1: ...
-...
----ENDMETHOD---`;
-        const prompt = `${command} the expression: ${expr} (variable: ${variable})\n${multiMethodInstruction}`;
-        onSend(prompt, fileData);
+        // CAS couldn't handle it — solveMathWithAI bypasses anti-chain-of-thought
+        setExtractionStatus('Solving with AI...');
+        try {
+          const mathPrompt = `${command} the expression: ${expr} (variable: ${variable})`;
+          const aiResult = await geminiService.solveMathWithAI({ prompt: mathPrompt, fileData });
+          onSend(`[MATH_RESULT]\n${aiResult}`, undefined);
+        } catch {
+          const fmt = `Show ALL steps. Format:\n---METHOD: [Name] ---\nStep 1...\nFinal Answer:\n---ENDMETHOD---`;
+          onSend(`${command} the expression: ${expr} (variable: ${variable})\n${fmt}`, fileData);
+        }
       }
 
     } catch (e) {
@@ -476,7 +477,13 @@ Step 1: ...
       const prompt = fileData
         ? `Solve this math problem step by step. ${command}.`
         : `${command}: ${rawText}. Show full step-by-step working.`;
-      onSend(prompt, fileData);
+      try {
+        const aiResult = await geminiService.solveMathWithAI({ prompt: rawText ? `${command}: ${rawText}` : command, fileData });
+        onSend(`[MATH_RESULT]
+${aiResult}`, undefined);
+      } catch {
+        onSend(prompt, fileData);
+      }
     } finally {
       setIsSolving(false);
       setExtractionStatus(null);
