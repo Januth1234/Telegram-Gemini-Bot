@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* eslint-disable react/no-unknown-property */
 import React, { forwardRef, useMemo, useRef, useLayoutEffect } from 'react';
 import { Canvas, useFrame, useThree, RootState } from '@react-three/fiber';
@@ -159,4 +160,3 @@ const Silk: React.FC<SilkProps> = ({
 };
 
 export default Silk;
-

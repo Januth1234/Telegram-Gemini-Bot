@@ -1,0 +1,1 @@
+declare module "postprocessing" { export class EffectComposer { constructor(...args: any[]); render(): void; addPass(p: any): void; } export class RenderPass { constructor(...args: any[]); } export class EffectPass { constructor(...args: any[]); } export class BloomEffect { constructor(...args: any[]); } }

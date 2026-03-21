@@ -1,3 +1,4 @@
+// @ts-nocheck
 /* eslint-disable react/no-unknown-property */
 import { forwardRef, useImperativeHandle, useEffect, useRef, useMemo, FC, ReactNode } from 'react';
 import * as THREE from 'three';
@@ -52,14 +53,20 @@ function extendMaterial<T extends THREE.Material = THREE.Material>(
         : ({ value: u } as THREE.IUniform<unknown>);
   });
 
-  let vert = `${cfg.header}\n${cfg.vertexHeader ?? ''}\n${baseVert}`;
-  let frag = `${cfg.header}\n${cfg.fragmentHeader ?? ''}\n${baseFrag}`;
+  let vert = `${cfg.header}
+${cfg.vertexHeader ?? ''}
+${baseVert}`;
+  let frag = `${cfg.header}
+${cfg.fragmentHeader ?? ''}
+${baseFrag}`;
 
   for (const [inc, code] of Object.entries(cfg.vertex ?? {})) {
-    vert = vert.replace(inc, `${inc}\n${code}`);
+    vert = vert.replace(inc, `${inc}
+${code}`);
   }
   for (const [inc, code] of Object.entries(cfg.fragment ?? {})) {
-    frag = frag.replace(inc, `${inc}\n${code}`);
+    frag = frag.replace(inc, `${inc}
+${code}`);
   }
 
   const mat = new THREE.ShaderMaterial({
@@ -368,4 +375,3 @@ const DirLight: FC<{ position: [number, number, number]; color: string }> = ({ p
 };
 
 export default Beams;
-

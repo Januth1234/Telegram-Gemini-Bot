@@ -8,12 +8,7 @@ import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
-const DarkVeil = lazy(() => import('./components/backgrounds/DarkVeil').then(m => ({ default: m.default })));
-const PixelBlast = lazy(() => import('./components/backgrounds/PixelBlast').then(m => ({ default: m.default })));
-const Particles = lazy(() => import('./components/backgrounds/Particles').then(m => ({ default: m.default })));
-const LightRays = lazy(() => import('./components/backgrounds/LightRays').then(m => ({ default: m.default })));
-const Silk = lazy(() => import('./components/backgrounds/Silk').then(m => ({ default: m.default })));
-const Beams = lazy(() => import('./components/backgrounds/Beams').then(m => ({ default: m.default })));
+import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg } from './components/backgrounds/CSSBackgrounds';
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
@@ -726,139 +721,17 @@ const App: React.FC = () => {
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
-  // Mobile/low-power: skip WebGL, use CSS only
-  const isMobileDevice = typeof window !== 'undefined' && (
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-    window.innerWidth < 768 ||
-    (navigator as any).hardwareConcurrency <= 4
-  );
-
-  const renderLandingBackground = () => {
-    // Mobile: CSS-only (zero GPU)
-    if (isMobileDevice) {
-      const mobileBg: Record<string, string> = {
-        aurora:   'bg-gradient-to-br from-indigo-900 via-purple-900 to-slate-900',
-        midnight: 'bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900',
-        terminal: 'bg-black',
-        ocean:    'bg-gradient-to-br from-sky-900 via-cyan-950 to-slate-900',
-        sunset:   'bg-gradient-to-br from-orange-950 via-red-900 to-slate-900',
-        paper:    'bg-gradient-to-br from-amber-950 via-orange-900 to-slate-900',
-        classic:  '',
-      };
-      const cls = mobileBg[userTheme] || '';
-      return cls ? <div className={`w-full h-full ${cls}`} /> : null;
+const renderLandingBackground = () => {
+    switch (userTheme) {
+      case 'aurora':   return <AuroraBg dark={effectiveDark} />;
+      case 'midnight': return <MidnightBg dark={effectiveDark} />;
+      case 'terminal': return <TerminalBg dark={effectiveDark} />;
+      case 'ocean':    return <SilkBg color={effectiveDark ? '#0ea5e9' : '#22d3ee'} dark={effectiveDark} />;
+      case 'sunset':   return <SunsetBg dark={effectiveDark} />;
+      case 'paper':    return <PaperBg dark={effectiveDark} />;
+      default: return null;
     }
-
-    // Desktop: original WebGL shaders — beautiful & performant at reduced settings
-    const content = (() => {
-      switch (userTheme) {
-        case 'aurora':
-          return (
-            <div className={effectiveDark ? 'w-full h-full opacity-[0.92]' : 'w-full h-full'}>
-              <DarkVeil
-                hueShift={effectiveDark ? 135 : 160}
-                noiseIntensity={effectiveDark ? 0.012 : 0.008}
-                scanlineIntensity={0}
-                scanlineFrequency={0}
-                speed={0.45}
-                warpAmount={0.06}
-                resolutionScale={0.4}
-              />
-            </div>
-          );
-        case 'midnight':
-          return (
-            <Particles
-              key={`midnight-${effectiveDark}`}
-              particleColors={effectiveDark ? ['#c7d2fe', '#a5b4fc', '#38bdf8'] : ['#c7d2fe', '#818cf8', '#38bdf8']}
-              particleCount={50}
-              particleSpread={10}
-              speed={0.10}
-              particleBaseSize={70}
-              moveParticlesOnHover={false}
-              particleHoverFactor={1.0}
-              alphaParticles={false}
-              sizeRandomness={1}
-              cameraDistance={22}
-              disableRotation={false}
-              pixelRatio={Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.5)}
-              className="w-full h-full"
-            />
-          );
-        case 'terminal':
-          return (
-            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
-              <PixelBlast
-                key={`terminal-${effectiveDark}`}
-                variant="square"
-                pixelSize={4}
-                color={effectiveDark ? '#22c55e' : '#059669'}
-                patternScale={2}
-                patternDensity={1}
-                pixelSizeJitter={0.15}
-                enableRipples
-                rippleSpeed={0.4}
-                rippleThickness={0.12}
-                rippleIntensityScale={1.4}
-                liquid={false}
-                speed={0.5}
-                edgeFade={0.3}
-                transparent
-              />
-            </div>
-          );
-        case 'ocean':
-          return (
-            <div className="w-full h-full [filter:blur(4px)]" aria-hidden>
-              <Silk
-                key={`ocean-${effectiveDark}`}
-                speed={2.5}
-                scale={1}
-                color={effectiveDark ? '#0ea5e9' : '#22d3ee'}
-                noiseIntensity={0.6}
-                rotation={0.1}
-                dprMax={0.75}
-              />
-            </div>
-          );
-        case 'sunset':
-          return (
-            <LightRays
-              raysOrigin="top-center"
-              raysColor={effectiveDark ? '#fed7aa' : '#ea580c'}
-              raysSpeed={0.7}
-              lightSpread={effectiveDark ? 0.65 : 0.75}
-              rayLength={effectiveDark ? 3.0 : 3.4}
-              followMouse={false}
-              mouseInfluence={0}
-              noiseAmount={0.04}
-              distortion={0.07}
-              fadeDistance={1}
-              saturation={effectiveDark ? 1.0 : 1.1}
-              pulsating
-              className={effectiveDark ? 'opacity-90' : 'opacity-100'}
-            />
-          );
-        case 'paper':
-          return (
-            <div className={effectiveDark ? 'w-full h-full opacity-85' : 'w-full h-full'}>
-              <Beams
-                beamWidth={2}
-                beamHeight={16}
-                beamNumber={12}
-                lightColor={effectiveDark ? '#fdba74' : '#f97316'}
-                speed={1.8}
-                noiseIntensity={1.3}
-                scale={0.20}
-                rotation={20}
-              />
-            </div>
-          );
-        default:
-          return null;
-      }
-    })();
-    return <Suspense fallback={null}>{content}</Suspense>;  };
+  };
 
   const rootBgClass = themeBg;
 

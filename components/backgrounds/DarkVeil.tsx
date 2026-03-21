@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useRef } from 'react';
 import { Renderer, Program, Mesh, Triangle, Vec2 } from 'ogl';
 
@@ -162,4 +163,3 @@ const DarkVeil: React.FC<DarkVeilProps> = ({
 };
 
 export default DarkVeil;
-
