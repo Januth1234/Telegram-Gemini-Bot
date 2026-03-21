@@ -18,6 +18,7 @@ export enum CacheKey {
   USER_MARKOV = 'orin_markov_v1',
   STUDIO_HISTORY = 'orin_studio_history_v1',
   MATH_HISTORY = 'orin_math_history_v1',
+  AGENT_USED_ONCE = 'orin_agent_used_once',
 }
 
 export class CacheService {

@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { translations } from '../translations';
 import { Language, UserAccount } from '../types';
+import { cacheService, CacheKey } from '../services/cacheService';
 
 interface AgentWorkspaceProps {
   user: UserAccount | null;
@@ -17,6 +18,10 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
   const t = translations[lang];
   const plan = user?.plan?.toLowerCase() ?? '';
   const isPro = plan === 'pro' || plan === 'pro_yearly';
+  const isBasic = plan === 'basic' || plan === 'basic_yearly';
+  const hasUsedOnce = cacheService.get<boolean>(CacheKey.AGENT_USED_ONCE, false);
+  // Free users get 1 agent run to try it. Basic/Pro have full access.
+  const canUseAgent = isPro || isBasic || !hasUsedOnce;
 
   const [task, setTask] = useState(initialPrompt);
   const [contents, setContents] = useState<ContentTurn[]>([]);
@@ -44,12 +49,14 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
   };
 
   const startAgent = async () => {
-    if (!task.trim() || !isPro) return;
+    if (!task.trim() || !canUseAgent) return;
     setError(null);
     setLoading(true);
     setLastText('');
     setLastCalls([]);
     setContents([]);
+    // Mark free trial as used
+    if (!isPro && !isBasic) cacheService.set(CacheKey.AGENT_USED_ONCE, true);
     try {
       const result = await geminiService.computerUse({ prompt: task.trim() });
       setLastText(result.text);

@@ -52,6 +52,7 @@ const THEME_ANIMATION: Record<UserThemeId, { animationClass: string; className: 
   paper: { animationClass: '', className: '' },
   ocean: { animationClass: '', className: '' },
   sunset: { animationClass: '', className: '' },
+  neon: { animationClass: '', className: '' },
 };
 
 const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onStartChat, onVoiceOpen, lang, user, onLogin, onSignInWithUser, thinkingMode, descriptiveMode, onReasoningModeChange, userTheme, isDark }) => {

@@ -4,7 +4,7 @@ export type UserTier = 'Free' | 'Basic' | 'Pro (BYO-Google)' | 'Verified Member'
 export type UserRole = 'visitor' | 'training' | 'devops' | 'owner';
 
 // Site-wide visual theme (independent of dark/light toggle)
-export type UserThemeId = 'classic' | 'midnight' | 'aurora' | 'terminal' | 'paper' | 'ocean' | 'sunset';
+export type UserThemeId = 'classic' | 'midnight' | 'aurora' | 'terminal' | 'paper' | 'ocean' | 'sunset' | 'neon';
 
 export interface UserAccount {
   id: string;

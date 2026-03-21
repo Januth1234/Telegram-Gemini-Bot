@@ -8,7 +8,7 @@ import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
-import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg } from './components/backgrounds/CSSBackgrounds';
+import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg, NeonBg } from './components/backgrounds/CSSBackgrounds';
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
@@ -78,7 +78,7 @@ const getIsNightByLocalTime = (): boolean => {
   return hour < 6 || hour >= 18; // 6am–6pm = day (light), else night (dark)
 };
 
-const VALID_USER_THEMES: UserThemeId[] = ['classic', 'midnight', 'aurora', 'terminal', 'paper', 'ocean', 'sunset'];
+const VALID_USER_THEMES: UserThemeId[] = ['classic', 'midnight', 'aurora', 'terminal', 'paper', 'ocean', 'sunset', 'neon'];
 const normalizeUserTheme = (value: unknown): UserThemeId => {
   if (value && typeof value === 'string' && VALID_USER_THEMES.includes(value as UserThemeId)) return value as UserThemeId;
   return 'classic'; // new users or invalid → classic so animations and theme always work
@@ -718,6 +718,10 @@ const App: React.FC = () => {
       light: 'bg-gradient-to-br from-amber-50/90 via-orange-50/70 to-rose-50/90',
       dark: 'bg-gradient-to-b from-rose-950/80 via-amber-950/50 to-stone-950',
     },
+    neon: {
+      light: 'bg-[#060012]',
+      dark: 'bg-[#060012]',
+    },
   };
   const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
 
@@ -729,6 +733,7 @@ const renderLandingBackground = () => {
       case 'ocean':    return <SilkBg color={effectiveDark ? '#0ea5e9' : '#22d3ee'} dark={effectiveDark} />;
       case 'sunset':   return <SunsetBg dark={effectiveDark} />;
       case 'paper':    return <PaperBg dark={effectiveDark} />;
+      case 'neon':     return <NeonBg dark={effectiveDark} />;
       default: return null;
     }
   };

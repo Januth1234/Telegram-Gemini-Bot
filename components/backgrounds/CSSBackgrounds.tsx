@@ -56,6 +56,7 @@ export const AuroraBg: React.FC<{ dark: boolean }> = ({ dark }) => (
            radial-gradient(ellipse 90% 60% at 50% 10%, #67e8f940 0%, transparent 55%),
            radial-gradient(ellipse 110% 50% at 30% 80%, #818cf870 0%, transparent 50%)`,
       animation: 'auroraFlow 16s ease-in-out infinite',
+      willChange: 'transform, opacity',
     }}/>
 
     {/* Flowing shimmer layer */}
@@ -65,6 +66,7 @@ export const AuroraBg: React.FC<{ dark: boolean }> = ({ dark }) => (
         : 'linear-gradient(135deg, #e0e7ff 0%, #ddd6fe 25%, #ede9fe 50%, #e0e7ff 75%, #ddd6fe 100%)',
       backgroundSize: '400% 400%',
       animation: 'auroraShift 12s ease-in-out infinite',
+      willChange: 'background-position',
     }}/>
 
     <style>{`
@@ -187,46 +189,68 @@ export const MidnightBg: React.FC<{ dark: boolean }> = ({ dark }) => {
   );
 };
 
-// ─── Terminal (replaces PixelBlast WebGL shader) ─────────────────────────────
-// Original: rippling green pixel grid.
-// CSS version: CSS scanlines + animated scan beam + noise texture.
+// ─── Terminal (hacker matrix rain aesthetic) ─────────────────────────────────
 export const TerminalBg: React.FC<{ dark: boolean }> = ({ dark }) => {
-  const green = dark ? '#22c55e' : '#16a34a';
+  const green = '#22c55e';
+  const dim = '#15803d';
+  // Simulate matrix rain columns with CSS — different heights and speeds
+  const columns = Array.from({ length: 22 }, (_, i) => ({
+    left: `${i * 4.8 + (i % 3) * 0.5}%`,
+    delay: `${(i * 0.37) % 3.5}s`,
+    dur: `${2.5 + (i % 5) * 0.4}s`,
+    opacity: 0.15 + (i % 4) * 0.08,
+  }));
   return (
-    <div className="absolute inset-0 overflow-hidden" aria-hidden>
-      <div className="absolute inset-0 bg-black"/>
-      {/* CRT scanlines */}
+    <div className="absolute inset-0 overflow-hidden bg-[#050a04]" aria-hidden>
+      {/* Deep scanline grid */}
       <div className="absolute inset-0" style={{
-        backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 2px, ${green}18 2px, ${green}18 3px)`,
-        backgroundSize: '100% 4px',
+        backgroundImage: `
+          repeating-linear-gradient(0deg, transparent, transparent 14px, ${green}0a 14px, ${green}0a 15px),
+          repeating-linear-gradient(90deg, transparent, transparent 14px, ${green}05 14px, ${green}05 15px)
+        `,
       }}/>
-      {/* Vertical phosphor columns */}
+      {/* Matrix rain columns */}
+      {columns.map((col, i) => (
+        <div key={i} className="absolute top-0 w-px" style={{
+          left: col.left,
+          height: '100%',
+          background: `linear-gradient(180deg,
+            transparent 0%,
+            ${green}00 10%,
+            ${green}${Math.round(col.opacity * 255).toString(16).padStart(2,'0')} 40%,
+            ${green}ff 55%,
+            ${dim}88 70%,
+            ${dim}22 85%,
+            transparent 100%)`,
+          animation: `matrixRain ${col.dur} linear infinite`,
+          animationDelay: col.delay,
+          filter: 'blur(0.5px)',
+        }}/>
+      ))}
+      {/* Glowing ground pulse */}
+      <div className="absolute bottom-0 left-0 right-0 h-40" style={{
+        background: `linear-gradient(0deg, ${green}18 0%, transparent 100%)`,
+        animation: 'groundPulse 3s ease-in-out infinite',
+      }}/>
+      {/* CRT vignette */}
       <div className="absolute inset-0" style={{
-        backgroundImage: `repeating-linear-gradient(90deg, transparent, transparent 6px, ${green}06 6px, ${green}06 7px)`,
-        backgroundSize: '8px 100%',
+        background: 'radial-gradient(ellipse at 50% 50%, transparent 30%, rgba(0,0,0,0.75) 100%)',
       }}/>
-      {/* Scan beam */}
-      <div className="absolute left-0 right-0 h-32" style={{
-        background: `linear-gradient(180deg, transparent 0%, ${green}25 50%, transparent 100%)`,
-        animation: 'terminalScan 4s linear infinite',
-      }}/>
-      {/* Corner vignette */}
-      <div className="absolute inset-0" style={{
-        background: 'radial-gradient(ellipse at 50% 50%, transparent 40%, rgba(0,0,0,0.6) 100%)',
-      }}/>
-      {/* Phosphor glow blob */}
-      <div className="absolute inset-0 opacity-15" style={{
-        background: `radial-gradient(ellipse 60% 40% at 50% 50%, ${green} 0%, transparent 70%)`,
-        animation: 'terminalPulse 3s ease-in-out infinite',
+      {/* Scan line overlay */}
+      <div className="absolute inset-0 opacity-40" style={{
+        backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 1px, rgba(0,0,0,0.3) 1px, rgba(0,0,0,0.3) 2px)`,
+        backgroundSize: '100% 2px',
       }}/>
       <style>{`
-        @keyframes terminalScan {
-          0% { top: -8rem; }
-          100% { top: 100%; }
+        @keyframes matrixRain {
+          0% { transform: translateY(-100%); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
         }
-        @keyframes terminalPulse {
-          0%,100% { opacity: 0.08; }
-          50% { opacity: 0.20; }
+        @keyframes groundPulse {
+          0%,100% { opacity: 0.5; }
+          50% { opacity: 1; }
         }
       `}</style>
     </div>
@@ -324,6 +348,87 @@ export const PaperBg: React.FC<{ dark: boolean }> = ({ dark }) => {
       }}/>
       <style>{`
         @keyframes beamPulse {
+          0%,100% { opacity: 0.5; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// ─── Neon (new theme) — cyberpunk glow ──────────────────────────────────────
+export const NeonBg: React.FC<{ dark: boolean }> = ({ dark }) => {
+  const pink = '#f472b6';
+  const cyan = '#22d3ee';
+  const purple = '#a855f7';
+  return (
+    <div className="absolute inset-0 overflow-hidden bg-[#060012]" aria-hidden>
+      <svg className="absolute inset-0 w-0 h-0">
+        <defs>
+          <filter id="neon-glow" x="-30%" y="-30%" width="160%" height="160%" colorInterpolationFilters="sRGB">
+            <feGaussianBlur stdDeviation="8" result="blur"/>
+            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+          </filter>
+          <filter id="neon-noise" x="-10%" y="-10%" width="120%" height="120%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018 0.012" numOctaves="3" seed="5" result="noise">
+              <animate attributeName="seed" values="5;9;3;7;5" dur="14s" repeatCount="indefinite"/>
+            </feTurbulence>
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="50" xChannelSelector="R" yChannelSelector="G"/>
+          </filter>
+        </defs>
+      </svg>
+
+      {/* Perspective grid floor */}
+      <div className="absolute bottom-0 left-0 right-0 h-1/2" style={{
+        backgroundImage: `
+          linear-gradient(0deg, ${cyan}30 1px, transparent 1px),
+          linear-gradient(90deg, ${pink}20 1px, transparent 1px)
+        `,
+        backgroundSize: '60px 60px',
+        transform: 'perspective(300px) rotateX(60deg) scale(2)',
+        transformOrigin: 'bottom center',
+        animation: 'gridScroll 4s linear infinite',
+      }}/>
+
+      {/* Glowing orbs displaced by SVG noise */}
+      <div className="absolute inset-0" style={{
+        filter: 'url(#neon-noise)',
+        backgroundImage: `
+          radial-gradient(ellipse 50% 40% at 30% 35%, ${pink}55 0%, transparent 60%),
+          radial-gradient(ellipse 60% 50% at 70% 30%, ${cyan}45 0%, transparent 60%),
+          radial-gradient(ellipse 40% 35% at 50% 60%, ${purple}40 0%, transparent 55%)
+        `,
+        animation: 'neonDrift 10s ease-in-out infinite',
+      }}/>
+
+      {/* Neon horizon line */}
+      <div className="absolute left-0 right-0" style={{
+        top: '50%', height: '2px',
+        background: `linear-gradient(90deg, transparent 0%, ${cyan}cc 30%, ${pink}cc 70%, transparent 100%)`,
+        filter: 'url(#neon-glow)',
+        animation: 'neonPulse 2.5s ease-in-out infinite',
+      }}/>
+
+      {/* Top glow */}
+      <div className="absolute top-0 left-0 right-0 h-48" style={{
+        background: `radial-gradient(ellipse at 50% 0%, ${purple}30 0%, transparent 70%)`,
+      }}/>
+
+      {/* Vignette */}
+      <div className="absolute inset-0" style={{
+        background: 'radial-gradient(ellipse at 50% 50%, transparent 25%, rgba(6,0,18,0.7) 100%)',
+      }}/>
+
+      <style>{`
+        @keyframes gridScroll {
+          0% { background-position: 0 0; }
+          100% { background-position: 0 60px; }
+        }
+        @keyframes neonDrift {
+          0%,100% { opacity: 0.7; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.05); }
+        }
+        @keyframes neonPulse {
           0%,100% { opacity: 0.5; }
           50% { opacity: 1; }
         }

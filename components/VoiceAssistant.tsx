@@ -62,6 +62,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const scrollTranscriptionRef = useRef<HTMLDivElement>(null);
 
   const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
@@ -135,8 +136,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const stopSession = useCallback(() => {
     stopAiSpeaking();
     if (sessionRef.current) { try { sessionRef.current.close(); } catch(e) {} sessionRef.current = null; }
-    if (audioContextRef.current && audioContextRef.current.state !== 'closed') { try { audioContextRef.current.close(); } catch(e) {} }
-    if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') { try { inputAudioContextRef.current.close(); } catch(e) {} }
+    // CRITICAL: stop mic tracks so device audio isn't locked and volume returns to normal
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') { try { audioContextRef.current.close(); } catch(e) {} audioContextRef.current = null; }
+    if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') { try { inputAudioContextRef.current.close(); } catch(e) {} inputAudioContextRef.current = null; }
     setIsActive(false);
     setIsConnecting(false);
     setTranscription([]);
@@ -170,13 +176,17 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       // FIX: Use system default sample rate to prevent crashes on incompatible hardware
-      audioContextRef.current = new AudioCtx(); 
+      // Fresh audio contexts - close any orphaned ones first
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') { try { audioContextRef.current.close(); } catch {} }
+      if (inputAudioContextRef.current && inputAudioContextRef.current.state !== 'closed') { try { inputAudioContextRef.current.close(); } catch {} }
+      audioContextRef.current = new AudioCtx();
       inputAudioContextRef.current = new AudioCtx(); 
       const inputSampleRate = inputAudioContextRef.current.sampleRate;
       
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
+      streamRef.current = stream;
       
       analyserRef.current = audioContextRef.current.createAnalyser();
       analyserRef.current.fftSize = 64; 
@@ -185,6 +195,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
       inputAnalyserRef.current = inputAudioContextRef.current.createAnalyser();
       inputAnalyserRef.current.fftSize = 64;
 
+      // Capture refs at session start so callbacks use correct instances
+      const capturedAudioCtx = audioContextRef.current!;
+      const capturedAnalyser = analyserRef.current!;
       const callbacks = {
         onopen: () => {
           setIsConnecting(false);
@@ -229,14 +242,14 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
           }
 
           const audio = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-          if (audio && audioContextRef.current) {
+          if (audio && capturedAudioCtx && capturedAudioCtx.state !== 'closed') {
             setIsSpeaking(true);
             try {
-                const buf = await decodeAudioData(decodeBase64(audio), audioContextRef.current);
-                const s = audioContextRef.current.createBufferSource();
+                const buf = await decodeAudioData(decodeBase64(audio), capturedAudioCtx);
+                const s = capturedAudioCtx.createBufferSource();
                 s.buffer = buf;
-                s.connect(analyserRef.current!);
-                const now = audioContextRef.current.currentTime;
+                s.connect(capturedAnalyser);
+                const now = capturedAudioCtx.currentTime;
                 if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
                 s.start(nextStartTimeRef.current);
                 nextStartTimeRef.current += buf.duration;
