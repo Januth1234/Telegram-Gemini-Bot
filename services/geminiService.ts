@@ -823,14 +823,12 @@ When the user asks about time, date, weather, or prices, use this context. For w
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
-      inputAudioTranscription: {},
-      outputAudioTranscription: {},
       ...(config.enableAffectiveDialog ? { enableAffectiveDialog: true } : {}),
       ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
 
-    // Try primary model, fall back to stable model on immediate close
-    const MODELS = ['gemini-live-2.5-flash-preview', 'gemini-2.0-flash-live-001'];
+    // Valid live models (from SDK 1.46 dist/index.cjs)
+    const MODELS = ['gemini-live-2.5-flash-preview', 'gemini-2.0-flash-live-preview-04-09'];
     let lastErr: unknown;
     for (const model of MODELS) {
       try {

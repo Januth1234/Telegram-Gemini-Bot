@@ -275,29 +275,46 @@ const MathResultCard: React.FC<MathResultProps> = ({ result, isTyping, onExplain
       )}
 
       {/* Steps */}
-      <div className="px-5 py-4 space-y-2">
-        {allMethods.length === 1 && (
-          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-3">{current.name}</p>
+      <div className="px-5 py-4 space-y-1.5">
+        {allMethods.length === 1 && current.name && current.name !== 'Solution — Step by Step' && (
+          <p className="text-[10px] font-black uppercase tracking-widest text-indigo-500 mb-2">{current.name}</p>
         )}
         {current.steps.map((step: string, i: number) => {
           const isFinal = /^final answer/i.test(step);
+          const isHeader = /^step \d+:/i.test(step);
+          const cleanStep = step.replace(/^final answer[:\s]*/i, '');
           return (
-            <div key={i} className={`flex gap-3 items-start ${isFinal ? 'pt-3 mt-1 border-t border-indigo-100 dark:border-indigo-800' : ''}`}>
-              {!isFinal && (
-                <span className="text-[10px] font-black text-indigo-300 mt-0.5 shrink-0 w-5">{i + 1}.</span>
+            <div key={i} className={`${isFinal ? 'mt-3 pt-3 border-t-2 border-indigo-200 dark:border-indigo-700' : ''}`}>
+              {isFinal ? (
+                <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl px-4 py-3">
+                  <i className="fa-solid fa-check-circle text-indigo-500 shrink-0" />
+                  <div>
+                    <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Final Answer</div>
+                    <div className="font-black text-indigo-700 dark:text-indigo-300 text-base font-mono">{cleanStep}</div>
+                  </div>
+                </div>
+              ) : isHeader ? (
+                <div className="pt-2 pb-0.5">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{step}</span>
+                </div>
+              ) : (
+                <div className="flex gap-3 items-baseline">
+                  <span className="text-[10px] font-black text-indigo-300 dark:text-indigo-600 shrink-0 w-5 text-right tabular-nums">{i + 1}.</span>
+                  <span className="text-sm leading-relaxed text-slate-700 dark:text-slate-300 font-mono">{step}</span>
+                </div>
               )}
-              <span className={`text-sm leading-relaxed font-mono ${
-                isFinal
-                  ? 'font-black text-indigo-700 dark:text-indigo-300 text-base'
-                  : 'text-slate-700 dark:text-slate-300'
-              }`}>{step}</span>
             </div>
           );
         })}
         {result.result && !/final answer/i.test(current.steps[current.steps.length - 1] || '') && (
-          <div className="pt-3 border-t border-indigo-100 dark:border-indigo-800">
-            <span className="text-[10px] font-black uppercase text-indigo-500">Result: </span>
-            <span className="font-bold text-slate-900 dark:text-white font-mono">{result.result}</span>
+          <div className="mt-3 pt-3 border-t-2 border-indigo-200 dark:border-indigo-700">
+            <div className="flex items-center gap-3 bg-indigo-50 dark:bg-indigo-950/50 rounded-xl px-4 py-3">
+              <i className="fa-solid fa-check-circle text-indigo-500 shrink-0" />
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-0.5">Result</div>
+                <div className="font-black text-indigo-700 dark:text-indigo-300 text-base font-mono">{result.result}</div>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -415,12 +432,18 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
     if (typeof window === 'undefined' || !window.sessionStorage) return;
     try {
       const pending = window.sessionStorage.getItem('pendingGraphExpression');
+      const openTab = window.sessionStorage.getItem('openGraphsTab');
+      window.sessionStorage.removeItem('pendingGraphExpression');
+      window.sessionStorage.removeItem('openGraphsTab');
       if (pending?.trim()) {
         setGraphExpression(pending.trim());
         setCurrentGraph({ id: 'graph-from-question', type: 'function', expressionLatex: pending.trim(), xDomain: { min: -10, max: 10 } });
         setGraphSource('question');
         setShowGraphs(true);
-        window.sessionStorage.removeItem('pendingGraphExpression');
+      } else if (openTab) {
+        // User asked to "solve using graphs" but gave no equation — open graphs tab
+        setGraphSource('manual');
+        setShowGraphs(true);
       }
     } catch {}
   }, []);
@@ -621,9 +644,8 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
             appendMathHistory({ kind: 'expression', inputLatex: expr, result: finalLine, graph: null });
           }
         } catch {
-          // Last resort — route to chat
-          const fmt = `Solve step by step. Use format:\n---METHOD: [Name] ---\nStep 1: ...\nFinal Answer: ...\n---ENDMETHOD---`;
-          onSend(`${command}: ${expr}\n${fmt}`, fileData);
+          // Last resort — route to chat (clean prompt, no internal format instructions)
+          onSend(`${command}: ${expr}. Show step-by-step working.`, fileData);
         }
       }
 
@@ -631,15 +653,28 @@ const MathsMode: React.FC<MathsModeProps> = ({ onClose, lang, embedded = false, 
       setExtractionStatus(null);
       const msg = e instanceof Error ? e.message : 'Extraction failed';
       // Fallback: just send raw input to AI
-      const prompt = fileData
-        ? `Solve this math problem step by step. ${command}.`
-        : `${command}: ${rawText}. Show full step-by-step working.`;
+      // Show error in the local result card instead of dumping to chat
+      const prompt = rawText ? `${command}: ${rawText}` : command;
       try {
-        const aiResult = await geminiService.solveMathWithAI({ prompt: rawText ? `${command}: ${rawText}` : command, fileData });
-        onSend(`[MATH_RESULT]
-${aiResult}`, undefined);
+        const aiResult = await geminiService.solveMathWithAI({ prompt, fileData });
+        const aiMethods = parseAIMethods(aiResult);
+        if (aiMethods.length > 0) {
+          const primary = aiMethods[0];
+          const finalLine = [...primary.steps].reverse().find((s: string) => /final answer/i.test(s)) || primary.steps[primary.steps.length - 1] || '';
+          setLocalStepsResult({
+            kind: 'solve', title: primary.name,
+            steps: primary.steps,
+            result: finalLine.replace(/^final answer[:\s]*/i, '').trim(),
+            input: rawText || '(image)',
+            extraMethods: aiMethods.slice(1),
+          });
+        } else if (aiResult.trim()) {
+          // Plain text answer — show in result card
+          setLocalStepsResult({ kind: 'solve', title: command, steps: aiResult.split('\n').filter(Boolean), result: '', input: rawText || '' });
+        }
       } catch {
-        onSend(prompt, fileData);
+        // True last resort
+        onSend(`${command}: ${rawText || 'this problem'}. Show step-by-step.`, fileData);
       }
     } finally {
       setIsSolving(false);

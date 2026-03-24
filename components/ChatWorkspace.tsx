@@ -114,8 +114,18 @@ const MessageContent: React.FC<{ content: string; isUser: boolean }> = ({ conten
     if (/^#{1,3} /.test(line)) {
       const lvl = (line.match(/^#+/) || [''])[0].length;
       const txt = line.replace(/^#+\s*/, '');
-      const cls = lvl === 1 ? 'text-base font-black mt-3 mb-1' : lvl === 2 ? 'text-sm font-black mt-2 mb-1 opacity-80' : 'text-xs font-black mt-1 opacity-70 uppercase tracking-wide';
+      const cls = lvl === 1 ? 'text-base font-black mt-4 mb-1 text-indigo-600 dark:text-indigo-400' 
+                : lvl === 2 ? 'text-sm font-black mt-3 mb-1 text-slate-600 dark:text-slate-400' 
+                : 'text-xs font-black mt-2 mb-0.5 uppercase tracking-wider text-slate-500';
       nodes.push(<p key={i} className={cls}>{renderInline(txt, isUser)}</p>);
+    }
+    // ALL-CAPS section headers like "PART (A) FINDING THE ANGLE"
+    else if (/^[A-Z][A-Z\s\(\)]+[A-Z]$/.test(line.trim()) && line.trim().length > 4) {
+      nodes.push(
+        <div key={i} className="mt-3 mb-1 pb-1 border-b border-slate-200 dark:border-slate-700">
+          <span className="text-[10px] font-black uppercase tracking-widest text-indigo-500 dark:text-indigo-400">{line.trim()}</span>
+        </div>
+      );
     }
     // Bullet
     else if (/^[\-\*•] /.test(line)) {
@@ -131,10 +141,20 @@ const MessageContent: React.FC<{ content: string; isUser: boolean }> = ({ conten
     else if (/^\d+\.\s/.test(line)) {
       const num = (line.match(/^(\d+)/) || ['',''])[1];
       const txt = line.replace(/^\d+\.\s*/, '');
+      const isFinalAnswer = /^final answer/i.test(txt);
       nodes.push(
-        <div key={i} className="flex gap-2 my-0.5">
-          <span className="shrink-0 font-bold opacity-60 text-xs mt-0.5 min-w-[1.2rem]">{num}.</span>
-          <span>{parseLine(txt, isUser, i)}</span>
+        <div key={i} className={`flex gap-2 my-0.5 ${isFinalAnswer ? 'mt-2 pt-2 border-t border-indigo-200 dark:border-indigo-800' : ''}`}>
+          {isFinalAnswer ? (
+            <div className="w-full flex items-center gap-2 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg px-3 py-2">
+              <i className="fa-solid fa-check-circle text-indigo-500 text-xs shrink-0" />
+              <span className="font-black text-indigo-700 dark:text-indigo-300 text-sm font-mono">{txt.replace(/^final answer[:\s]*/i,'')}</span>
+            </div>
+          ) : (
+            <>
+              <span className="shrink-0 font-black text-indigo-400 dark:text-indigo-600 text-xs mt-1 min-w-[1.4rem] text-right tabular-nums">{num}.</span>
+              <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{parseLine(txt, isUser, i)}</span>
+            </>
+          )}
         </div>
       );
     }
@@ -258,13 +278,15 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       if (graphDef) {
         try {
           if (typeof window !== 'undefined' && window.sessionStorage) {
+            // Store expression if we have one; store flag so MathsMode opens graphs tab
             window.sessionStorage.setItem('pendingGraphExpression', graphDef.expressionLatex || '');
+            if (!graphDef.expressionLatex) {
+              // No expression extracted — tell MathsMode to just open the graphs tab
+              window.sessionStorage.setItem('openGraphsTab', '1');
+            }
           }
-        } catch {
-          // Ignore storage errors; graphing is a best-effort enhancement.
-        }
+        } catch {}
         onModeSwitch?.('maths');
-        // Hand off to Maths workspace; do not also send this as a chat turn.
         return;
       }
     }
