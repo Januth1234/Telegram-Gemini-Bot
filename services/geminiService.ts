@@ -802,7 +802,7 @@ When the user asks about time, date, weather, or prices, use this context. For w
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
     // Live API preview models require v1alpha — v1beta rejects them immediately
-    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
+    const ai = new GoogleGenAI({ apiKey, apiVersion: 'v1alpha' });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
