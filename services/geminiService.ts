@@ -801,7 +801,8 @@ When the user asks about time, date, weather, or prices, use this context. For w
   // Live model — try native audio first (what the working build used), fallback to preview
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
+    // Live API preview models require v1alpha — v1beta rejects them immediately
+    const ai = new GoogleGenAI({ apiKey, httpOptions: { apiVersion: 'v1alpha' } });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
@@ -827,21 +828,9 @@ When the user asks about time, date, weather, or prices, use this context. For w
       ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
 
-    // Valid live models (from SDK 1.46 dist/index.cjs)
-    const MODELS = ['gemini-live-2.5-flash-preview', 'gemini-2.0-flash-live-preview-04-09'];
-    let lastErr: unknown;
-    for (const model of MODELS) {
-      try {
-        console.log('[Orin Live API] Connecting with model:', model);
-        const session = await ai.live.connect({ model, callbacks: wrappedCallbacks, config: liveConfig });
-        console.log('[Orin Live API] Connected successfully:', model);
-        return session;
-      } catch (err) {
-        console.error('[Orin Live API] Failed with model', model, err);
-        lastErr = err;
-      }
-    }
-    throw lastErr ?? new Error('Live API connection failed');
+    const model = 'gemini-live-2.5-flash-preview';
+    console.log('[Orin Live API] Connecting with model:', model);
+    return ai.live.connect({ model, callbacks: wrappedCallbacks, config: liveConfig });
   }
 
   async connectTranslator(callbacks: any, options: any) {
