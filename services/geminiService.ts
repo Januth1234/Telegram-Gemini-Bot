@@ -801,36 +801,22 @@ When the user asks about time, date, weather, or prices, use this context. For w
   // Live model — try native audio first (what the working build used), fallback to preview
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
-    // Live API preview models require v1alpha — v1beta rejects them immediately
-    const ai = new GoogleGenAI({ apiKey, apiVersion: 'v1alpha' });
+    // Use default v1beta (works for standard Live API per Google docs)
+    const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-
-    // Wrap callbacks to log onerror for debugging
-    const wrappedCallbacks = {
-      ...callbacks,
-      onerror: (e: unknown) => {
-        console.error('[Orin Live API] Connection error:', e);
-        if (callbacks.onerror) callbacks.onerror(e);
-      },
-      onclose: (e?: unknown) => {
-        console.log('[Orin Live API] Connection closed:', e);
-        if (callbacks.onclose) callbacks.onclose(e);
-      },
-    };
 
     const liveConfig = {
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
-      ...(config.enableAffectiveDialog ? { enableAffectiveDialog: true } : {}),
-      ...(config.proactiveAudio ? { proactivity: { proactiveAudio: true } } : {}),
     };
 
-    const model = 'gemini-live-2.5-flash-preview';
-    console.log('[Orin Live API] Connecting with model:', model);
-    return ai.live.connect({ model, callbacks: wrappedCallbacks, config: liveConfig });
+    // Model confirmed working in official Google docs (March 2026)
+    // gemini-live-2.5-flash-preview was removed; use native audio model
+    const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
+    return ai.live.connect({ model, callbacks, config: liveConfig });
   }
 
   async connectTranslator(callbacks: any, options: any) {
