@@ -802,12 +802,7 @@ const renderLandingBackground = () => {
                 label="Agent"
                 onClick={() => handleStartWorkspace(globalPrompt, 'agent')}
               />
-              <NavTab
-                active={view === 'files'}
-                icon="fa-folder-open"
-                label="Files"
-                onClick={() => handleStartWorkspace('', 'files')}
-              />
+
             </div>
           )}
           <div className="flex items-center gap-2">

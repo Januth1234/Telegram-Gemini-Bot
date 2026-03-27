@@ -782,9 +782,10 @@ If it is a system of equations, expression should be an array of strings.`;
     return `${tonePart}
 
 VOICE RULES (CRITICAL):
-1. SPEED: Answer in 1–2 short sentences. Be fast and concise. No long monologues.
-2. NOISE: Ignore background noise, coughs, and non-speech sounds. Only respond to clear, directed speech from the user. If input seems like noise or incomplete, give a very brief prompt like "Yes?" or "Go on."
-3. INTERRUPTION: If the user starts speaking while you are talking, stop immediately (you will be cut off by the system). Do not repeat yourself after being interrupted.
+1. LANGUAGE: ALWAYS reply in the SAME language the user speaks. If they speak Sinhala, reply in Sinhala. If Tamil, reply in Tamil. If English, reply in English. NEVER switch languages mid-conversation.
+2. SPEED: Answer in 1–2 short sentences. Be fast and concise. No long monologues.
+3. NOISE: Ignore background noise, coughs, barks, TV sounds. Only respond to clear directed speech. If input seems like noise/incomplete, say "Yes?" or stay silent.
+4. INTERRUPTION: If the user starts speaking, stop immediately. Do not repeat yourself.
 
 SESSION CONTEXT (use for answers about time, place, money, weather):
 - User's timezone: ${tz}
@@ -811,12 +812,26 @@ When the user asks about time, date, weather, or prices, use this context. For w
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
+      // VAD tuning: less sensitive start, slower end-of-speech to handle pauses & background noise
+      realtimeInputConfig: {
+        automaticActivityDetection: {
+          startOfSpeechSensitivity: 'START_SENSITIVITY_LOW' as any,  // don't trigger on dog barks
+          endOfSpeechSensitivity: 'END_SENSITIVITY_LOW' as any,       // wait longer before cutting off
+          silenceDurationMs: 1500,   // need 1.5s of silence to end turn (default ~800ms)
+          prefixPaddingMs: 300,      // need 300ms of speech before starting (filters short noises)
+        },
+      },
     };
 
     // Model confirmed working in official Google docs (March 2026)
     // gemini-live-2.5-flash-preview was removed; use native audio model
+    // Add Google Search grounding so voice can answer current events
+    const liveConfigWithTools = {
+      ...liveConfig,
+      tools: [{ googleSearch: {} }],
+    };
     const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
-    return ai.live.connect({ model, callbacks, config: liveConfig });
+    return ai.live.connect({ model, callbacks, config: liveConfigWithTools });
   }
 
   async connectTranslator(callbacks: any, options: any) {
@@ -832,7 +847,11 @@ Output ONLY the translation — no commentary, greetings, or explanations.`,
     return this.connectLive(callbacks, {
       voiceName: config.voiceName || 'Zephyr',
       systemInstruction: `${getToneInstruction(config.tone || 'neutral')}
-You are processing a live video feed. Describe what you see, answer questions about the video, and respond naturally to the user's voice. Be concise and conversational.`,
+You are processing a live video feed. CRITICAL RULES:
+1. LANGUAGE: Always reply in the same language the user speaks — Sinhala, Tamil, or English.
+2. SPEED: Give instant, short answers (1–2 sentences max). Don't wait to accumulate context.
+3. VISION: When describing what you see, be immediate and specific. Don't hedge.
+4. NOISE: Ignore background noise. Only respond to directed speech from the user.`,
     });
   }
 
@@ -913,7 +932,15 @@ You are processing a live video feed. Describe what you see, answer questions ab
     const plan = user?.plan?.toLowerCase() ?? 'free';
     if (plan === 'pro' || plan === 'pro_yearly') return 'gemini-2.5-pro-preview-06-05'; // 1M ctx
     if (plan === 'basic' || plan === 'basic_yearly') return 'gemini-2.5-flash';          // 1M ctx
-    return 'gemini-2.0-flash'; // 128K ctx
+    // Free: 2 long-context uses per day, tracked in localStorage
+    const today = new Date().toDateString();
+    const key = `orin_long_ctx_${today}`;
+    const used = parseInt(typeof localStorage !== 'undefined' ? (localStorage.getItem(key) || '0') : '0', 10);
+    if (used < 2) {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(key, String(used + 1));
+      return 'gemini-2.5-flash'; // 1M ctx - free users get 2 uses/day
+    }
+    return 'gemini-2.0-flash'; // 128K ctx fallback
   }
 
   // ─── Code Execution ────────────────────────────────────────────────────────

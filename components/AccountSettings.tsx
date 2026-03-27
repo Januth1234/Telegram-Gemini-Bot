@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language, UserThemeId } from '../types';
+import FilesWorkspace from './FilesWorkspace';
 import { translations } from '../translations';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -259,6 +260,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">Creations (30 days)</span>
                     </div>
                  </div>
+              </div>
+
+              {/* File Library */}
+              <div className="pt-4 border-t border-black/5 dark:border-white/5 w-full animate-reveal" style={{ animationDelay: '0.09s' }}>
+                <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest px-1 mb-3">File Library</h4>
+                <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10" style={{ minHeight: 420 }}>
+                  <FilesWorkspace onClose={() => {}} lang={lang} user={user} />
+                </div>
               </div>
 
               {/* Danger Zone */}
