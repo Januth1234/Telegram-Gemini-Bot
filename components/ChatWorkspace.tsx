@@ -217,6 +217,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [localInput, setLocalInput] = useState(initialPrompt);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [urlContextInput, setUrlContextInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+  const [deepResearchActive, setDeepResearchActive] = useState(false);
+  const [deepResearchResult, setDeepResearchResult] = useState('');
+  const [codeExecMode, setCodeExecMode] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -291,6 +296,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
     }
     
+    // Handle URL context if URL input is shown
+    if (showUrlInput && urlContextInput.trim()) {
+      const today = new Date().toDateString();
+      const urlKey = `orin_url_used_${today}`;
+      const used = parseInt(localStorage.getItem(urlKey) || '0', 10);
+      const cachedUser = JSON.parse(localStorage.getItem('orin_user') || '{}');
+      const plan = (cachedUser?.plan || 'free').toLowerCase();
+      const limit = plan === 'pro' || plan === 'pro_yearly' ? 10 : plan.includes('basic') ? 3 : 1;
+      if (used >= limit) {
+        setChatError(`URL context limit (${limit}/day) reached. Upgrade for more.`);
+        return;
+      }
+      localStorage.setItem(urlKey, String(used + 1));
+    }
     abortControllerRef.current = new AbortController();
     setChatError(null);
     setIsTyping(true);
@@ -315,22 +334,76 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     try {
       const isChatMode = activeTab === 'chat';
-      const res = await geminiService.chat(text || "Continue.", { 
-        fileData: fileToUse || undefined, 
-        useThinking: isChatMode ? thinkingMode : false,
-        descriptive: isChatMode ? descriptiveMode : false,
-        history: isPrivate ? privateMessages : messages, 
-        signal: abortControllerRef.current.signal,
-        isPrivate: isPrivate 
-      });
+      let resText = '';
+      let resLinks: any[] = [];
+
+      // ── URL Context mode ────────────────────────────────────────────────
+      if (showUrlInput && urlContextInput.trim()) {
+        const urlRes = await geminiService.fetchUrlContext({
+          url: urlContextInput.trim(),
+          question: text || 'Summarise this page',
+          history: isPrivate ? privateMessages : messages,
+        });
+        resText = urlRes.text;
+        if (urlRes.urlSource) resLinks = [{ title: urlRes.urlSource, uri: urlContextInput.trim() }];
+        setShowUrlInput(false);
+        setUrlContextInput('');
+      }
+      // ── Code Execution mode ─────────────────────────────────────────────
+      else if (codeExecMode) {
+        const codeRes = await geminiService.executeCode({
+          prompt: text || '',
+          history: isPrivate ? privateMessages : messages,
+        });
+        resText = [
+          codeRes.text,
+          codeRes.code ? `\`\`\`python\n${codeRes.code}\n\`\`\`` : '',
+          codeRes.output ? `**Output:**\n\`\`\`\n${codeRes.output}\n\`\`\`` : '',
+        ].filter(Boolean).join('\n\n');
+      }
+      // ── Deep Research mode ─────────────────────────────────────────────
+      else if (deepResearchActive) {
+        const today = new Date().toISOString().slice(0, 7); // YYYY-MM
+        const drKey = `orin_deep_research_${today}`;
+        const cachedUser = JSON.parse(localStorage.getItem('orin_user') || '{}');
+        const plan = (cachedUser?.plan || 'free').toLowerCase();
+        const drLimit = plan === 'pro' || plan === 'pro_yearly' ? 10 : plan.includes('basic') ? 3 : 1;
+        const drUsed = parseInt(localStorage.getItem(drKey) || '0', 10);
+        if (drUsed >= drLimit) {
+          throw new Error(`Deep Research limit (${drLimit}/month) reached. Upgrade for more.`);
+        }
+        let accumulated = '';
+        await geminiService.deepResearch({
+          prompt: text || '',
+          onChunk: (chunk) => { accumulated += chunk; },
+          onDone: (full) => { resText = full; },
+          signal: abortControllerRef.current?.signal,
+        });
+        if (!resText) resText = accumulated;
+        localStorage.setItem(drKey, String(drUsed + 1));
+        setDeepResearchActive(false);
+      }
+      // ── Standard chat ──────────────────────────────────────────────────
+      else {
+        const res = await geminiService.chat(text || "Continue.", {
+          fileData: fileToUse || undefined,
+          useThinking: isChatMode ? thinkingMode : false,
+          descriptive: isChatMode ? descriptiveMode : false,
+          history: isPrivate ? privateMessages : messages,
+          signal: abortControllerRef.current.signal,
+          isPrivate: isPrivate,
+        });
+        resText = res.text;
+        resLinks = res.links || [];
+      }
 
       const botMsg: ChatMessage = { 
          id: (Date.now() + 1).toString(), 
          role: 'assistant', 
-         content: res.text, 
+         content: resText, 
          timestamp: new Date(), 
          type: 'text', 
-         links: res.links 
+         links: resLinks 
       };
 
       if (isPrivate) {
@@ -723,7 +796,33 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                      </div>
                   )}
 
-                  <div className={`p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 ${isPrivate ? 'bg-slate-900 border-slate-600/50' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10'}`}>
+                  {/* URL Context input row */}
+                {showUrlInput && (
+                  <div className="flex gap-2 px-1 pb-2">
+                    <input
+                      type="url"
+                      placeholder="Paste URL to fetch context from… (1/day free)"
+                      value={urlContextInput}
+                      onChange={e => setUrlContextInput(e.target.value)}
+                      className="flex-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-white/5 border border-indigo-200 dark:border-indigo-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <button onClick={() => setShowUrlInput(false)} className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 flex items-center justify-center shrink-0">
+                      <i className="fa-solid fa-xmark text-xs" />
+                    </button>
+                  </div>
+                )}
+                {deepResearchActive && (
+                  <div className="flex items-center gap-2 px-1 pb-2">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 text-[10px] font-bold text-violet-600 dark:text-violet-400">
+                      <i className="fa-solid fa-microscope text-xs" />
+                      Deep Research mode — sends a comprehensive research request (1/month free)
+                    </div>
+                    <button onClick={() => setDeepResearchActive(false)} className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 flex items-center justify-center shrink-0 text-xs">
+                      <i className="fa-solid fa-xmark" />
+                    </button>
+                  </div>
+                )}
+                <div className={`p-2 rounded-2xl shadow-lg border flex flex-wrap items-center gap-2 ${isPrivate ? 'bg-slate-900 border-slate-600/50' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-white/10'}`}>
                      <button onClick={() => fileInputRef.current?.click()} className="w-9 h-9 shrink-0 rounded-lg flex items-center justify-center text-slate-400" aria-label="Attach file or image"><i className="fa-solid fa-paperclip" /></button>
                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf,.txt,application/pdf,text/plain" onChange={(e) => {
                        const file = e.target.files?.[0];

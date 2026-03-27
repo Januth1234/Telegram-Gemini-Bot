@@ -907,6 +907,177 @@ You are processing a live video feed. Describe what you see, answer questions ab
    * Dedicated math solver with Symbolab-style system instruction.
    * Bypasses anti-chain-of-thought in chat(). Uses plan-based model routing.
    */
+  // ─── Long Context Chat ─────────────────────────────────────────────────────
+  /** Long context: Pro uses gemini-2.5-flash with 1M token window. Pass full history. */
+  private getLongContextModel(user: UserAccount | null): string {
+    const plan = user?.plan?.toLowerCase() ?? 'free';
+    if (plan === 'pro' || plan === 'pro_yearly') return 'gemini-2.5-pro-preview-06-05'; // 1M ctx
+    if (plan === 'basic' || plan === 'basic_yearly') return 'gemini-2.5-flash';          // 1M ctx
+    return 'gemini-2.0-flash'; // 128K ctx
+  }
+
+  // ─── Code Execution ────────────────────────────────────────────────────────
+  /** Run code via Gemini's built-in code execution tool. Returns output + generated code. */
+  async executeCode(options: {
+    prompt: string;
+    history?: ChatMessage[];
+    plan?: string;
+  }): Promise<{ text: string; code?: string; output?: string }> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const model = this.getLongContextModel(this.currentUser);
+
+    const contents: any[] = (options.history || []).map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content }],
+    }));
+    contents.push({ role: 'user', parts: [{ text: options.prompt }] });
+
+    const response = await ai.models.generateContent({
+      model,
+      contents,
+      config: {
+        tools: [{ codeExecution: {} }],
+        systemInstruction: 'You are a coding assistant. When asked to compute or run code, use the code execution tool. Show the code and its output clearly.',
+      },
+    });
+
+    let text = '', code = '', output = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      const p = part as any;
+      if (p.text) text += p.text;
+      if (p.executableCode?.code) code = p.executableCode.code;
+      if (p.codeExecutionResult?.output) output = p.codeExecutionResult.output;
+    }
+    return { text: text.trim(), code, output };
+  }
+
+  // ─── URL Context ────────────────────────────────────────────────────────────
+  /** Fetch + analyse a URL using Gemini's built-in URL context tool. 1/day free, more for paid. */
+  async fetchUrlContext(options: {
+    url: string;
+    question: string;
+    history?: ChatMessage[];
+  }): Promise<{ text: string; urlTitle?: string; urlSource?: string }> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const model = this.getLongContextModel(this.currentUser);
+
+    const prompt = `Fetch this URL and answer the question based on its content.\nURL: ${options.url}\nQuestion: ${options.question}`;
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        tools: [{ urlContext: {} }],
+        systemInstruction: 'You are a web research assistant. When given a URL, fetch its content using the url_context tool and answer the question thoroughly based on what you find.',
+      },
+    });
+
+    let text = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      const p = part as any;
+      if (p.text && !p.thought) text += p.text;
+    }
+    // Extract URL metadata from grounding
+    const meta = (response.candidates?.[0] as any)?.urlContextMetadata;
+    const urlSource = meta?.urlMetadata?.[0]?.retrievedUrl;
+    const urlTitle = meta?.urlMetadata?.[0]?.urlRetrievalStatus;
+    return { text: text.trim(), urlTitle, urlSource };
+  }
+
+  // ─── Deep Research ────────────────────────────────────────────────────────
+  /** Run a deep research task. 1/month free, more for paid plans. Returns streamed chunks. */
+  async deepResearch(options: {
+    prompt: string;
+    onChunk: (text: string) => void;
+    onDone: (fullText: string) => void;
+    signal?: AbortSignal;
+  }): Promise<void> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    // Deep research uses interactions API with DeepResearchAgentConfig
+    const response = await (ai as any).interactions?.create?.({
+      api_version: 'v1alpha',
+      model: 'gemini-2.5-flash',
+      input: [{ type: 'text', text: options.prompt }],
+      agent_config: { type: 'deep-research', thinking_summaries: 'auto' },
+      stream: true,
+    });
+
+    let fullText = '';
+    if (response && typeof response[Symbol.asyncIterator] === 'function') {
+      for await (const chunk of response) {
+        const delta = (chunk as any)?.delta;
+        if (delta?.type === 'text') {
+          fullText += delta.text;
+          options.onChunk(delta.text);
+        }
+      }
+    } else {
+      // Fallback: use regular chat with deep grounding prompt
+      const result = await this.chat(
+        `[DEEP RESEARCH] ${options.prompt}\n\nConduct thorough research on this topic. Use web search extensively. Provide a comprehensive, well-structured report with sources.`,
+        { grounding: 'search', useThinking: true }
+      );
+      fullText = result.text;
+      options.onChunk(fullText);
+    }
+    options.onDone(fullText);
+  }
+
+  // ─── File Search ──────────────────────────────────────────────────────────
+  /** Search user's uploaded files using Gemini File Search. */
+  async searchFiles(options: {
+    query: string;
+    fileSearchStoreName: string;
+  }): Promise<{ text: string; citations: Array<{ fileName: string; snippet: string }> }> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const model = this.getLongContextModel(this.currentUser);
+
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: options.query }] }],
+      config: {
+        tools: [{ fileSearch: { fileSearchStoreNames: [options.fileSearchStoreName] } }],
+        systemInstruction: "Answer based on the documents in the user's file store. Cite specific files and quote relevant passages.",
+      },
+    });
+
+    let text = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      const p = part as any;
+      if (p.text && !p.thought) text += p.text;
+    }
+    // Extract file citations
+    const citations: Array<{ fileName: string; snippet: string }> = [];
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      const p = part as any;
+      if (p.fileSearchResult?.documents) {
+        for (const doc of p.fileSearchResult.documents) {
+          citations.push({ fileName: doc.displayName || doc.name || 'File', snippet: doc.snippet || '' });
+        }
+      }
+    }
+    return { text: text.trim(), citations };
+  }
+
+  /** Create a file search store for a user (called once on signup/first file upload). */
+  async createFileSearchStore(displayName: string): Promise<string> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const store = await (ai as any).fileSearchStores?.create?.({ config: { displayName } });
+    return store?.name ?? '';
+  }
+
+  /** Upload a file to the user's file search store. */
+  async uploadToFileStore(storeName: string, file: File): Promise<void> {
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    await (ai as any).fileSearchStores?.uploadFileToFileSearchStore?.(storeName, file, {});
+  }
+
+
   async solveMathWithAI(options: {
     prompt: string;
     fileData?: { data: string; mimeType: string; name?: string };

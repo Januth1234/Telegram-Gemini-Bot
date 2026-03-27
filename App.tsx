@@ -9,6 +9,7 @@ import { translations } from './translations';
 
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
 import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg, NeonBg } from './components/backgrounds/CSSBackgrounds';
+const FilesWorkspace = lazy(() => import('./components/FilesWorkspace'));
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
@@ -42,7 +43,7 @@ function conversationToSearchText(c: Conversation): string {
   return text.length > 4000 ? text.slice(0, 4000) : text;
 }
 
-const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'translator', agent: 'agent' };
+const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'translator', agent: 'agent', files: 'chat' };
 // Only workspace views map to workspace modes; static pages shouldn't force-chat.
 const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   art: 'studio',
@@ -52,6 +53,7 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   translator: 'translator',
   voice: 'voice',
   agent: 'agent',
+  files: 'files',
   landing: 'chat', // landing CTA opens chat by default
   account: 'chat',
   privacy: 'chat',
@@ -64,8 +66,8 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
 };
-const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot'];
+const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
@@ -663,6 +665,11 @@ const App: React.FC = () => {
           />
         );
       case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
+      case 'files': return (
+        <Suspense fallback={null}>
+          <FilesWorkspace onClose={() => window.location.hash = 'chat'} lang={lang} user={user} />
+        </Suspense>
+      );
       case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -794,6 +801,12 @@ const renderLandingBackground = () => {
                 icon="fa-robot"
                 label="Agent"
                 onClick={() => handleStartWorkspace(globalPrompt, 'agent')}
+              />
+              <NavTab
+                active={view === 'files'}
+                icon="fa-folder-open"
+                label="Files"
+                onClick={() => handleStartWorkspace('', 'files')}
               />
             </div>
           )}

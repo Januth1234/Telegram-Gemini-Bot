@@ -68,6 +68,12 @@ export const SEED_PHRASES: SeedPhrasesMap = {
     "Translate to English",
     "How do you say in",
   ],
+  files: [
+    "Search my documents for",
+    "Find the file about",
+    "What does my document say about",
+    "Upload and search",
+  ],
   agent: [
     "Find information about",
     "Summarize the key points",

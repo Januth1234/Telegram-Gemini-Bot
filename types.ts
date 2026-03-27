@@ -75,8 +75,8 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
-export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent';
+export type AppView = 'landing' | 'chat' | 'translator' | 'art' | 'camera' | 'voice' | 'math' | 'agent' | 'files' | 'account' | 'privacy' | 'terms' | 'releases' | 'logic' | 'creator' | 'pricing' | 'downloads' | 'admin-portal' | 'telegram-bot';
+export type WorkspaceMode = 'chat' | 'studio' | 'vision' | 'voice' | 'translator' | 'maths' | 'agent' | 'files';
 
 // Graphing types for Maths / Graphs workspace
 export type GraphType = 'function' | 'parametric' | 'polar' | 'data';

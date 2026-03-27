@@ -11,6 +11,12 @@ import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKey
 interface UsagePlanLimits {
   textPerDay: number | null;
   imagesPer30Days: number | null;
+  fileSearchPerDay: number | null;   // file search queries per day
+  urlContextPerDay: number | null;   // URL context fetches per day
+  deepResearchPerMonth: number | null; // deep research runs per month
+  codeExecPerDay: number | null;     // code execution per day
+  agentMinutesPerMonth: number | null; // agent (computer use) minutes/month
+  storageMB: number | null;          // max file storage in MB
   videosPer30Days: number | null;
 }
 
@@ -261,12 +267,12 @@ class FirebaseService {
   }
 
   private static readonly USAGE_LIMITS: Record<string, UsagePlanLimits> = {
-    free:         { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 },
-    starter:      { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 }, // legacy alias
-    basic:        { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
-    basic_yearly: { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
-    pro:          { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
-    pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
+    free:         { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0,  fileSearchPerDay: 3,    urlContextPerDay: 1,    deepResearchPerMonth: 1,    codeExecPerDay: 0,    agentMinutesPerMonth: 30,  storageMB: 1024    },
+    starter:      { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0,  fileSearchPerDay: 3,    urlContextPerDay: 1,    deepResearchPerMonth: 1,    codeExecPerDay: 0,    agentMinutesPerMonth: 30,  storageMB: 1024    },
+    basic:        { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2,  fileSearchPerDay: 10,   urlContextPerDay: 3,    deepResearchPerMonth: 3,    codeExecPerDay: 10,   agentMinutesPerMonth: 60,  storageMB: 5120    },
+    basic_yearly: { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2,  fileSearchPerDay: 10,   urlContextPerDay: 3,    deepResearchPerMonth: 3,    codeExecPerDay: 10,   agentMinutesPerMonth: 60,  storageMB: 5120    },
+    pro:          { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null, fileSearchPerDay: null, urlContextPerDay: 10, deepResearchPerMonth: 10, codeExecPerDay: null, agentMinutesPerMonth: null, storageMB: 102400 },
+    pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null, fileSearchPerDay: null, urlContextPerDay: 10, deepResearchPerMonth: 10, codeExecPerDay: null, agentMinutesPerMonth: null, storageMB: 102400 },
   };
 
   /**

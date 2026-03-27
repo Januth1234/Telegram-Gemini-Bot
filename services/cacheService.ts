@@ -19,6 +19,10 @@ export enum CacheKey {
   STUDIO_HISTORY = 'orin_studio_history_v1',
   MATH_HISTORY = 'orin_math_history_v1',
   AGENT_USED_ONCE = 'orin_agent_used_once',
+  FILE_SEARCH_STORE = 'orin_file_search_store',   // Firestore store name for user's files
+  URL_CONTEXT_USED = 'orin_url_context_used',     // date string of last URL context use
+  DEEP_RESEARCH_USED = 'orin_deep_research_used', // YYYY-MM string of last deep research
+  CODE_EXEC_USED = 'orin_code_exec_used',         // count today
 }
 
 export class CacheService {
