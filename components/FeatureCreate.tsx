@@ -58,6 +58,9 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [publishModal, setPublishModal] = useState<{ url: string; prompt: string } | null>(null);
+  const [publishCaption, setPublishCaption] = useState('');
+  const [publishing, setPublishing] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [upgradeModalMessage, setUpgradeModalMessage] = useState("");
   const [showClearHistoryConfirm, setShowClearHistoryConfirm] = useState(false);
@@ -392,6 +395,40 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     } finally {
       setIsLoading(false);
       setExtendingTimestamp(null);
+    }
+  };
+
+  const publishToFeed = () => {
+    if (!publishModal) return;
+    setPublishing(true);
+    const FEED_KEY = 'orin_feed_posts_v2';
+    const POINTS_KEY = 'orin_creator_points';
+    try {
+      const cachedUser = JSON.parse(localStorage.getItem('orin_user') || '{}');
+      const uid = cachedUser?.id || 'guest';
+      const userName = cachedUser?.name || cachedUser?.email || 'Creator';
+      const userAvatar = cachedUser?.avatar || '';
+      const post = {
+        id: `${Date.now()}-${uid}`,
+        userId: uid, userName, userAvatar,
+        type: 'image',
+        mediaUrl: publishModal.url,
+        caption: publishCaption || `Generated with Orin AI Studio`,
+        prompt: publishModal.prompt,
+        aiGenerated: true,
+        likes: [], comments: [],
+        createdAt: Date.now(),
+        points: 10,
+      };
+      const existing = JSON.parse(localStorage.getItem(FEED_KEY) || '[]');
+      localStorage.setItem(FEED_KEY, JSON.stringify([post, ...existing].slice(0, 200)));
+      // Award points
+      const pts = JSON.parse(localStorage.getItem(POINTS_KEY) || '{}');
+      pts[uid] = (pts[uid] || 0) + 10;
+      localStorage.setItem(POINTS_KEY, JSON.stringify(pts));
+    } finally {
+      setPublishing(false);
+      setPublishModal(null);
     }
   };
 
@@ -908,6 +945,45 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     </div>
     </>
   );
+      {/* ── Publish to Feed modal (slides up after image gen) ── */}
+      {publishModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4 bg-black/40 backdrop-blur-sm animate-fade">
+          <div className="w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden animate-slide-up">
+            <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-slate-100 dark:border-white/5">
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-fire text-orange-500" />
+                <span className="text-sm font-black text-slate-900 dark:text-white">Share to Creations Feed</span>
+                <span className="text-[9px] font-black px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-600">+10 pts</span>
+              </div>
+              <button onClick={() => setPublishModal(null)} className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-white/5 text-slate-400 hover:text-red-500 flex items-center justify-center">
+                <i className="fa-solid fa-xmark text-xs" />
+              </button>
+            </div>
+            <div className="p-4 space-y-3">
+              <img src={publishModal.url} alt="Generated" className="w-full max-h-40 object-contain rounded-xl bg-slate-50 dark:bg-black/20" />
+              <input
+                type="text"
+                placeholder="Add a caption… (optional)"
+                value={publishCaption}
+                onChange={e => setPublishCaption(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setPublishModal(null)}
+                  className="py-3 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 text-xs font-black uppercase tracking-wider hover:bg-slate-200 dark:hover:bg-white/10 transition-colors">
+                  Skip
+                </button>
+                <button onClick={publishToFeed} disabled={publishing}
+                  className="py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-pink-600 text-white text-xs font-black uppercase tracking-wider hover:opacity-90 disabled:opacity-40 transition-opacity flex items-center justify-center gap-1.5">
+                  {publishing ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-paper-plane" />}
+                  Publish
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
 };
 
 export default FeatureCreate;

@@ -10,6 +10,7 @@ import { translations } from './translations';
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
 import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg, NeonBg } from './components/backgrounds/CSSBackgrounds';
 const FilesWorkspace = lazy(() => import('./components/FilesWorkspace'));
+const CreationFeed = lazy(() => import('./components/CreationFeed'));
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
@@ -65,9 +66,10 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   downloads: 'chat',
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
+  community: 'chat',
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
@@ -670,6 +672,11 @@ const App: React.FC = () => {
           <FilesWorkspace onClose={() => window.location.hash = 'chat'} lang={lang} user={user} />
         </Suspense>
       );
+      case 'community': return (
+        <Suspense fallback={null}>
+          <CreationFeed onClose={() => window.location.hash = 'chat'} lang={lang} user={user} />
+        </Suspense>
+      );
       case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -801,6 +808,12 @@ const renderLandingBackground = () => {
                 icon="fa-robot"
                 label="Agent"
                 onClick={() => handleStartWorkspace(globalPrompt, 'agent')}
+              />
+              <NavTab
+                active={view === 'community'}
+                icon="fa-fire"
+                label="Creations"
+                onClick={() => { window.location.hash = 'community'; }}
               />
 
             </div>

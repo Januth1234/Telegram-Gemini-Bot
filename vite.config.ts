@@ -31,17 +31,27 @@ export default defineConfig(({ mode }) => {
     plugins: [react(), swVersionPlugin()],
     build: {
       chunkSizeWarningLimit: 1000,
+      minify: 'esbuild',
+      target: 'es2020',
+      cssMinify: true,
       rollupOptions: {
         output: {
-          manualChunks: {
-            // AI/Google SDK — large, rarely changes
-            'vendor-ai': ['@google/genai'],
-            // Firebase
-            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/messaging'],
-            // Math libraries — only loaded in maths tab
-            'vendor-math': ['mathjs', 'nerdamer'],
-            // KaTeX for math rendering
-            'vendor-katex': ['katex'],
+          manualChunks(id) {
+            // AI SDK — largest dep, rarely changes → separate chunk
+            if (id.includes('@google/genai')) return 'vendor-ai';
+            // Firebase — split into smaller pieces
+            if (id.includes('firebase/firestore')) return 'vendor-firebase-firestore';
+            if (id.includes('firebase/auth') || id.includes('firebase/compat')) return 'vendor-firebase-auth';
+            if (id.includes('firebase/app') || id.includes('firebase/messaging')) return 'vendor-firebase-core';
+            if (id.includes('firebase-admin')) return 'vendor-firebase-admin';
+            // Math — heavy, only in maths tab
+            if (id.includes('nerdamer')) return 'vendor-nerdamer';
+            if (id.includes('mathjs')) return 'vendor-mathjs';
+            if (id.includes('katex')) return 'vendor-katex';
+            // Plotly — only in graphs
+            if (id.includes('plotly')) return 'vendor-plotly';
+            // React core
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) return 'vendor-react';
           },
         },
       },
