@@ -114,7 +114,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const themeFx = THEME_ANIMATION[landingTheme];
 
   return (
-    <main className="h-full overflow-x-hidden overflow-y-auto custom-scrollbar flex flex-col items-center bg-transparent relative z-10 safe-pb">
+    <main className="h-full overflow-x-hidden flex flex-col items-center bg-transparent relative z-10 safe-pb">
       {/* Optional soft overlay tint; for shader themes this is very subtle */}
       <div
         aria-hidden

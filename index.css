@@ -3,40 +3,75 @@
 @tailwind utilities;
 
 @layer base {
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden; /* Prevent body scroll, use component-level scrolling */
+  }
   html { scroll-behavior: smooth; }
   :focus-visible { outline: 2px solid rgb(99 102 241 / 0.6); outline-offset: 2px; }
   ::selection { background-color: rgb(99 102 241 / 0.15); }
-  body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { 
+    -webkit-font-smoothing: antialiased; 
+    -moz-osx-font-smoothing: grayscale;
+    background-color: theme('colors.slate.50');
+  }
+  .dark body {
+    background-color: theme('colors.slate.950');
+  }
 }
 
-.custom-scrollbar { scrollbar-width: thin; scrollbar-color: rgb(148 163 184 / 0.3) transparent; }
-.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+/* ─── Scrollbar Styling ─────────────────────────────────────────────────── */
+.custom-scrollbar { 
+  scrollbar-width: thin; 
+  scrollbar-color: rgb(148 163 184 / 0.3) transparent; 
+}
+.custom-scrollbar::-webkit-scrollbar { width: 5px; height: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-.custom-scrollbar::-webkit-scrollbar-thumb { background: rgb(148 163 184 / 0.3); border-radius: 99px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { 
+  background: rgb(148 163 184 / 0.3); 
+  border-radius: 99px; 
+}
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgb(148 163 184 / 0.5); }
+
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ─── Layout Utilities ──────────────────────────────────────────────────── */
 .safe-pb { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
 .safe-pt { padding-top: max(0px, env(safe-area-inset-top)); }
 .tap-target { min-width: 44px; min-height: 44px; }
 .sinhala-text { font-family: 'Noto Sans Sinhala', sans-serif; line-height: 1.8; }
 .tamil-text { font-family: 'Noto Sans Tamil', sans-serif; line-height: 1.8; }
 
+/* ─── UI Components ─────────────────────────────────────────────────────── */
 .glass {
   background: rgb(255 255 255 / 0.7);
-  backdrop-filter: blur(16px) saturate(180%);
-  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
   border: 1px solid rgb(255 255 255 / 0.2);
 }
-.dark .glass { background: rgb(15 23 42 / 0.7); border-color: rgb(255 255 255 / 0.08); }
+.dark .glass { 
+  background: rgb(15 23 42 / 0.7); 
+  border-color: rgb(255 255 255 / 0.08); 
+}
 
 .gradient-text {
   background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #06b6d4 100%);
-  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text; 
+  background-clip: text; 
+  -webkit-text-fill-color: transparent;
 }
 
 pre, code { font-family: 'JetBrains Mono','Fira Code',ui-monospace,monospace; font-size: 0.85em; }
-pre { overflow-x: auto; border-radius: 12px; padding: 1rem 1.25rem; background: rgb(15 23 42 / 0.05); border: 1px solid rgb(15 23 42 / 0.08); }
+pre { 
+  overflow-x: auto; 
+  border-radius: 12px; 
+  padding: 1rem 1.25rem; 
+  background: rgb(15 23 42 / 0.05); 
+  border: 1px solid rgb(15 23 42 / 0.08); 
+}
 .dark pre { background: rgb(255 255 255 / 0.04); border-color: rgb(255 255 255 / 0.08); }
 
 .chat-prose { line-height: 1.65; }
@@ -51,16 +86,7 @@ pre { overflow-x: auto; border-radius: 12px; padding: 1rem 1.25rem; background: 
 .card-lift:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgb(0 0 0 / 0.1); }
 .dark .card-lift:hover { box-shadow: 0 12px 40px rgb(0 0 0 / 0.3); }
 
-.badge-free { background: rgb(241 245 249); color: rgb(100 116 139); border: 1px solid rgb(226 232 240); }
-.badge-basic { background: rgb(239 246 255); color: rgb(37 99 235); border: 1px solid rgb(191 219 254); }
-.badge-pro { background: linear-gradient(135deg, rgb(99 102 241 / 0.12), rgb(139 92 246 / 0.12)); color: rgb(109 40 217); border: 1px solid rgb(196 181 253 / 0.6); }
-.dark .badge-free { background: rgb(30 41 59); color: rgb(148 163 184); border-color: rgb(51 65 85); }
-.dark .badge-basic { background: rgb(23 37 84 / 0.5); color: rgb(147 197 253); border-color: rgb(29 78 216 / 0.4); }
-.dark .badge-pro { background: rgb(76 29 149 / 0.2); color: rgb(196 181 253); border-color: rgb(109 40 217 / 0.4); }
-
-.mode-pill { transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease; }
-.mode-pill.active { box-shadow: 0 2px 8px rgb(99 102 241 / 0.25); }
-
+/* ─── Animations ────────────────────────────────────────────────────────── */
 @keyframes typingDot {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
   30% { transform: translateY(-4px); opacity: 1; }
@@ -74,62 +100,22 @@ pre { overflow-x: auto; border-radius: 12px; padding: 1rem 1.25rem; background: 
 }
 .skeleton {
   background: linear-gradient(90deg, rgb(241 245 249) 25%, rgb(226 232 240) 50%, rgb(241 245 249) 75%);
-  background-size: 800px 100%; animation: skeletonShimmer 1.6s ease-in-out infinite; border-radius: 8px;
+  background-size: 800px 100%; 
+  animation: skeletonShimmer 1.6s ease-in-out infinite; 
+  border-radius: 8px;
 }
 .dark .skeleton {
   background: linear-gradient(90deg, rgb(30 41 59) 25%, rgb(51 65 85) 50%, rgb(30 41 59) 75%);
-  background-size: 800px 100%;
 }
 
-.katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.25rem 0; }
-.katex { font-size: 1.05em !important; }
-
-.tool-chip {
-  display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px;
-  font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase;
-  background: rgb(99 102 241 / 0.08); color: rgb(99 102 241); border: 1px solid rgb(99 102 241 / 0.2);
-}
-.dark .tool-chip { background: rgb(99 102 241 / 0.12); border-color: rgb(99 102 241 / 0.3); color: rgb(165 180 252); }
-
-.view-enter { animation: reveal 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
-
-/* ─── MathLive: move keyboard toggle + menu to far right ─────────────────── */
-/* MathLive renders its toolbar inside shadow DOM using a flex container.
-   Setting direction pushes the toggle buttons (first children) to the end. */
-math-field {
-  --keyboard-toggle-float: right;
-}
-/* Fallback: target the outer container MathLive adds via ::part */
-math-field::part(container) {
-  flex-direction: row-reverse;
-}
-/* The math content should still fill available space */
-math-field::part(content) {
-  flex: 1;
-}
-/* Keep the toggle buttons grouped on the right */
-math-field::part(virtual-keyboard-toggle),
-math-field::part(menu-toggle) {
-  order: 99;
-  margin-left: 4px;
-  margin-right: 0;
-}
-
-/* ─── GPU optimisation ───────────────────────────────────────────────────── */
-/* Disable WebGL/heavy animations on mobile / reduced-motion preference */
+/* ─── GPU & Efficiency ───────────────────────────────────────────────────── */
 @media (max-width: 767px) {
-  .animate-hero-float,
-  .animate-glow-pulse,
-  .animate-shimmer,
-  .animate-theme-classic,
-  .animate-theme-midnight,
-  .animate-theme-aurora,
-  .animate-theme-terminal,
-  .animate-theme-ocean,
-  .animate-theme-sunset,
-  .animate-theme-paper {
+  .animate-hero-float, .animate-glow-pulse, .animate-shimmer {
     animation: none !important;
+  }
+  /* Slow down background animations on mobile to save battery/CPU */
+  .aurora-l1, .aurora-l2, .aurora-shift, .silk-a, .silk-b, .mid-orb, .term-col, .sunset-rays, .sunset-sun {
+    animation-duration: 30s !important;
   }
 }
 
@@ -141,37 +127,22 @@ math-field::part(menu-toggle) {
   }
 }
 
-/* Chat bubbles: avoid promoting to compositor layer unnecessarily */
-.chat-prose, .chat-bubble {
-  contain: layout style;
-}
+.chat-prose, .chat-bubble { contain: layout style; }
 
-/* Scrollable containers: let browser optimise scrolling */
 .custom-scrollbar {
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
 }
 
-/* ─── Touch devices: lightweight but animated ───────────────────────────────── */
 @media (hover: none) {
-  /* backdrop-filter is the #1 GPU killer — remove it */
   * {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  /* Replace semi-transparent glass with solid */
-  .glass-panel {
-    background: rgba(255,255,255,0.98) !important;
+  .glass {
+    background: rgba(255,255,255,0.95) !important;
   }
-  .dark .glass-panel {
-    background: rgba(15,23,42,0.98) !important;
+  .dark .glass {
+    background: rgba(15,23,42,0.95) !important;
   }
-  /* Slow down heavy animations instead of killing them */
-  .aurora-l1 { animation-duration: 30s !important; }
-  .aurora-l2 { animation-duration: 40s !important; }
-  .aurora-shift { animation-duration: 25s !important; }
-  .silk-a { animation-duration: 18s !important; }
-  .silk-b { animation-duration: 14s !important; }
-  .neon-grid { animation-duration: 8s !important; }
-  .neon-o1 { animation-duration: 20s !important; }
 }
