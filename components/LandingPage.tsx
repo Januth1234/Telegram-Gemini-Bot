@@ -145,12 +145,12 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               </div>
             </div>
             
-            <div className="space-y-4 md:space-y-6 text-center">
-              <h1 className="text-4xl md:text-8xl font-black tracking-tighter text-slate-900 dark:text-white leading-[0.9] opacity-0 animate-reveal" style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}>
+            <div className="space-y-4 md:space-y-8 text-center">
+              <h1 className="text-hero text-slate-900 dark:text-white opacity-0 animate-reveal" style={{ animationDelay: '100ms', animationFillMode: 'forwards' }}>
                 {t.welcome}
               </h1>
               <div className="min-h-[3rem] md:min-h-[4rem] flex flex-col items-center justify-center px-4 gap-2">
-                  <h2 className="text-lg md:text-3xl font-bold text-slate-600 dark:text-slate-300 tracking-tight max-w-2xl leading-snug opacity-0 animate-reveal" style={{ animationDelay: '200ms', animationFillMode: 'forwards' }}>
+                  <h2 className="text-heading-lg text-slate-700 dark:text-slate-200 max-w-2xl opacity-0 animate-reveal" style={{ animationDelay: '200ms', animationFillMode: 'forwards' }}>
                     {context.timeOfDay === 'morning' ? t.goodMorning : context.timeOfDay === 'afternoon' ? t.goodAfternoon : t.goodEvening} {t.orinReady}
                   </h2>
               </div>
@@ -178,22 +178,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               )}
 
               {/* Single search-style row: input + send */}
-              <div className="flex items-center gap-2 w-full rounded-2xl border border-slate-200/80 dark:border-white/15 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shadow-sm focus-within:border-cyan-400/50 dark:focus-within:border-cyan-400/40 focus-within:shadow-md transition-all duration-200 overflow-hidden">
+              <div className="flex items-center gap-2 w-full rounded-2xl border border-slate-200/80 dark:border-white/15 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md shadow-md focus-within:border-indigo-400/60 dark:focus-within:border-indigo-400/50 focus-within:shadow-lg focus-within:scale-[1.02] transition-all duration-200 overflow-hidden input-glow">
                 <input
                   type="text"
                   value={prompt}
                   onChange={(e) => onPromptChange(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleGuestSubmit()}
                   placeholder={user ? t.howHelp : t.tryDemoPlaceholder}
-                  className="flex-1 min-w-0 px-4 py-3 md:py-3.5 text-sm md:text-base bg-transparent border-none outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-400 font-medium"
+                  className="flex-1 min-w-0 px-5 py-3.5 md:py-4 text-sm md:text-base bg-transparent border-none outline-none focus:ring-0 text-slate-900 dark:text-white placeholder:text-slate-500 dark:placeholder:text-slate-400 font-semibold"
                 />
                 <button
                   onClick={handleGuestSubmit}
                   disabled={isGuestLoading || !prompt.trim()}
-                  className="shrink-0 m-1.5 w-10 h-10 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 flex items-center justify-center hover:opacity-90 active:scale-95 disabled:opacity-40 transition-all tap-target"
+                  className="shrink-0 m-2 w-11 h-11 rounded-lg bg-gradient-to-br from-indigo-600 to-indigo-700 dark:from-indigo-500 dark:to-indigo-600 text-white flex items-center justify-center hover:shadow-lg hover:scale-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150 tap-target font-bold"
                   aria-label={user ? t.go : t.demo}
                 >
-                  {isGuestLoading ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-arrow-right text-sm" />}
+                  {isGuestLoading ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-arrow-right text-base" />}
                 </button>
               </div>
 
@@ -202,20 +202,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
                 <button
                   type="button"
                   onClick={() => onReasoningModeChange({ thinking: !thinkingMode })}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-                    thinkingMode ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 ${thinkingMode ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
                 >
-                  Thinking
+                  ⚡ Thinking
                 </button>
                 <button
                   type="button"
                   onClick={() => onReasoningModeChange({ descriptive: !descriptiveMode })}
-                  className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold uppercase tracking-wider transition-colors ${
-                    descriptiveMode ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-                  }`}
+                  className={`px-3.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 ${descriptiveMode ? 'bg-indigo-600 text-white shadow-md scale-105' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700'}`}
                 >
-                  Descriptive
+                  📝 Descriptive
                 </button>
               </div>
             </div>

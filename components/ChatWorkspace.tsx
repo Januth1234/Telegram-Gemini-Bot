@@ -616,7 +616,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           ) : (
             currentMessages.map((msg, i) => (
               <div key={msg.id || i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                 <div className={`max-w-[92%] p-5 md:p-6 rounded-2xl shadow-sm border ${msg.role === 'user' ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-tr-none' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
+                 <div className={`max-w-[92%] p-5 md:p-6 rounded-2xl shadow-md border ${msg.role === 'user' ? 'bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white dark:to-slate-100 text-white dark:text-slate-950 rounded-tr-none font-semibold' : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 rounded-tl-none border-slate-200 dark:border-white/10'}`}>
                   <MessageContent content={msg.content} isUser={msg.role === 'user'} />
                   {msg.links && msg.links.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-slate-200/50 dark:border-white/10">
@@ -640,11 +640,11 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           )}
           {isTyping && (
             <div className="flex items-center gap-3 mt-2">
-              <div className="flex items-center gap-1 bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-white/[0.08] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-                <span className="typing-dot w-1.5 h-1.5 bg-indigo-500 rounded-full inline-block" />
-                <span className="typing-dot w-1.5 h-1.5 bg-indigo-500 rounded-full inline-block" />
-                <span className="typing-dot w-1.5 h-1.5 bg-indigo-500 rounded-full inline-block" />
-                {stepLabel && <span className="ml-2 text-[10px] font-bold text-indigo-500 uppercase tracking-widest">{stepLabel}</span>}
+              <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200/70 dark:border-white/[0.1] rounded-2xl rounded-tl-sm px-4 py-3 shadow-md">
+                <span className="typing-dot w-2 h-2 bg-indigo-600 dark:bg-indigo-400 rounded-full inline-block" />
+                <span className="typing-dot w-2 h-2 bg-indigo-600 dark:bg-indigo-400 rounded-full inline-block" />
+                <span className="typing-dot w-2 h-2 bg-indigo-600 dark:bg-indigo-400 rounded-full inline-block" />
+                {stepLabel && <span className="ml-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">{stepLabel}</span>}
               </div>
             </div>
           )}
