@@ -325,7 +325,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const activeColor = mode === 'translator' ? 'indigo' : 'cyan';
   const containerClass = inline 
     ? "w-full h-full flex flex-col items-center p-4 overflow-hidden relative" 
-    : "w-full max-w-lg glass-panel rounded-[40px] flex flex-col items-center p-4 md:p-6 bg-white dark:bg-slate-900/95 shadow-2xl transition-all duration-500 overflow-hidden relative max-h-[min(90vh,calc(var(--vh,1vh)*90))]";
+    : "w-full max-w-sm glass-panel rounded-3xl flex flex-col items-center p-6 bg-white dark:bg-slate-900 shadow-xl transition-all duration-300 overflow-hidden relative border border-slate-200/80 dark:border-white/10";
 
   const applySettings = () => {
     setShowSettings(false);
@@ -336,7 +336,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   };
 
   return (
-    <div className={inline ? "h-full w-full flex flex-col items-center justify-center min-h-0" : "fixed inset-0 z-[150] flex items-center justify-center p-4 safe-pt safe-pb bg-black/40 backdrop-blur-md overflow-y-auto"}>
+    <div className={inline ? "h-full w-full flex flex-col items-center justify-center min-h-0" : "fixed inset-0 z-[150] flex items-center justify-center p-4 safe-pt safe-pb bg-slate-900/20 backdrop-blur-sm overflow-y-auto"}>
       {!inline && <div className="absolute inset-0" onClick={onClose} aria-hidden />}
       
       <div className={containerClass}>
@@ -404,7 +404,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         <div className="flex-1 w-full flex flex-col items-center min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar py-2">
             <div className="relative flex flex-col items-center justify-center py-4 md:py-6">
                <div className="relative">
-                  <div className={`absolute inset-0 rounded-full blur-2xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
+                  <div className={`absolute inset-0 rounded-full blur-xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-indigo-500' : 'bg-cyan-500'}`}></div>
                   <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-indigo-600' : 'bg-cyan-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
                     {isActive && <div className={`absolute -inset-4 rounded-full border-2 border-current opacity-10 ${isSpeaking ? 'animate-ping' : ''}`}></div>}
                     <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl`}></i>

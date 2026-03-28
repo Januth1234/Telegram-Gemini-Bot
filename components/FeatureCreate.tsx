@@ -458,7 +458,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         </div>
       </div>
     )}
-    <div className="max-w-7xl mx-auto space-y-4 animate-reveal pb-12 px-2 sm:px-6 lg:px-8 pt-4 h-full flex flex-col">
+    <div className="w-full h-full flex flex-col overflow-hidden px-3 sm:px-5 pt-3">
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-black/5 dark:border-white/5 pb-4 shrink-0">
         <div className="flex items-center gap-4">
@@ -506,9 +506,9 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         {activeTab === 'audio' ? (
           <MusicStudio />
         ) : activeTab === 'narration' ? (
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-6 items-start overflow-hidden">
-            <div className="space-y-4 lg:overflow-y-auto custom-scrollbar h-full lg:pr-2">
-              <div className="glass-panel p-6 rounded-[32px] border border-slate-200 dark:border-white/10 shadow-xl relative bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-4 min-h-0 overflow-hidden">
+            <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar min-h-0 pb-2">
+              <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg bg-white dark:bg-slate-900/90">
                 <div className="space-y-6 relative z-10">
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
@@ -518,7 +518,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       value={narrationText}
                       onChange={(e) => setNarrationText(e.target.value)}
                       placeholder="Paste essay, article, or dialogue. For multi-speaker use: Speaker1: Hello. Speaker2: Hi there."
-                      className={`${inputStyle} h-32 resize-none leading-relaxed text-sm`}
+                      className={`${inputStyle} h-24 sm:h-28 resize-none leading-relaxed text-sm`}
                     />
                   </div>
                   <div className="space-y-3">
@@ -583,7 +583,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
             {/* Narration preview reuses same right panel as image/video; history includes audio */}
-            <div className="min-h-[500px] h-full glass-panel rounded-[40px] overflow-hidden flex flex-col items-center justify-start p-6 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950 shadow-inner overflow-y-auto custom-scrollbar">
+            <div className="min-h-0 h-full glass-panel rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950">
               <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
               {isLoading && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
@@ -615,7 +615,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   ))}
                 </div>
               ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 relative z-10 opacity-40">
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
                   <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-[32px] flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-inner">
                     <i className="fa-solid fa-microphone-slash text-4xl" />
                   </div>
@@ -626,10 +626,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
             </div>
           </div>
         ) : (
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[380px,1fr] gap-6 items-start overflow-hidden">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-4 min-h-0 overflow-hidden">
           {/* Left Control Panel */}
-          <div className="space-y-4 lg:overflow-y-auto custom-scrollbar h-full lg:pr-2">
-            <div className="glass-panel p-6 rounded-[32px] border border-slate-200 dark:border-white/10 shadow-xl relative bg-white dark:bg-slate-900/90 backdrop-blur-3xl">
+          <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar min-h-0 pb-2">
+            <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg bg-white dark:bg-slate-900/90">
               <div className="space-y-6 relative z-10">
                 {activeTab === 'image' && (
                   <div className="space-y-2">
@@ -688,7 +688,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     placeholder={activeTab === 'video' ? (videoMode === 'image' ? "e.g. The person in this photo starts walking towards the camera" : videoMode === 'frames' ? "Describe what happens between first and last frame..." : "Describe the motion, camera angle, and scene...") : "Describe your vision in high detail..."}
-                    className={`${inputStyle} h-32 resize-none leading-relaxed text-sm`}
+                    className={`${inputStyle} h-24 sm:h-28 resize-none leading-relaxed text-sm`}
                   />
                 </div>
 
@@ -746,7 +746,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 <button 
                   onClick={() => handleGenerate()}
                   disabled={isLoading || (activeTab === 'video' ? (videoMode === 'image' ? !prompt.trim() || !videoImage : videoMode === 'frames' ? !prompt.trim() || !videoFirstFrame : !prompt.trim()) : !prompt.trim())}
-                  className="w-full py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-3 group relative overflow-hidden"
+                  className="w-full py-3 bg-slate-900 text-white dark:bg-white dark:text-slate-950 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] shadow-lg hover:scale-[1.01] active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 flex items-center justify-center gap-3"
                 >
                   {isLoading ? (
                     <>
@@ -781,7 +781,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
 
           {/* Right Preview Area */}
-          <div className="min-h-[500px] h-full glass-panel rounded-[40px] overflow-hidden flex flex-col items-center justify-start p-6 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950 shadow-inner overflow-y-auto custom-scrollbar">
+          <div className="min-h-0 h-full glass-panel rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950">
             <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }}></div>
             
             {isLoading && (
@@ -885,12 +885,12 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 ))}
               </div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-8 relative z-10 opacity-40">
+              <div className="flex-1 flex flex-col items-center justify-center text-center space-y-6 relative z-10">
                 <div className="w-20 h-20 bg-slate-100 dark:bg-white/5 rounded-[32px] flex items-center justify-center text-slate-300 dark:text-slate-700 shadow-inner">
-                  <i className="fa-solid fa-cube text-4xl"></i>
+                  <i className="fa-solid fa-wand-magic-sparkles text-4xl text-slate-300 dark:text-slate-600"></i>
                 </div>
                 <div className="space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-[0.6em] text-slate-400 dark:text-slate-500 translate-x-1">Idle Mode</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.6em] text-slate-400 dark:text-slate-500 ">Synthesis Pipeline Ready</p>
                   <p className="text-xs font-bold text-slate-400/80 dark:text-slate-600 max-w-xs mx-auto leading-relaxed">Synthesis pipeline ready.</p>
                 </div>
               </div>

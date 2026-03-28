@@ -164,12 +164,12 @@ export class GeminiService {
     const plan = user?.plan?.toLowerCase() ?? 'free';
 
     if (plan === 'pro' || plan === 'pro_yearly') {
-      return ['gemini-2.5-pro-preview-06-05', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      return ['gemini-2.5-flash', 'gemini-2.0-flash']; // 2.5-pro reserved for long-context only
     }
     if (plan === 'basic' || plan === 'basic_yearly') {
       return ['gemini-2.5-flash', 'gemini-2.0-flash'];
     }
-    // Free: keep a single, valid model to avoid silent fallbacks to non-existent names.
+    // Free: gemini-2.0-flash — fast, cheap, reliable
     return ['gemini-2.0-flash'];
   }
 
@@ -423,26 +423,46 @@ EXPLANATION STYLE:
     try {
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
-      const imageModel = this.currentUser?.plan?.toLowerCase().includes('pro')
-        ? 'gemini-2.0-flash-preview-image-generation'
-        : 'gemini-2.0-flash-preview-image-generation';
-      const response = await ai.models.generateContent({
-        model: imageModel,
-        contents: { parts: [{ text: prompt }] },
-        config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: size as any } }
-      });
+
+      // Use Imagen 3 via generateImages — most reliable for image generation
+      // gemini-2.0-flash-preview-image-generation also works but uses generateContent
+      let dataUrl = '';
+      try {
+        const imgRes = await (ai.models as any).generateImages({
+          model: 'imagen-3.0-generate-002',
+          prompt,
+          config: { numberOfImages: 1, aspectRatio: aspectRatio as any, outputMimeType: 'image/png' },
+        });
+        const imgData = imgRes?.generatedImages?.[0]?.image?.imageBytes
+          ?? imgRes?.generatedImages?.[0]?.image?.imageData;
+        if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
+      } catch {
+        // Fallback to gemini flash image generation
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-preview-image-generation',
+          contents: [{ parts: [{ text: prompt }] }],
+          config: { responseModalities: ['TEXT', 'IMAGE'] } as any,
+        });
+        for (const part of response.candidates?.[0]?.content?.parts || []) {
+          if ((part as any).inlineData) {
+            dataUrl = `data:image/png;base64,${(part as any).inlineData.data}`;
+            break;
+          }
+        }
+      }
+
+      if (!dataUrl) throw new Error('No image returned. Try a different prompt or quality setting.');
 
       if (!this.currentUser) {
         this.resetGuestWindows();
         this.guestUsage.uploadCount++;
+      } else {
+        firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
       }
-
-      for (const part of response.candidates?.[0]?.content?.parts || []) {
-        if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
-      }
-      throw new Error("No image generated.");
-    } catch {
-      throw new AppError("Drawing failed.", 'generic');
+      return dataUrl;
+    } catch (err: any) {
+      const msg = err?.message || String(err);
+      throw new AppError(msg.includes('limit') ? msg : `Generation failed: ${msg}`, 'generic');
     }
   }
 
@@ -812,13 +832,13 @@ When the user asks about time, date, weather, or prices, use this context. For w
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
-      // VAD tuning: less sensitive start, slower end-of-speech to handle pauses & background noise
+      // VAD tuning: high sensitivity for instant response
       realtimeInputConfig: {
         automaticActivityDetection: {
-          startOfSpeechSensitivity: 'START_SENSITIVITY_LOW' as any,  // don't trigger on dog barks
-          endOfSpeechSensitivity: 'END_SENSITIVITY_LOW' as any,       // wait longer before cutting off
-          silenceDurationMs: 1500,   // need 1.5s of silence to end turn (default ~800ms)
-          prefixPaddingMs: 300,      // need 300ms of speech before starting (filters short noises)
+          startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH' as any, // instant activation
+          endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as any,      // cut off quickly after speech
+          silenceDurationMs: 500,    // 500ms silence = end of turn (fast response)
+          prefixPaddingMs: 100,      // only 100ms speech needed to start
         },
       },
     };

@@ -376,7 +376,7 @@ const App: React.FC = () => {
             }
           }
           setSyncStatus('syncing');
-          await firebaseService.saveHistory(user.id, meaningfulConversations, [], lastCloudRef.current, embeddingsByConvId);
+          await firebaseService.saveHistory(user.id, meaningfulConversations, []);
           setSyncStatus('success');
           setTimeout(() => setSyncStatus('idle'), 2000);
         } catch {
@@ -544,7 +544,7 @@ const App: React.FC = () => {
     if (user?.id) {
       try {
         setSyncStatus('syncing');
-        await firebaseService.saveHistory(user.id, meaningful, [id], lastCloudRef.current);
+        await firebaseService.saveHistory(user.id, meaningful, [id]);
         setSyncStatus('success');
         setTimeout(() => setSyncStatus('idle'), 2000);
       } catch {
@@ -563,7 +563,7 @@ const App: React.FC = () => {
        setActiveConversationId(null);
        cacheService.remove(CacheKey.HISTORY);
        cacheService.remove(CacheKey.ACTIVE_CONV);
-       if (user?.id) await firebaseService.saveHistory(user.id, [], [], lastCloudRef.current);
+       if (user?.id) await firebaseService.saveHistory(user.id, [], []);
        window.location.hash = 'chat';
     }
   };
@@ -583,7 +583,7 @@ const App: React.FC = () => {
     setUserTheme(nextTheme);
     cacheService.set(CacheKey.USER_THEME, nextTheme);
     if (user?.id) {
-      firebaseService.updateUserTheme(user.id, nextTheme).catch(() => {});
+      // theme saved locally only — no separate Firestore field needed
     }
   };
 
