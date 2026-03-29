@@ -410,7 +410,7 @@ EXPLANATION STYLE:
     return { text: text.trim(), functionCalls, safetyDecisions };
   }
 
-  async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal): Promise<string> {
+  async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal, referenceImage?: { data: string; mimeType: string }): Promise<string> {
     if (this.currentUser) {
        if (await firebaseService.checkLimit(this.currentUser.id, 'images')) throw new AppError("Image limit reached.", "limit_reached");
     } else {
@@ -426,24 +426,45 @@ EXPLANATION STYLE:
 
       let dataUrl = '';
 
-      // Primary: Imagen 3 via generateImages() — stable, supports aspect ratios
-      try {
-        const imgRes = await (ai.models as any).generateImages({
-          model: 'imagen-3.0-generate-002',
-          prompt,
-          config: {
-            numberOfImages: 1,
-            aspectRatio: aspectRatio as any,
-            outputMimeType: 'image/png',
-          },
+      if (referenceImage) {
+        // Image-to-image: user supplied a reference image — use gemini-2.0-flash-exp
+        // which supports vision input + image output in one call
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-exp',
+          contents: [{
+            parts: [
+              { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
+              { text: `Edit or transform this image based on the following instruction: ${prompt}. Output only the modified image.` },
+            ],
+          }],
+          config: { responseModalities: ['IMAGE', 'TEXT'] } as any,
         });
-        const imgData =
-          imgRes?.generatedImages?.[0]?.image?.imageBytes ??
-          imgRes?.generatedImages?.[0]?.image?.imageData;
-        if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
-      } catch (imagenErr) {
-        // Fallback: gemini-2.0-flash-exp with IMAGE modality (works on v1beta)
+        for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+          const p = part as any;
+          if (p.inlineData?.data) {
+            dataUrl = `data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`;
+            break;
+          }
+        }
+        if (!dataUrl) throw new Error('Image editing failed — try a clearer instruction or different image.');
+      } else {
+        // Text-to-image: Primary Imagen 3, fallback to flash-exp
         try {
+          const imgRes = await (ai.models as any).generateImages({
+            model: 'imagen-3.0-generate-002',
+            prompt,
+            config: {
+              numberOfImages: 1,
+              aspectRatio: aspectRatio as any,
+              outputMimeType: 'image/png',
+            },
+          });
+          const imgData =
+            imgRes?.generatedImages?.[0]?.image?.imageBytes ??
+            imgRes?.generatedImages?.[0]?.image?.imageData;
+          if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
+        } catch {
+          // Fallback: gemini-2.0-flash-exp
           const response = await ai.models.generateContent({
             model: 'gemini-2.0-flash-exp',
             contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
@@ -456,9 +477,8 @@ EXPLANATION STYLE:
               break;
             }
           }
-        } catch (flashErr: any) {
-          throw flashErr; // bubble up real error
         }
+        if (!dataUrl) throw new Error('No image returned. Try a different prompt.');
       }
 
       if (!dataUrl) throw new Error('No image returned. Try a different prompt.');

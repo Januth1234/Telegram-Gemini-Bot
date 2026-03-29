@@ -58,6 +58,9 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Reference image for image-to-image generation
+  const [referenceImage, setReferenceImage] = useState<{ data: string; mimeType: string; preview: string } | null>(null);
+  const refImageInputRef = useRef<HTMLInputElement>(null);
   const [publishModal, setPublishModal] = useState<{ url: string; prompt: string } | null>(null);
   const [publishCaption, setPublishCaption] = useState('');
   const [publishing, setPublishing] = useState(false);
@@ -247,7 +250,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     try {
       let url = "";
       if (activeTab === 'image') {
-        url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize);
+        url = await geminiService.generateImagePro(finalPrompt, aspectRatio, imageSize, undefined, referenceImage ? { data: referenceImage.data, mimeType: referenceImage.mimeType } : undefined);
       } else {
         const veoRatio = (aspectRatio === '9:16') ? '9:16' : '16:9';
         const videoOpts: Parameters<typeof geminiService.generateVideo>[0] = { prompt: finalPrompt, aspectRatio: veoRatio, resolution: videoResolution };
@@ -734,15 +737,72 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     </div>
                   </div>
                 )}
+                {/* Reference image upload — image tab only */}
+                {activeTab === 'image' && (
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
+                      <i className="fa-solid fa-image text-violet-500"></i>
+                      Reference Image <span className="font-normal normal-case text-slate-400">(optional — for editing)</span>
+                    </label>
+                    {referenceImage ? (
+                      <div className="relative rounded-2xl overflow-hidden border border-violet-200 dark:border-violet-800 group">
+                        <img src={referenceImage.preview} alt="Reference" className="w-full max-h-48 object-contain bg-slate-50 dark:bg-black/40" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                          <button
+                            onClick={() => setReferenceImage(null)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity w-9 h-9 rounded-full bg-red-500 text-white flex items-center justify-center shadow-lg"
+                          >
+                            <i className="fa-solid fa-xmark" />
+                          </button>
+                        </div>
+                        <div className="absolute top-2 left-2 px-2 py-1 rounded-lg bg-violet-600 text-white text-[9px] font-black">
+                          Reference set
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => refImageInputRef.current?.click()}
+                        className="w-full py-4 rounded-2xl border-2 border-dashed border-slate-200 dark:border-white/10 hover:border-violet-400 dark:hover:border-violet-600 transition-colors flex items-center justify-center gap-3 text-slate-400 hover:text-violet-500 group"
+                      >
+                        <i className="fa-solid fa-upload text-lg group-hover:scale-110 transition-transform" />
+                        <div className="text-left">
+                          <p className="text-xs font-black">Add your photo or image</p>
+                          <p className="text-[10px] opacity-70">AI will use it as a starting point</p>
+                        </div>
+                      </button>
+                    )}
+                    <input
+                      ref={refImageInputRef}
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 10 * 1024 * 1024) { setError('Reference image must be under 10 MB.'); return; }
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          const result = ev.target?.result as string;
+                          const data = result.split(',')[1];
+                          setReferenceImage({ data, mimeType: file.type, preview: result });
+                          setError(null);
+                        };
+                        reader.readAsDataURL(file);
+                        e.target.value = '';
+                      }}
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
                     <i className="fa-solid fa-terminal text-indigo-500"></i>
-                    {activeTab === 'video' ? (videoMode === 'image' ? 'How to animate' : videoMode === 'frames' ? 'Scene description' : 'Motion Prompt') : 'Neural Input Prompt'}
+                    {activeTab === 'video' ? (videoMode === 'image' ? 'How to animate' : videoMode === 'frames' ? 'Scene description' : 'Motion Prompt') : referenceImage ? 'Edit Instruction' : 'Neural Input Prompt'}
                   </label>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
-                    placeholder={activeTab === 'video' ? (videoMode === 'image' ? "e.g. The person in this photo starts walking towards the camera" : videoMode === 'frames' ? "Describe what happens between first and last frame..." : "Describe the motion, camera angle, and scene...") : "Describe your vision in high detail..."}
+                    placeholder={activeTab === 'video' ? (videoMode === 'image' ? "e.g. The person in this photo starts walking towards the camera" : videoMode === 'frames' ? "Describe what happens between first and last frame..." : "Describe the motion, camera angle, and scene...") : referenceImage ? "e.g. Make it look like a watercolor painting, add a sunset background, change hair to blonde..." : "Describe your vision in high detail..."}
                     className={`${inputStyle} h-24 sm:h-28 resize-none leading-relaxed text-sm`}
                   />
                 </div>
