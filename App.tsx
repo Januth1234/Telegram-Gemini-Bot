@@ -674,7 +674,7 @@ const App: React.FC = () => {
       );
       case 'community': return (
         <Suspense fallback={null}>
-          <CreationFeed onClose={() => window.location.hash = 'chat'} lang={lang} user={user} />
+          <CreationFeed onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onUsePrompt={(prompt) => { setGlobalPrompt(prompt); window.location.hash = 'chat'; }} />
         </Suspense>
       );
       case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;

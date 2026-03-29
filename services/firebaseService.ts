@@ -3,7 +3,7 @@ import { getAnalytics } from "firebase/analytics";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
 import "firebase/compat/functions";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where } from "firebase/firestore";
+import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where, addDoc, deleteDoc, limit, startAfter, DocumentSnapshot, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage } from "../types";
 
 interface UsagePlanLimits {
@@ -433,6 +433,90 @@ class FirebaseService {
       return null;
     }
   }
+
+  // ─── Creations ─────────────────────────────────────────────────────────────
+
+  async createCreation(data: {
+    title: string; caption: string; originalPrompt: string;
+    output?: string; mediaUrl?: string;
+    mediaType?: 'image' | 'video' | 'music' | 'text';
+    tags?: string[]; userId: string; userName: string; userAvatar?: string;
+  }): Promise<string> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (!data.originalPrompt && !data.caption) throw new Error('prompt or caption required');
+    const ref = await addDoc(collection(this.db, 'creations'), {
+      ...data, likes: [], likeCount: 0, commentCount: 0,
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+    return ref.id;
+  }
+
+  async getCreations(pageSize = 12, lastVisible?: DocumentSnapshot): Promise<{ posts: any[]; lastDoc: DocumentSnapshot | null }> {
+    if (!this.db) return { posts: [], lastDoc: null };
+    const constraints: any[] = [orderBy('createdAt', 'desc'), limit(pageSize)];
+    if (lastVisible) constraints.push(startAfter(lastVisible));
+    const snap = await getDocs(query(collection(this.db, 'creations'), ...constraints));
+    return {
+      posts: snap.docs.map(d => ({ id: d.id, ...d.data() })),
+      lastDoc: snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null,
+    };
+  }
+
+  async getCreation(id: string): Promise<any | null> {
+    if (!this.db) return null;
+    const snap = await getDoc(doc(this.db, 'creations', id));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
+  }
+
+  async updateCreation(id: string, data: Partial<{ title: string; caption: string; originalPrompt: string; tags: string[] }>): Promise<void> {
+    if (!this.db) return;
+    await updateDoc(doc(this.db, 'creations', id), { ...data, updatedAt: serverTimestamp() });
+  }
+
+  async deleteCreation(id: string): Promise<void> {
+    if (!this.db) return;
+    await deleteDoc(doc(this.db, 'creations', id));
+  }
+
+  async toggleCreationLike(creationId: string, userId: string): Promise<boolean> {
+    if (!this.db) return false;
+    const ref = doc(this.db, 'creations', creationId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return false;
+    const liked = (snap.data().likes as string[]).includes(userId);
+    await updateDoc(ref, {
+      likes: liked ? arrayRemove(userId) : arrayUnion(userId),
+      likeCount: increment(liked ? -1 : 1),
+    });
+    return !liked;
+  }
+
+  async addCreationComment(creationId: string, comment: { userId: string; userName: string; userAvatar?: string; text: string }): Promise<any> {
+    if (!this.db) throw new Error('DB not initialized');
+    if (!comment.text.trim()) throw new Error('Comment cannot be empty');
+    const cRef = await addDoc(collection(this.db, 'creations', creationId, 'comments'), {
+      ...comment, likes: [], createdAt: serverTimestamp(),
+    });
+    await updateDoc(doc(this.db, 'creations', creationId), { commentCount: increment(1) });
+    return { id: cRef.id, ...comment, likes: [], createdAt: new Date() };
+  }
+
+  async getCreationComments(creationId: string): Promise<any[]> {
+    if (!this.db) return [];
+    const snap = await getDocs(query(collection(this.db, 'creations', creationId, 'comments'), orderBy('createdAt', 'asc')));
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  }
+
+  async toggleCommentLike(creationId: string, commentId: string, userId: string): Promise<void> {
+    if (!this.db) return;
+    const ref = doc(this.db, 'creations', creationId, 'comments', commentId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
+    const liked = (snap.data().likes as string[]).includes(userId);
+    await updateDoc(ref, { likes: liked ? arrayRemove(userId) : arrayUnion(userId) });
+  }
+
+
 }
 
 export const firebaseService = new FirebaseService();
