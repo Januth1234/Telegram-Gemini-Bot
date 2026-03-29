@@ -257,13 +257,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
         {/* Navigation Grid - staggered entrance */}
         <section className="w-full max-w-6xl space-y-8 md:space-y-12">
           <div className="flex flex-wrap justify-center gap-3 md:gap-6 px-2 md:px-0">
-              <NavCard href="#downloads" title={t.downloads} icon="fa-download" lang={lang} delayMs={0} />
-              <NavCard href="#creator" title={t.creator} icon="fa-user" lang={lang} delayMs={80} />
-              <NavCard href="#pricing" title={t.pricing} icon="fa-tag" lang={lang} delayMs={160} />
-              <NavCard href="#logic" title={t.logicFlow} icon="fa-sitemap" lang={lang} delayMs={240} />
-              <NavCard href="#releases" title={t.releases} icon="fa-code-branch" lang={lang} delayMs={320} />
-              <NavCard href="#terms" title={t.terms} icon="fa-file-contract" lang={lang} delayMs={400} />
-              <NavCard href="#privacy" title={t.privacy} icon="fa-shield-halved" lang={lang} delayMs={480} />
+              <NavCard href="#community" title="Creations" icon="fa-fire" lang={lang} delayMs={0} />
+              <NavCard href="#downloads" title={t.downloads} icon="fa-download" lang={lang} delayMs={80} />
+              <NavCard href="#creator" title={t.creator} icon="fa-user" lang={lang} delayMs={160} />
+              <NavCard href="#pricing" title={t.pricing} icon="fa-tag" lang={lang} delayMs={240} />
+              <NavCard href="#logic" title={t.logicFlow} icon="fa-sitemap" lang={lang} delayMs={320} />
+              <NavCard href="#releases" title={t.releases} icon="fa-code-branch" lang={lang} delayMs={400} />
+              <NavCard href="#terms" title={t.terms} icon="fa-file-contract" lang={lang} delayMs={480} />
+              <NavCard href="#privacy" title={t.privacy} icon="fa-shield-halved" lang={lang} delayMs={560} />
           </div>
         </section>
 
