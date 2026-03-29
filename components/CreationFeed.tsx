@@ -272,17 +272,36 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
     reader.readAsDataURL(f);
   };
 
+  /* ── Upload file to Vercel Blob, then save to Firestore ── */
+  const uploadToBlob = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/upload-blob', { method: 'POST', body: fd });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Upload failed (${res.status})`);
+    }
+    const { url } = await res.json();
+    if (!url) throw new Error('No URL returned from blob upload');
+    return url;
+  };
+
   /* ── Submit creation ── */
   const handleSubmit = async () => {
     if (!user) return;
-    if (!form.originalPrompt.trim() && !form.caption.trim()) {
-      dispatch({type:'set',key:'error',value:'Enter a prompt or caption.'}); return;
+    if (!form.originalPrompt.trim() && !form.caption.trim() && !form.file) {
+      dispatch({type:'set',key:'error',value:'Enter a prompt, caption, or upload a file.'}); return;
     }
     dispatch({type:'set',key:'submitting',value:true});
     dispatch({type:'set',key:'error',value:null});
     try {
       const tags = extractTags(form.originalPrompt + ' ' + form.caption);
-      const mediaUrl = form.preview || undefined;
+      // Upload file to Vercel Blob if one is selected
+      let mediaUrl: string | undefined;
+      if (form.file) {
+        dispatch({type:'set',key:'error',value:null});
+        mediaUrl = await uploadToBlob(form.file);
+      }
       const id = await firebaseService.createCreation({
         title: form.title || form.originalPrompt.slice(0,60) || 'Untitled',
         caption: form.caption,
@@ -829,7 +848,7 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
 
                 <button onClick={handleSubmit} disabled={form.submitting || (!form.originalPrompt.trim() && !form.file)}
                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-pink-600 text-white font-black text-xs uppercase tracking-widest disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-                  {form.submitting ? <><Spinner />Posting…</> : <><i className="fa-solid fa-paper-plane" />Share Creation</>}
+                  {form.submitting ? <><Spinner />{form.file ? 'Uploading…' : 'Posting…'}</> : <><i className="fa-solid fa-paper-plane" />Share Creation</>}
                 </button>
               </>
             )}

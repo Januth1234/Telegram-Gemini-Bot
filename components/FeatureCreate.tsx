@@ -398,34 +398,52 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     }
   };
 
-  const publishToFeed = () => {
+  const publishToFeed = async () => {
     if (!publishModal) return;
     setPublishing(true);
-    const FEED_KEY = 'orin_feed_posts_v2';
-    const POINTS_KEY = 'orin_creator_points';
     try {
       const cachedUser = JSON.parse(localStorage.getItem('orin_user') || '{}');
       const uid = cachedUser?.id || 'guest';
       const userName = cachedUser?.name || cachedUser?.email || 'Creator';
       const userAvatar = cachedUser?.avatar || '';
-      const post = {
-        id: `${Date.now()}-${uid}`,
-        userId: uid, userName, userAvatar,
-        type: 'image',
-        mediaUrl: publishModal.url,
-        caption: publishCaption || `Generated with Orin AI Studio`,
-        prompt: publishModal.prompt,
+
+      // Upload AI-generated image (base64 data URL) to Vercel Blob
+      let mediaUrl = publishModal.url;
+      try {
+        const res = await fetch(publishModal.url);
+        const blob = await res.blob();
+        const file = new File([blob], `ai-gen-${Date.now()}.png`, { type: 'image/png' });
+        const fd = new FormData();
+        fd.append('file', file);
+        const uploadRes = await fetch('/api/upload-blob', { method: 'POST', body: fd });
+        if (uploadRes.ok) {
+          const data = await uploadRes.json();
+          if (data.url) mediaUrl = data.url;
+        }
+      } catch { /* keep base64 as fallback */ }
+
+      // Save to Firestore
+      const { firebaseService } = await import('../services/firebaseService');
+      await (firebaseService as any).createCreation({
+        title: publishCaption || 'AI Studio Generation',
+        caption: publishCaption || 'Generated with Orin AI Studio',
+        originalPrompt: publishModal.prompt,
+        mediaUrl,
+        mediaType: 'image' as const,
+        tags: [] as string[],
         aiGenerated: true,
-        likes: [], comments: [],
-        createdAt: Date.now(),
-        points: 10,
-      };
-      const existing = JSON.parse(localStorage.getItem(FEED_KEY) || '[]');
-      localStorage.setItem(FEED_KEY, JSON.stringify([post, ...existing].slice(0, 200)));
-      // Award points
-      const pts = JSON.parse(localStorage.getItem(POINTS_KEY) || '{}');
+        userId: uid,
+        userName,
+        userAvatar,
+      });
+
+      // Award creator points
+      const PTS_KEY = 'orin_creator_pts';
+      const pts = JSON.parse(localStorage.getItem(PTS_KEY) || '{}');
       pts[uid] = (pts[uid] || 0) + 10;
-      localStorage.setItem(POINTS_KEY, JSON.stringify(pts));
+      localStorage.setItem(PTS_KEY, JSON.stringify(pts));
+    } catch (e) {
+      console.error('Publish to feed failed:', e);
     } finally {
       setPublishing(false);
       setPublishModal(null);

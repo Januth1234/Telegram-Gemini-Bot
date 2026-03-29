@@ -424,34 +424,44 @@ EXPLANATION STYLE:
       const apiKey = await this.getApiKey();
       const ai = new GoogleGenAI({ apiKey });
 
-      // Use Imagen 3 via generateImages — most reliable for image generation
-      // gemini-2.0-flash-preview-image-generation also works but uses generateContent
       let dataUrl = '';
+
+      // Primary: Imagen 3 via generateImages() — stable, supports aspect ratios
       try {
         const imgRes = await (ai.models as any).generateImages({
           model: 'imagen-3.0-generate-002',
           prompt,
-          config: { numberOfImages: 1, aspectRatio: aspectRatio as any, outputMimeType: 'image/png' },
+          config: {
+            numberOfImages: 1,
+            aspectRatio: aspectRatio as any,
+            outputMimeType: 'image/png',
+          },
         });
-        const imgData = imgRes?.generatedImages?.[0]?.image?.imageBytes
-          ?? imgRes?.generatedImages?.[0]?.image?.imageData;
+        const imgData =
+          imgRes?.generatedImages?.[0]?.image?.imageBytes ??
+          imgRes?.generatedImages?.[0]?.image?.imageData;
         if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
-      } catch {
-        // Fallback to gemini flash image generation
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-preview-image-generation',
-          contents: [{ parts: [{ text: prompt }] }],
-          config: { responseModalities: ['TEXT', 'IMAGE'] } as any,
-        });
-        for (const part of response.candidates?.[0]?.content?.parts || []) {
-          if ((part as any).inlineData) {
-            dataUrl = `data:image/png;base64,${(part as any).inlineData.data}`;
-            break;
+      } catch (imagenErr) {
+        // Fallback: gemini-2.0-flash-exp with IMAGE modality (works on v1beta)
+        try {
+          const response = await ai.models.generateContent({
+            model: 'gemini-2.0-flash-exp',
+            contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+            config: { responseModalities: ['IMAGE', 'TEXT'] } as any,
+          });
+          for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+            const p = part as any;
+            if (p.inlineData?.data) {
+              dataUrl = `data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`;
+              break;
+            }
           }
+        } catch (flashErr: any) {
+          throw flashErr; // bubble up real error
         }
       }
 
-      if (!dataUrl) throw new Error('No image returned. Try a different prompt or quality setting.');
+      if (!dataUrl) throw new Error('No image returned. Try a different prompt.');
 
       if (!this.currentUser) {
         this.resetGuestWindows();
