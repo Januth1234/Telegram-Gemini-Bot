@@ -554,7 +554,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <button onClick={onClose} className="w-10 h-10 rounded-xl glass-panel flex items-center justify-center text-slate-400 hover:text-red-500 transition-all shadow-sm border border-black/5 dark:border-white/5">
+          <button onClick={onClose} className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-red-500 transition-colors border border-slate-200 dark:border-white/10">
             <i className="fa-solid fa-xmark text-lg"></i>
           </button>
         </div>
@@ -566,7 +566,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         ) : activeTab === 'narration' ? (
           <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-4 min-h-0 overflow-hidden">
             <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar min-h-0 pb-2">
-              <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg bg-white dark:bg-slate-900/90">
+              <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
                 <div className="space-y-6 relative z-10">
                   <div className="space-y-3">
                     <label className="flex items-center gap-3 text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest px-1">
@@ -641,10 +641,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
             {/* Narration preview reuses same right panel as image/video; history includes audio */}
-            <div className="min-h-0 h-full glass-panel rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950">
-              <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+            <div className="min-h-0 h-full rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950">
+              
               {isLoading && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 dark:bg-slate-950/95 animate-fade">
                   <div className="text-center space-y-6 animate-reveal">
                     <div className="w-24 h-24 rounded-full border-2 border-indigo-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
                       <i className="fa-solid fa-waveform-lines text-2xl text-indigo-500/40" />
@@ -658,7 +658,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                   {history.filter((a) => a.type === 'audio').map((asset) => (
                     <div key={asset.timestamp} className="w-full flex flex-col items-center gap-6 animate-scale-in max-w-2xl mx-auto">
                       <div className="relative w-full rounded-[32px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 p-6">
-                        <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <div className="absolute top-4 left-4 px-3 py-1.5 bg-black/70 rounded-lg text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                           <i className="fa-solid fa-headphones" /> audio
                         </div>
                         <audio src={asset.url} controls className="w-full mt-8" />
@@ -687,7 +687,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[320px,1fr] gap-4 min-h-0 overflow-hidden">
           {/* Left Control Panel */}
           <div className="flex flex-col gap-3 overflow-y-auto custom-scrollbar min-h-0 pb-2">
-            <div className="glass-panel p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 shadow-lg bg-white dark:bg-slate-900/90">
+            <div className="p-4 sm:p-5 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900">
               <div className="space-y-6 relative z-10">
                 {activeTab === 'image' && (
                   <div className="space-y-2">
@@ -884,7 +884,7 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
               </div>
             </div>
 
-            <div className="p-6 glass-panel rounded-3xl border border-black/5 dark:border-white/5 opacity-80">
+            <div className="p-5 rounded-2xl border border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-white/3 opacity-80">
                <div className="flex items-start gap-3">
                   <i className="fa-solid fa-shield-halved text-indigo-600 text-base mt-0.5"></i>
                   <div>
@@ -896,11 +896,11 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
 
           {/* Right Preview Area */}
-          <div className="min-h-0 h-full glass-panel rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 animate-reveal bg-white dark:bg-slate-950">
-            <div className="absolute inset-0 opacity-[0.02] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(currentColor 1px, transparent 1px)', backgroundSize: '48px 48px' }}></div>
+          <div className="min-h-0 h-full rounded-3xl overflow-hidden flex flex-col items-center justify-start p-5 relative border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-950">
+            
             
             {isLoading && (
-              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl animate-fade">
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 dark:bg-slate-950/95 animate-fade">
                 <div className="text-center space-y-6 animate-reveal">
                   <div className="relative">
                     <div className="w-24 h-24 rounded-full border-2 border-indigo-500/10 border-t-cyan-500 animate-spin mx-auto flex items-center justify-center shadow-2xl">
@@ -929,11 +929,11 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 {displayHistory.map((asset, idx) => (
                   <div key={asset.timestamp} className="w-full flex flex-col items-center gap-8 animate-scale-in max-w-4xl mx-auto group/item">
                     <div className="relative group/img w-full">
-                      <div className="absolute -inset-4 bg-gradient-to-tr from-indigo-500/10 to-indigo-500/10 rounded-[48px] blur opacity-0 group-hover/img:opacity-100 transition-opacity duration-700"></div>
+                      
                       <div className="relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700 min-h-[300px]">
                         
                         {/* Type Badge */}
-                        <div className="absolute top-6 left-6 z-20 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-lg border border-white/10 text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
+                        <div className="absolute top-6 left-6 z-20 px-3 py-1.5 bg-black/70 rounded-lg text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                            <i className={`fa-solid ${asset.type === 'video' ? 'fa-video' : asset.type === 'audio' ? 'fa-headphones' : 'fa-image'}`}></i>
                            {asset.type}
                         </div>
