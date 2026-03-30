@@ -507,7 +507,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
               className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-950 rounded-[24px] font-black text-[11px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-4"
             >
               {isConnecting ? <i className="fa-solid fa-circle-notch animate-spin"></i> : <i className={`fa-solid ${mode === 'translator' ? 'fa-play' : 'fa-microphone'}`}></i>}
-              <span>{isConnecting ? "HANDSHAKING..." : (mode === 'translator' ? t.transMode.start : t.voice)}</span>
+              <span>{isConnecting ? "HANDSHAKING..." : (mode === 'translator' ? t.agentStart : t.voice)}</span>
             </button>
           ) : (
             <div className="flex gap-3">

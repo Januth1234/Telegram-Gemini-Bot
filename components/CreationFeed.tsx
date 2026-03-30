@@ -407,14 +407,14 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
     } catch {}
   };
 
-  /* ── USE IT ── */
+  /* ── USE IT — routes to Studio Create for image prompts, Chat for text ── */
   const handleUseIt = (post: Creation) => {
     if (!post.originalPrompt) return;
+    setUseItToast(true);
+    setTimeout(() => setUseItToast(false), 2500);
+    setSelectedPost(null);
     if (onUsePrompt) {
       onUsePrompt(post.originalPrompt);
-      setUseItToast(true);
-      setTimeout(() => setUseItToast(false), 2500);
-      setSelectedPost(null);
     }
   };
 
@@ -683,7 +683,7 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
       {/* "Use it" global toast */}
       {useItToast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[300] bg-indigo-600 text-white px-5 py-3 rounded-2xl shadow-xl text-sm font-black flex items-center gap-2 animate-slide-up">
-          <i className="fa-solid fa-wand-magic-sparkles" />Prompt sent to chat!
+          <i className="fa-solid fa-wand-magic-sparkles" />Prompt copied — paste in Chat or Studio!
         </div>
       )}
 
