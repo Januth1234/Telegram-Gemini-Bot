@@ -4,6 +4,8 @@
  * Uploads to Vercel Blob and returns the public CDN URL.
  */
 import { put } from '@vercel/blob';
+import { formidable } from 'formidable';
+import { readFileSync } from 'fs';
 
 export const config = { api: { bodyParser: false } };
 
@@ -15,36 +17,32 @@ export default async function handler(req, res) {
 
   const token = process.env.BLOB_READ_WRITE_TOKEN;
   if (!token) {
-    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN not set' });
+    return res.status(500).json({ error: 'BLOB_READ_WRITE_TOKEN not configured' });
   }
 
   try {
-    // Use formidable — available in Vercel Node.js runtime
-    const formidable = (await import('formidable')).default || (await import('formidable'));
-    const IncomingForm = formidable.IncomingForm || formidable;
+    const form = formidable({ maxFileSize: 100 * 1024 * 1024 });
 
-    const data = await new Promise((resolve, reject) => {
-      const form = new IncomingForm({ maxFileSize: 100 * 1024 * 1024 });
-      form.parse(req, (err, _fields, files) => {
-        if (err) return reject(err);
-        resolve(files);
+    const [, files] = await new Promise((resolve, reject) => {
+      form.parse(req, (err, fields, files) => {
+        if (err) reject(err);
+        else resolve([fields, files]);
       });
     });
 
-    const uploaded = data.file;
+    const uploaded = files.file;
     if (!uploaded) {
-      return res.status(400).json({ error: 'No file field found in form' });
+      return res.status(400).json({ error: 'No file field in form data' });
     }
 
     const fileObj = Array.isArray(uploaded) ? uploaded[0] : uploaded;
-    const fs = await import('fs');
-    const fileBuffer = fs.readFileSync(fileObj.filepath || fileObj.path);
+    const filePath = fileObj.filepath || fileObj.path;
     const mimeType = fileObj.mimetype || fileObj.type || 'application/octet-stream';
-    const originalName = fileObj.originalFilename || fileObj.name || 'upload';
-    const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const pathname = `creations/${Date.now()}-${safeName}`;
+    const originalName = (fileObj.originalFilename || fileObj.name || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const pathname = `creations/${Date.now()}-${originalName}`;
 
-    const blob = await put(pathname, fileBuffer, {
+    const buffer = readFileSync(filePath);
+    const blob = await put(pathname, buffer, {
       access: 'public',
       contentType: mimeType,
       token,
@@ -53,6 +51,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ url: blob.url, contentType: mimeType });
   } catch (err) {
     console.error('Blob upload error:', err);
-    return res.status(500).json({ error: err.message || 'Upload failed' });
+    return res.status(500).json({ error: err?.message || 'Upload failed' });
   }
 }
