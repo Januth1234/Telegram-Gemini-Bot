@@ -458,6 +458,9 @@ const MusicStudio: React.FC = () => {
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <p className="text-[9px] text-red-500 font-black uppercase tracking-widest">{error}</p>
+              {error.includes('connect') || error.includes('WebSocket') || error.includes('model') ? (
+                <p className="text-[9px] text-slate-400 mt-1">Lyria RealTime requires a Gemini API key with early access. Check your API key settings.</p>
+              ) : null}
               </div>
             )}
           </div>

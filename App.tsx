@@ -11,7 +11,7 @@ import { translations } from './translations';
 import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg, NeonBg } from './components/backgrounds/CSSBackgrounds';
 const FilesWorkspace = lazy(() => import('./components/FilesWorkspace'));
 const CreationFeed = lazy(() => import('./components/CreationFeed'));
-const ChatWorkspace = lazy(() => import('./components/ChatWorkspace').then(m => ({ default: m.default })));
+const ChatWorkspace = lazy(() => import('./components/ChatWorkspace'));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
 const TermsPage = lazy(() => import('./components/TermsPage').then(m => ({ default: m.default })));
@@ -99,6 +99,7 @@ const App: React.FC = () => {
 
   // Global Auth State
   const [user, setUser] = useState<UserAccount | null>(null);
+  const [upgradePopup, setUpgradePopup] = useState<{ plan: string } | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
 
   // App State
@@ -497,6 +498,13 @@ const App: React.FC = () => {
       const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
       geminiService.setSessionUser(syncedUser);
       setUser(syncedUser);
+      // Show upgrade greeting if plan changed since last visit
+      const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
+      if (lastSeenPlan && lastSeenPlan !== syncedUser.plan && 
+          (syncedUser.plan === 'basic' || syncedUser.plan === 'pro' || syncedUser.plan?.includes('yearly'))) {
+        setUpgradePopup({ plan: syncedUser.plan });
+      }
+      localStorage.setItem(`orin_last_plan_${authUser.uid}`, syncedUser.plan || 'free');
       if (syncedUser.theme) {
         setUserTheme(normalizeUserTheme(syncedUser.theme));
         cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
@@ -849,6 +857,28 @@ const renderLandingBackground = () => {
           </Suspense>
         </div>
       </main>
+
+      {/* Upgrade Greeting Popup */}
+      {upgradePopup && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setUpgradePopup(null)}>
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-slate-200 dark:border-white/10 animate-scale-in" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-4 shadow-lg">
+              <i className="fa-solid fa-crown text-white text-2xl" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">
+              {upgradePopup.plan?.includes('pro') ? '🎉 Welcome to Pro!' : '🎉 Welcome to Basic!'}
+            </h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+              {upgradePopup.plan?.includes('pro')
+                ? 'You now have unlimited access to all Orin AI features. Enjoy the full experience!'
+                : 'You now have enhanced access to Orin AI. More chats, more generations!'}
+            </p>
+            <button onClick={() => setUpgradePopup(null)} className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-500 transition-colors">
+              Let's Go!
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

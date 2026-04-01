@@ -174,7 +174,7 @@ function Spinner() { return <i className="fa-solid fa-circle-notch animate-spin"
    MAIN COMPONENT
 ════════════════════════════════════════════════════════════════════════════ */
 const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt }) => {
-  const [tab, setTab]               = useState<'feed'|'create'|'points'>('feed');
+  const [tab, setTab]               = useState<'feed'|'create'|'mine'|'points'>('feed');
   const [posts, setPosts]           = useState<Creation[]>([]);
   const [loading, setLoading]       = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -207,6 +207,7 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
 
   const PAGE = 12;
   const loaderRef = useRef<HTMLDivElement>(null);
+  const loadingLockRef = useRef(false); // prevent concurrent load calls = duplicate posts
 
   // Build markov from history
   useEffect(() => { setMarkov(buildMarkov(promptHist)); }, [promptHist]);
@@ -222,7 +223,9 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
 
   /* ── Initial feed load ── */
   const loadPosts = useCallback(async (reset=false) => {
-    if (reset) { setLoading(true); setFeedError(null); }
+    if (loadingLockRef.current) return; // prevent concurrent calls → duplicates
+    loadingLockRef.current = true;
+    if (reset) { setLoading(true); setFeedError(null); setLastDoc(null); }
     else setLoadingMore(true);
     try {
       const { posts: newPosts, lastDoc: ld } = await firebaseService.getCreations(PAGE, reset ? undefined : lastDoc);
@@ -233,6 +236,7 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
       setFeedError(e?.message || 'Failed to load creations.');
     } finally {
       setLoading(false); setLoadingMore(false);
+      loadingLockRef.current = false;
     }
   }, [lastDoc]);
 
@@ -242,7 +246,7 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
   useEffect(() => {
     if (!loaderRef.current) return;
     const obs = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && hasMore && !loadingMore) loadPosts();
+      if (entry.isIntersecting && hasMore && !loadingMore && !loadingLockRef.current) loadPosts();
     }, { threshold: 0.1 });
     obs.observe(loaderRef.current);
     return () => obs.disconnect();
@@ -714,14 +718,15 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
           </div>
         </div>
         <div className="flex border-t border-slate-100 dark:border-white/5">
-          {(['feed','create','points'] as const).map(t => (
+          {(['feed','create','mine','points'] as const).map(t => (
             <button key={t} onClick={() => setTab(t)}
-              className={`flex-1 py-2.5 text-[10px] font-black uppercase tracking-widest transition-colors ${
+              className={`flex-1 py-2.5 text-[9px] font-black uppercase tracking-widest transition-colors ${
                 tab===t ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
               }`}>
-              {t==='feed'&&<><i className="fa-solid fa-house mr-1.5" />Feed</>}
-              {t==='create'&&<><i className="fa-solid fa-circle-plus mr-1.5" />Create</>}
-              {t==='points'&&<><i className="fa-solid fa-star mr-1.5" />Points</>}
+              {t==='feed'&&<><i className="fa-solid fa-house mr-1" />Feed</>}
+              {t==='create'&&<><i className="fa-solid fa-circle-plus mr-1" />Create</>}
+              {t==='mine'&&<><i className="fa-solid fa-images mr-1" />Mine</>}
+              {t==='points'&&<><i className="fa-solid fa-star mr-1" />Points</>}
             </button>
           ))}
         </div>
@@ -911,6 +916,85 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
           </div>
         )}
       </div>
+
+
+        {/* ══ YOUR CREATIONS ══ */}
+        {tab==='mine' && (
+          <div className="max-w-xl mx-auto pb-4">
+            {!user ? (
+              <div className="flex flex-col items-center py-16 gap-3 text-center">
+                <i className="fa-solid fa-lock text-4xl text-slate-200 dark:text-slate-700" />
+                <p className="text-sm font-bold text-slate-400">Sign in to see your creations</p>
+              </div>
+            ) : (() => {
+              const mine = posts.filter(p => p.userId === user.id);
+              if (mine.length === 0) return (
+                <div className="flex flex-col items-center py-16 gap-4 text-center">
+                  <i className="fa-solid fa-image text-5xl text-slate-200 dark:text-slate-700" />
+                  <p className="text-sm font-bold text-slate-400">No creations yet</p>
+                  <button onClick={() => setTab('create')} className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black hover:bg-indigo-500">Create Now</button>
+                </div>
+              );
+              return (
+                <div className="space-y-0">
+                  {mine.map(post => (
+                    <article key={post.id} className="border-b border-slate-100 dark:border-white/5 p-4">
+                      <div className="flex gap-3">
+                        {/* Thumbnail */}
+                        <div className="w-20 h-20 rounded-2xl overflow-hidden bg-slate-100 dark:bg-white/5 shrink-0">
+                          {post.mediaUrl && post.mediaType === 'image'
+                            ? <img src={post.mediaUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                            : post.mediaType === 'video'
+                            ? <div className="w-full h-full flex items-center justify-center"><i className="fa-solid fa-video text-xl text-indigo-400" /></div>
+                            : post.mediaType === 'music'
+                            ? <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-pink-500/20 to-purple-600/20"><i className="fa-solid fa-music text-xl text-pink-400" /></div>
+                            : <div className="w-full h-full flex items-center justify-center"><i className="fa-solid fa-pen-nib text-xl text-amber-400" /></div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-black text-slate-900 dark:text-white truncate mb-0.5">{post.title || post.caption || 'Untitled'}</p>
+                          {post.originalPrompt && (
+                            <p className="text-[10px] text-slate-400 italic line-clamp-2 mb-1.5">✦ {post.originalPrompt}</p>
+                          )}
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {post.tags?.slice(0,3).map(t => <TagPill key={t} tag={t} />)}
+                          </div>
+                          <div className="flex items-center gap-3 text-[10px] text-slate-400">
+                            <span className="flex items-center gap-1"><i className="fa-solid fa-heart text-red-400" />{post.likeCount || 0}</span>
+                            <span className="flex items-center gap-1"><i className="fa-regular fa-comment" />{post.commentCount || 0}</span>
+                            <span className="ml-auto">{timeAgo(post.createdAt)}</span>
+                          </div>
+                          {/* Use it + Delete */}
+                          <div className="flex gap-2 mt-2">
+                            {post.originalPrompt && (
+                              <button onClick={() => handleUseIt(post)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-[9px] font-black hover:bg-indigo-500 transition-colors">
+                                <i className="fa-solid fa-wand-magic-sparkles text-[8px]" />Use it
+                              </button>
+                            )}
+                            <button onClick={() => setDeleteConfirm(post.id)}
+                              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-500 text-[9px] font-black hover:bg-red-100 transition-colors">
+                              <i className="fa-solid fa-trash text-[8px]" />Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      {deleteConfirm === post.id && (
+                        <div className="mt-2 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-center justify-between gap-3">
+                          <p className="text-xs font-bold text-red-600">Delete this creation?</p>
+                          <div className="flex gap-2">
+                            <button onClick={() => handleDelete(post.id)} className="px-3 py-1.5 rounded-lg bg-red-500 text-white text-[10px] font-black">Delete</button>
+                            <button onClick={() => setDeleteConfirm(null)} className="px-3 py-1.5 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-500 text-[10px] font-black">Cancel</button>
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
       {/* Detail Modal */}
       <DetailModal />

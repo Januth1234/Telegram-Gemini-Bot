@@ -208,6 +208,8 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   
   // Private Mode State
   const [isPrivate, setIsPrivate] = useState(false);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryPopup, setSummaryPopup] = useState<string | null>(null);
   const [privateMessages, setPrivateMessages] = useState<ChatMessage[]>([]);
 
   const [progress, setProgress] = useState(0);
@@ -269,6 +271,28 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     }
     setProgress(100);
     setTimeout(() => { setProgress(0); setStepLabel(""); }, 500);
+  };
+
+  const handleGenerateSummary = async () => {
+    if (summaryLoading || messages.length < 2) return;
+    setSummaryLoading(true);
+    try {
+      const transcript = messages
+        .filter(m => m.role === 'user' || m.role === 'assistant')
+        .slice(-30) // last 30 msgs
+        .map(m => `${m.role === 'user' ? 'User' : 'Orin'}: ${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+        .join('\n');
+      const result = await geminiService.chat(
+        `Summarize this conversation in 5–8 bullet points. Be concise. Focus only on what was discussed and decided. Skip greetings and filler.\n\nCONVERSATION:\n${transcript}`,
+        { isPrivate: true }
+      );
+      const text = typeof result === 'string' ? result : result?.text || 'No summary generated.';
+      setSummaryPopup(text);
+    } catch (e: any) {
+      setSummaryPopup('Could not generate summary: ' + (e?.message || 'Unknown error'));
+    } finally {
+      setSummaryLoading(false);
+    }
   };
 
   const handleSend = useCallback(async (overrideInput?: string, overrideFile?: { data: string; mimeType: string; name: string }) => {
@@ -742,6 +766,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         <header className="h-14 shrink-0 border-b border-slate-200 dark:border-white/5 flex items-center justify-between px-4 z-[60] bg-white dark:bg-slate-950 relative">
           <button onClick={() => setIsHistoryOpen(true)} className="w-10 h-10 rounded-xl border border-slate-200 dark:border-white/10 flex items-center justify-center" aria-label="History"><i className="fa-solid fa-bars" /></button>
           <div className="flex items-center gap-2">
+            {/* Generate Summary — visible only when there are messages */}
+            {messages.length >= 2 && (
+              <button
+                onClick={handleGenerateSummary}
+                disabled={summaryLoading}
+                title="Generate a summary of this chat"
+                className="p-2 md:px-3 md:py-2 rounded-xl border bg-white dark:bg-white/5 text-slate-500 border-slate-200 dark:border-white/10 flex items-center gap-2 transition-all hover:border-indigo-400 hover:text-indigo-500 disabled:opacity-50"
+              >
+                {summaryLoading
+                  ? <i className="fa-solid fa-circle-notch animate-spin text-sm" />
+                  : <i className="fa-solid fa-list-check text-sm" />}
+                <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest">Summary</span>
+              </button>
+            )}
             <button
               onClick={togglePrivate}
               title={isPrivate ? 'Private — messages not saved (tap to turn off)' : 'Public (tap for Private)'}
@@ -907,8 +945,32 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
         )}
       </div>
     </div>
+
+      {/* Summary Popup */}
+      {summaryPopup && (
+        <div className="fixed inset-0 z-[300] bg-black/50 flex items-end sm:items-center justify-center p-4"
+          onClick={() => setSummaryPopup(null)}>
+          <div className="w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-white/10"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
+                <i className="fa-solid fa-list-check text-indigo-500" />Chat Summary
+              </h3>
+              <button onClick={() => setSummaryPopup(null)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 hover:text-red-500">
+                <i className="fa-solid fa-xmark text-sm" />
+              </button>
+            </div>
+            <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+              {summaryPopup}
+            </div>
+            <button onClick={() => { navigator.clipboard?.writeText(summaryPopup || ''); }}
+              className="mt-4 w-full py-2 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 text-[10px] font-black uppercase tracking-widest hover:bg-slate-200 dark:hover:bg-white/10 transition-colors flex items-center justify-center gap-1.5">
+              <i className="fa-solid fa-copy text-[9px]" />Copy Summary
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 };
-
 export default ChatWorkspace;

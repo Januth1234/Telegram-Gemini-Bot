@@ -17,57 +17,86 @@ interface LocalCodeSnapshot extends GitHubReleaseItem {
 // Historical log using official language — static, so defined outside component to avoid re-creation on every render.
 const OFFICIAL_UPDATES: LocalCodeSnapshot[] = [
   {
-    version: "4.6.0",
-    date: "March 2026",
+    version: "5.5.0",
+    date: "April 2026",
     features: [
-      "Thinking Mode (Deeper Reasoning)",
-      "Descriptive Mode for Step-by-Step Answers",
-      "Minimal Neural Themes (5 full skins)",
-      "Per-User Workspace Theme Sync",
-      "Live Neural Memory Tuning"
+      "Creations Feed — Instagram-style social platform",
+      "Your Creations tab — personal generation history with prompts",
+      "Image-to-Image generation with reference photo",
+      "Generate Summary button in every chat",
+      "Agent Mode — auto-executes browser tasks step by step",
+      "Language toggle saves across sessions",
+      "Voice & Camera — fixed false error on close",
+      "VAD bark filter — 250ms sustained speech required",
+      "Upgrade greeting popup on plan change",
+      "All users logged to database on sign-in",
+      "Plain-language translations in Sinhala and Tamil",
     ],
-    body: "This release makes Orin feel more personal and modern. Thinking Mode lets Orin slow down and reason more deeply on hard questions, while Descriptive Mode adds clearer, step‑by‑step explanations when you need them. A new set of minimal neural themes (Classic, Midnight, Aurora, Terminal, and Paper) now skin the entire workspace and follow you across devices. Neural memory continues to be updated live from your chats, keeping a short summary of what matters to you.",
-    bodySi: "මෙම නිකුතුව ඔරින්‍ව වඩාත් පුද්ගලික සහ නවීන ලෙස පෙනෙන විධියට යාවත්කාලීන කරයි. “Thinking Mode” සක්‍රීය කළ විට අසීරු ප්‍රශ්න සඳහා වඩා ගැඹුරු ව සලකා බැලීමක් කරන අතර “Descriptive Mode” සවිස්තර සතරෙන්, පියවරෙන් පියවර පැහැදිලි කිරීම් ලබා දෙයි. Classic, Midnight, Aurora, Terminal සහ Paper යන අතිමත් සරල නව තේමාවන් මුළු වැඩබිමටම අදාළ වෙමින් ඔබ ගිණුම සමඟ උපාංග අතර සමමුහුර්ත වේ. ඔබට වැදගත් දේ පිළිබඳ කෙටි සාරාංශයක් රඳවා තබා ගැනීමට ස්නායු මතකය ඔබේ සංවාද වලින් දිගටම යාවත්කාලීන වේ.",
+    body: "A major quality-of-life release. Creations is now a full social platform — post AI-generated images, like, comment, and share. The new 'Your Creations' tab keeps your personal generation history. Image generation now supports a reference photo for image-to-image editing. Agent Mode auto-plans and opens URLs for browser tasks. Voice mode no longer shows false errors when you close it. Language preference now persists across refreshes. All translations rewritten in plain everyday language.",
+    bodySi: "Creations දැන් සම්පූර්ණ සමාජ වේදිකාවක් — like, comment, share. 'Your Creations' ඔබේ AI රූප ඉතිහාසය ගබඩා කරයි. Image gen ට reference photo හැකි. Voice close කළ විට වැරදි error නිවැරදි. භාෂා toggle refresh කළ විටත් සටහන් රැකේ. සිංහල translations ස්වාභාවික.",
     htmlUrl: "#releases"
   },
   {
-    version: "5.0.0-Beta",
-    date: "February 1, 2026",
+    version: "5.4.0",
+    date: "March 2026",
     features: [
-      "Studio Create Refinements",
-      "Secure Blob Asset Downloads",
-      "Dark Mode Visibility Optimization",
-      "Official Platform Release Log",
-      "Enhanced Multimodal Pipeline"
+      "Image generation fixed — Imagen 3 + Gemini fallback",
+      "GPU drain in Studio Create eliminated (removed backdrop-blur)",
+      "Vercel Blob media uploads for Creations",
+      "Firestore-backed Creations with real-time likes and comments",
+      "Use It button — reuse any creation prompt in chat or Studio",
+      "Edit and delete own posts",
+      "Markov chain autocomplete for prompts",
+      "Auto tag extraction from prompt keywords",
     ],
-    body: "Major platform update focusing on Studio Create stability and visual consistency. This release introduces secure download protocols for generated assets and optimized readability across high-contrast environments.",
-    bodySi: "Studio Create හි ස්ථායීතාවය සහ දෘශ්‍ය අනුකූලතාවය කෙරෙහි අවධානය යොමු කරමින් සිදු කළ ප්‍රධාන යාවත්කාලීනයකි. මෙම සංස්කරණය මගින් උත්පාදනය කරන ලද වත්කම් සඳහා ආරක්ෂිත බාගත කිරීමේ ක්‍රම සහ ඉහළ කියවීමේ හැකියාව හඳුන්වා දෙයි.",
-    htmlUrl: "#"
+    body: "Stability and performance. Image generation no longer fails — tries Imagen 3 first, Gemini Flash as fallback. GPU usage in Studio Create dropped significantly after removing all backdrop-blur effects. Creations are now stored in Firestore with real-time likes, comments, editing, deletion, and the Use It prompt reuse feature. Markov chain autocomplete suggests completions as you type.",
+    bodySi: "Image gen 404 දෝෂය නිවැරදි — Imagen 3 මුලින්, Flash fallback. Studio Create GPU භාවිතය අඩු. Creations Firestore හි like, comment, edit, delete, Use It.",
+    htmlUrl: "#releases"
   },
   {
-    version: "4.1.2",
-    date: "January 25, 2026",
+    version: "5.3.0",
+    date: "March 2026",
     features: [
-      "Memory Core History Sync",
-      "Cloud Storage Handshake",
-      "Logic Flow UI Overhaul"
+      "Gemini Live Voice — fixed with correct model and WebSocket config",
+      "Camera mode — real-time live video AI",
+      "Code execution, URL context, Deep research in chat",
+      "File search workspace",
+      "Math mode with step-by-step solutions",
+      "Creations social feed launched",
+      "Points and rewards system",
     ],
-    body: "Introduced local and cloud-synchronized history management. Refined the Logic Flow visualization to accurately represent neural processing steps.",
-    bodySi: "දේශීය සහ වලාකුළු සමමුහුර්ත ඉතිහාස කළමනාකරණය හඳුන්වා දෙන ලදී. ස්නායු සැකසුම් පියවර නිවැරදිව නිරූපණය කිරීම සඳහා Logic Flow දර්ශනය වැඩි දියුණු කරන ලදී.",
-    htmlUrl: "#"
+    body: "Gemini Live Voice now works after fixing the model name and audio pipeline. Code execution runs Python in chat. URL context reads any webpage. Deep research gives thorough answers. Creations went live as a social platform for AI content.",
+    bodySi: "Voice live API නිවැරදිව. Code execution, URL context, deep research chat හි. Creations social feed දියත්.",
+    htmlUrl: "#releases"
+  },
+  {
+    version: "4.6.0",
+    date: "February 2026",
+    features: [
+      "Thinking Mode — deeper reasoning on hard questions",
+      "Descriptive Mode — step-by-step explanations",
+      "5 Minimal Themes (Classic, Midnight, Aurora, Terminal, Paper)",
+      "Per-User Theme Sync across devices",
+      "Live Memory from conversations",
+    ],
+    body: "Thinking Mode lets Orin reason more deeply. Five new minimal themes skin the entire workspace and sync across devices. Live memory keeps a short summary of what matters to you.",
+    bodySi: "Thinking Mode ගැඹුරු සිතීම. තේමා 5 devices අතර sync. Live memory ඔබ ගැන වැදගත් දේ සටහන් කරයි.",
+    htmlUrl: "#releases"
   },
   {
     version: "4.0.0",
-    date: "January 10, 2026",
+    date: "January 2026",
     features: [
-      "Initial Neural Workspace Release",
-      "Bilingual Reason Engine",
-      "Gemini 2.5 Integration"
+      "Initial Orin AI Platform launch",
+      "Bilingual — English and Sinhala",
+      "Gemini 2.5 Integration",
+      "Firebase auth and history sync",
+      "Studio Create — image and video generation",
     ],
-    body: "The official launch of Orin AI Platform. Providing advanced neural workspace capabilities to Sri Lankan users in both Sinhala and English.",
-    bodySi: "ඔරින් AI වේදිකාවේ නිල දියත් කිරීම. ශ්‍රී ලාංකික පරිශීලකයින්ට සිංහල සහ ඉංග්‍රීසි යන භාෂා දෙකෙන්ම උසස් ස්නායු වැඩබිම් හැකියාවන් ලබා දීම.",
-    htmlUrl: "#"
-  }
+    body: "The official launch of Orin AI. Sri Lanka's first bilingual AI assistant with image generation, voice, camera, math, and translation.",
+    bodySi: "ඔරින් AI නිල දියත් කිරීම. ශ්‍රී ලංකාවේ ප්‍රථම bilingual AI.",
+    htmlUrl: "#releases"
+  },
 ];
 
 const ReleasesPage: React.FC<ReleasesPageProps> = ({ onClose, lang }) => {

@@ -167,6 +167,15 @@ class FirebaseService {
   private static readonly THIRTY_DAYS_MS = 30 * FirebaseService.DAY_MS;
 
   async syncUserSession(uid: string, email: string, photoURL?: string | null): Promise<UserAccount> {
+    // Log this login to Firestore immediately — before any chat starts
+    if (this.db) {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        await setDoc(doc(this.db, 'login_events', `${uid}_${today}`), {
+          uid, email, loginAt: serverTimestamp(), date: today
+        }, { merge: true });
+      } catch { /* non-blocking */ }
+    }
     if (!this.db) throw new Error("DB not init");
     const userRef = doc(this.db, "users", uid);
     const snap = await getDoc(userRef);
