@@ -373,7 +373,7 @@ EXPLANATION STYLE:
     }
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-2.5-pro-preview-06-05';
+    const model = 'gemini-2.5-flash'; // flash works for CUA planning
     const tools = [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' as any } }];
     let contents: Array<{ role: 'user' | 'model'; parts: unknown[] }>;
     if (params.contents && params.contents.length > 0) {
@@ -609,7 +609,7 @@ EXPLANATION STYLE:
     const ai = new GoogleGenAI({ apiKey });
     // TTS models: pro gets higher quality, flash is default
     const ttsModels = model === 'pro'
-      ? ['gemini-2.5-pro-preview-tts', 'gemini-2.5-flash-preview-tts']
+      ? ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-preview-tts']
       : ['gemini-2.5-flash-preview-tts'];
     const ttsModel = ttsModels[0]; // Use first; error handling below falls back
 
@@ -843,7 +843,14 @@ SESSION CONTEXT (use for answers about time, place, money, weather):
 - User's region/country: ${country}
 - Local currency: ${currency}
 - Locale: ${locale}
-When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.`;
+When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.
+
+ORIN AI FACTS (use when asked about Orin AI features, pricing, privacy, terms, or creator):
+- Orin AI is a Sri Lankan bilingual AI assistant at orinai.org, built by Januth Nimnal.
+- Features: Chat, Camera (live vision AI), Voice (real-time), Studio (image/video/audio gen), Math, Translator, Agent (browser tasks), Creations (social feed), Files.
+- Plans: Free (daily limits), Basic (500 chats/day, 30 images/month, LKR), Pro (unlimited everything, LKR).
+- Privacy: Chat saved in Firebase for signed-in users only. No data sold.
+- If asked about Orin AI privacy, terms, pricing or features — use above facts only, not generic web knowledge.`;
   }
 
   /** Live audio models — try native audio first (best quality), fall back to stable. */
@@ -986,7 +993,7 @@ You are processing a live video feed. CRITICAL RULES:
   /** Long context: Pro uses gemini-2.5-flash with 1M token window. Pass full history. */
   private getLongContextModel(user: UserAccount | null): string {
     const plan = user?.plan?.toLowerCase() ?? 'free';
-    if (plan === 'pro' || plan === 'pro_yearly') return 'gemini-2.5-pro-preview-06-05'; // 1M ctx
+    if (plan === 'pro' || plan === 'pro_yearly') return 'gemini-2.5-pro'; // 1M ctx
     if (plan === 'basic' || plan === 'basic_yearly') return 'gemini-2.5-flash';          // 1M ctx
     // Free: 2 long-context uses per day, tracked in localStorage
     const today = new Date().toDateString();
@@ -1219,6 +1226,34 @@ If multiple methods, add a second block. Steps ARE the answer.`;
 
     return text || 'No solution returned. Try again.';
   }
+
+  /** Agent: plan a task into executable browser steps */
+  async agentPlan(task: string): Promise<{ steps: Array<{ action: string; target?: string; value?: string; description: string }>; summary: string }> {
+    const plan = this.currentUser?.plan?.toLowerCase() ?? '';
+    if (plan !== 'pro' && plan !== 'pro_yearly') {
+      throw new AppError('Agent mode is Pro only.', 'plan_required');
+    }
+    const apiKey = await this.getApiKey();
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: `Break this task into concrete browser steps. Task: ${task}
+
+Reply ONLY with valid JSON (no markdown):
+{"summary":"brief summary","steps":[{"action":"navigate","target":"https://...","description":"Go to..."},{"action":"search","value":"query","description":"Search for..."},{"action":"done","description":"Task complete"}]}
+
+Valid actions: navigate, search, click, type, wait, done.` }] }],
+      config: { systemInstruction: 'Output only valid JSON. No markdown fences.' },
+    });
+    const text = (response.candidates?.[0]?.content?.parts?.[0] as any)?.text || '';
+    try {
+      const clean = text.replace(/```json|```/g, '').trim();
+      return JSON.parse(clean);
+    } catch {
+      return { summary: task, steps: [{ action: 'search', value: task, description: 'Search for: ' + task }] };
+    }
+  }
+
 }
 
 export const geminiService = new GeminiService();
