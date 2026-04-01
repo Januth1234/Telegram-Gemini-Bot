@@ -66,6 +66,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sessionRef = useRef<any>(null);
+  const userClosedRef = useRef(false); // true when user explicitly closes — suppresses onclose error
   const sessionReadyRef = useRef<any>(null);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
 
@@ -135,6 +136,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
   }, []);
 
   const stopSession = useCallback(() => {
+    userClosedRef.current = true; // intentional close — suppress onclose error
     stopAiSpeaking();
     sessionReadyRef.current = null; // stop sending audio immediately
     if (sessionRef.current) { try { sessionRef.current.close(); } catch(e) {} sessionRef.current = null; }
@@ -273,12 +275,13 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, inline =
         },
         onclose: (e: unknown) => {
           console.warn('[Orin Voice] onclose:', e);
-          // If session closed before we ever became active → show error not silent close
           setIsActive((prev) => {
-            if (!prev) {
-              // Was still connecting — closed before onopen
+            // Only show error if it was NOT an intentional close by the user
+            // and the session never reached active state (= real connection failure)
+            if (!prev && !userClosedRef.current) {
               setErrorMessage('Session closed before connecting. Check your API key or try again.');
             }
+            userClosedRef.current = false; // reset for next session
             return false;
           });
           setIsConnecting(false);

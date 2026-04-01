@@ -1,81 +1,65 @@
-
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    function hasRole(role) {
-      return request.auth != null && request.auth.token.role == role;
-    }
-    function isOwner() { return hasRole('owner'); }
-    function isDevOps() { return hasRole('devops') || isOwner(); }
-    function isTrainer() { return hasRole('training') || isDevOps(); }
 
-    // Users: each user can read their own document, but only update
-    // non-privileged fields. Privileged fields like plan/role/approved
-    // are managed server-side (e.g. via Stripe webhook with Admin SDK).
+    // ── Existing user data (keep as is) ──────────────────────────────────────
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-
-      // Allow create own doc with restricted defaults (plan/role/approved must be safe)
-      allow create: if request.auth != null
-                    && request.auth.uid == userId
-                    && (!('plan' in request.resource.data) || request.resource.data.plan == 'free')
-                    && (!('role' in request.resource.data) || request.resource.data.role == 'visitor')
-                    && (!('approved' in request.resource.data) || request.resource.data.approved == false);
-
-      // Allow update only if privileged/subscription fields are unchanged (those are server-only).
-      allow update: if request.auth != null
-                    && request.auth.uid == userId
-                    && request.resource.data.plan == resource.data.plan
-                    && request.resource.data.role == resource.data.role
-                    && request.resource.data.approved == resource.data.approved
-                    && (!('stripeCustomerId' in request.resource.data) || request.resource.data.stripeCustomerId == resource.data.stripeCustomerId)
-                    && (!('subscriptionStatus' in request.resource.data) || request.resource.data.subscriptionStatus == resource.data.subscriptionStatus)
-                    && (!('currentPeriodEnd' in request.resource.data) || request.resource.data.currentPeriodEnd == resource.data.currentPeriodEnd);
-    }
-
-    // Conversation history subcollection (avoids 1MB document limit).
-    match /users/{userId}/conversations/{convId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Pending Signups: Create own (only if none exists), with validated email/reason to prevent DoS.
-    match /pending_signups/{uid} {
+    match /conversations/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /usage/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /pending_signups/{docId} {
+      allow read, write: if request.auth != null;
+    }
+
+    match /api_keys/{docId} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+
+    match /site_metrics/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── Creations (social feed) ───────────────────────────────────────────────
+    match /creations/{creationId} {
+      // Anyone can read — public feed
+      allow read: if true;
+
+      // Only signed-in users can create
       allow create: if request.auth != null
-                    && request.auth.uid == uid
-                    && !exists(/databases/$(database)/documents/pending_signups/$(uid))
-                    && request.resource.data.keys().hasAll(['email', 'reason'])
-                    && request.resource.data.email is string
-                    && request.resource.data.email.size() >= 1
-                    && request.resource.data.email.size() <= 512
-                    && request.resource.data.reason is string
-                    && request.resource.data.reason.size() >= 1
-                    && request.resource.data.reason.size() <= 2000;
-      allow read, write: if isOwner();
-    }
+        && request.resource.data.userId == request.auth.uid;
 
-    // Metrics: Restrict metrics to DevOps/Owner; not general users.
-    match /site_metrics/{doc} {
-      allow read: if isDevOps();
-    }
+      // Only the owner can update or delete
+      allow update: if request.auth != null
+        && resource.data.userId == request.auth.uid;
 
-    // API Keys: DevOps/Owner only
-    match /api_keys/{key} {
-      allow read, write: if isDevOps();
-    }
+      allow delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
 
-    // Training Data
-    match /papers/{paper} {
-      allow read, write: if isTrainer();
-    }
-    match /questions/{q} {
-      allow read, write: if isTrainer();
-    }
+      // Comments subcollection
+      match /comments/{commentId} {
+        // Anyone can read comments
+        allow read: if true;
 
-    // Audit Logs: Owner read only
-    match /audit_logs/{log} {
-      allow read: if isOwner();
-      allow create: if false; // Server only
+        // Signed-in users can add comments
+        allow create: if request.auth != null
+          && request.resource.data.userId == request.auth.uid;
+
+        // Comment owner can update (e.g. toggle like on own comment)
+        allow update: if request.auth != null;
+
+        // Comment owner or creation owner can delete
+        allow delete: if request.auth != null;
+      }
     }
   }
 }

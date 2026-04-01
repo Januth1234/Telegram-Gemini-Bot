@@ -865,10 +865,16 @@ When the user asks about time, date, weather, or prices, use this context. For w
       // VAD tuning: high sensitivity for instant response
       realtimeInputConfig: {
         automaticActivityDetection: {
-          startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH' as any, // instant activation
-          endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as any,      // cut off quickly after speech
-          silenceDurationMs: 500,    // 500ms silence = end of turn (fast response)
-          prefixPaddingMs: 100,      // only 100ms speech needed to start
+          // START_SENSITIVITY_HIGH picks up speech fast — good for responsiveness
+          startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH' as any,
+          // END_SENSITIVITY_HIGH cuts off quickly after speech ends — fast response
+          endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as any,
+          // 600ms silence before turn ends — fast but allows natural pauses
+          silenceDurationMs: 600,
+          // 250ms of sustained audio required before triggering
+          // Dog barks / claps / short noises are typically < 200ms — this filters them
+          // Human speech syllables are 200-400ms+ — this still captures them
+          prefixPaddingMs: 250,
         },
       },
     };

@@ -53,6 +53,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   const audioContextRef = useRef<AudioContext | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const sessionRef = useRef<any>(null);
+  const userClosedRef = useRef(false);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   
@@ -267,7 +268,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
              nextStartTimeRef.current = 0;
           }
         },
-        onclose: (e: unknown) => { console.warn("[Orin Camera] onclose:", e); stopSession(); },
+        onclose: (e: unknown) => { console.warn("[Orin Camera] onclose:", e); if (!userClosedRef.current) { stopSession(); } else { userClosedRef.current = false; setIsActive(false); setIsConnecting(false); } },
         onerror: (e: unknown) => {
             const raw = e instanceof Error ? e.message
               : (typeof e === 'object' && e !== null ? JSON.stringify(e) : String(e));
@@ -294,6 +295,7 @@ const LiveVisionMode: React.FC<LiveVisionModeProps> = ({ onClose, lang }) => {
   };
 
   const stopSession = () => {
+    userClosedRef.current = true;
     setIsActive(false);
     setIsConnecting(false);
     setAiSpeaking(false);
