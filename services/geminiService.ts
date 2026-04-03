@@ -10,11 +10,18 @@ const MEMORY_UPDATE_COOLDOWN_MS = 2 * 60 * 1000; // at most once per 2 minutes p
 /** Only run memory update when the user message suggests something worth remembering (personal info, preferences). */
 function shouldUpdateMemoryFromExchange(userPrompt: string): boolean {
   const trimmed = userPrompt.trim();
-  if (trimmed.length < 40) return false; // skip "ok", "thanks", "what's 2+2?"
+  // Skip very short messages — no useful context
+  if (trimmed.length < 30) return false;
   const lower = trimmed.toLowerCase();
-  const looksPersonal =
-    /\b(i'?m|i am|my name|call me|i (like|love|prefer|enjoy|hate|dislike|need|have|live|work|study)|remember (that|this)|my (email|phone|address|job|school|birthday|age)|i'm from)\b/i.test(lower);
-  return looksPersonal;
+  // Skip pure questions/commands with no personal content
+  if (/^(what|how|why|when|where|who|can you|please|ok|yes|no|thanks|sure|hi|hello|hey)\b/i.test(trimmed) && trimmed.length < 60) return false;
+  // Skip math, code, translation requests — no personal value
+  if (/\b(calculate|compute|translate|convert|solve|\d[+\-*/=]\d)\b/i.test(lower) && trimmed.length < 80) return false;
+  // Save if personal info is shared
+  const looksPersonal = /\b(i'?m|i am|my name|call me|i (like|love|prefer|enjoy|hate|dislike|need|have|live|work|study|build|made|created|own)|remember (that|this)|my (email|phone|address|job|school|birthday|age|project|company|team|business)|i'?m from|i live|i work|i study|i'm building|i run|we are|our (company|team|project|app|product))\b/i.test(lower);
+  // Also save meaningful discussions (long substantive messages)
+  const isSubstantive = trimmed.length > 150;
+  return looksPersonal || isSubstantive;
 }
 
 export class AppError extends Error {
@@ -659,7 +666,16 @@ EXPLANATION STYLE:
     const apiKey = await this.getApiKey().catch(() => null);
     if (!apiKey) return;
     const ai = new GoogleGenAI({ apiKey });
-    const systemInstruction = `You are a memory updater for a personal AI assistant. Given the PREVIOUS MEMORY and the NEW EXCHANGE, output ONLY the updated memory: a single block of text (a few concise sentences) that summarizes what to remember about the user. Include any new facts, preferences, or context the user shared. Do not include greetings or meta-commentary. Output nothing but the updated memory.`;
+    const systemInstruction = `You are a memory manager for a personal AI assistant. Update the user's memory profile.
+
+RULES:
+- Output ONLY the updated memory — no explanation, no commentary
+- Keep it SHORT (3-6 sentences max) and USEFUL for future conversations
+- Include: name, job/projects, preferences, important context they shared
+- IGNORE: greetings, one-off questions, math problems, translation requests
+- REMOVE: outdated info replaced by newer info
+- NEVER include: passwords, sensitive data, trivial facts
+- Write in third person: "User is a developer in Sri Lanka who..."`;
     const userContent = `PREVIOUS MEMORY:\n${previousMemory || "(none)"}\n\nUSER: ${userPrompt}\n\nASSISTANT: ${assistantReply}`;
     try {
       const response = await ai.models.generateContent({

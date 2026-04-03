@@ -42,6 +42,28 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// ── Upgrade notification reconciliation ─────────────────────────────────────
+// When the app is offline or closed and a plan upgrade happens, the push
+// notification may be missed. On SW activate, we send a message to all open
+// clients so the app can re-check the plan and show the upgrade popup.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'CHECK_PLAN_UPDATE') {
+    // Re-broadcast to all clients so they can check localStorage plan vs DB
+    self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
+      clients.forEach(client => client.postMessage({ type: 'RECHECK_PLAN' }));
+    });
+  }
+});
+
+// On activate, tell all open clients to re-check their plan (catches missed upgrades)
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    self.clients.matchAll({ includeUncontrolled: true }).then(clients => {
+      clients.forEach(client => client.postMessage({ type: 'RECHECK_PLAN' }));
+    })
+  );
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' ||

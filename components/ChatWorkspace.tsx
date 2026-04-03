@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 
 function cosineSimilarity(a: number[], b: number[]): number {
@@ -730,7 +730,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             {searchQuery.trim() && semanticOrder && !isSearching && <p className="text-[9px] text-indigo-600 dark:text-indigo-400 mt-1">Sorted by relevance</p>}
         </div>
         <div className="overflow-y-auto flex-1 min-h-0 p-2">
-            {(semanticOrder ? semanticOrder.map((id) => conversations.find((c) => c.id === id)).filter(Boolean) as Conversation[] : [...conversations].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())).map(c => (
+            {useMemo(() => (semanticOrder ? semanticOrder.map((id) => conversations.find((c) => c.id === id)).filter(Boolean) as Conversation[] : [...conversations].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())), [conversations, semanticOrder]).map(c => (
                 <div key={c.id} className={`group relative mb-1.5 rounded-xl ${activeConvId === c.id ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-slate-100 dark:hover:bg-white/5'}`}>
                     <button 
                         onClick={() => { onSwitchConv(c.id); setIsHistoryOpen(false); }} 

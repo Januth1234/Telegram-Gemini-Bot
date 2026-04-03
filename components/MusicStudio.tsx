@@ -174,7 +174,8 @@ const MusicStudio: React.FC = () => {
     });
     sourcesRef.current.clear();
     if (sessionRef.current) {
-      try { sessionRef.current.stop(); } catch {}
+      try { (sessionRef.current as any).close?.(); } catch {}
+      try { (sessionRef.current as any).stop?.(); } catch {}
       sessionRef.current = null;
     }
     const ctx = audioCtxRef.current;
@@ -458,8 +459,10 @@ const MusicStudio: React.FC = () => {
             {error && (
               <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <p className="text-[9px] text-red-500 font-black uppercase tracking-widest">{error}</p>
-              {error.includes('connect') || error.includes('WebSocket') || error.includes('model') ? (
-                <p className="text-[9px] text-slate-400 mt-1">Lyria RealTime requires a Gemini API key with early access. Check your API key settings.</p>
+              {(error.includes('connect') || error.includes('WebSocket') || error.includes('model') || error.includes('403') || error.includes('not found') || error.includes('NOT_FOUND')) ? (
+                <p className="text-[9px] text-slate-400 mt-1">
+                  Lyria RealTime (AI music) needs early access. <a href="https://aistudio.google.com" target="_blank" rel="noopener" className="text-indigo-400 underline">Enable it in Google AI Studio</a> or the feature may not be available in your region yet.
+                </p>
               ) : null}
               </div>
             )}

@@ -208,6 +208,24 @@ const App: React.FC = () => {
         }
         setSyncStatus('success');
         notificationService.setupForUser().catch(() => {});
+      // Listen for SW-triggered plan recheck (catches missed upgrade notifications)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', async (e) => {
+          if (e.data?.type === 'RECHECK_PLAN' && syncedUser?.id) {
+            try {
+              const refreshed = await firebaseService.syncUserSession(syncedUser.id, syncedUser.email || '', syncedUser.avatar);
+              const lastSeenPlan = localStorage.getItem(`orin_last_plan_${syncedUser.id}`);
+              if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
+                  (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
+                setUpgradePopup({ plan: refreshed.plan });
+              }
+              localStorage.setItem(`orin_last_plan_${syncedUser.id}`, refreshed.plan || 'free');
+              setUser(refreshed);
+              geminiService.setSessionUser(refreshed);
+            } catch { /* non-blocking */ }
+          }
+        });
+      }
       } catch {
         // If Firestore is unavailable, fall back to a local-only user
         // but do NOT attach it to geminiService so usage stays on guest limits.
@@ -517,6 +535,24 @@ const App: React.FC = () => {
       }
       setSyncStatus('success');
       notificationService.setupForUser().catch(() => {});
+      // Listen for SW-triggered plan recheck (catches missed upgrade notifications)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.addEventListener('message', async (e) => {
+          if (e.data?.type === 'RECHECK_PLAN' && syncedUser?.id) {
+            try {
+              const refreshed = await firebaseService.syncUserSession(syncedUser.id, syncedUser.email || '', syncedUser.avatar);
+              const lastSeenPlan = localStorage.getItem(`orin_last_plan_${syncedUser.id}`);
+              if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
+                  (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
+                setUpgradePopup({ plan: refreshed.plan });
+              }
+              localStorage.setItem(`orin_last_plan_${syncedUser.id}`, refreshed.plan || 'free');
+              setUser(refreshed);
+              geminiService.setSessionUser(refreshed);
+            } catch { /* non-blocking */ }
+          }
+        });
+      }
     } catch {
       // Same as initial auth: degrade gracefully but keep Gemini in guest mode.
       setUser(fallbackUser);
