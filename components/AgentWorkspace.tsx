@@ -1,12 +1,24 @@
 /**
- * AgentWorkspace — AI agent that takes over browser tasks.
- * Plans steps with Gemini, executes them: opens tabs, copies values to clipboard,
- * takes screenshots via Screen Capture API, feeds them back to Gemini for next step.
+ * AgentWorkspace — TRUE autonomous browser agent.
+ *
+ * TWO MODES:
+ * 1. EXTENSION MODE (full takeover): Detects the Orin Agent Chrome extension.
+ *    Sends commands (navigate/click/type/screenshot) via chrome.runtime.sendMessage.
+ *    Extension executes them in ANY tab, returns screenshots automatically.
+ *    Loop: task → plan → [screenshot → Gemini Vision → action] × N → done
+ *
+ * 2. SCREEN CAPTURE MODE (no extension): Uses getDisplayMedia() to capture the
+ *    screen, takes frames automatically every 3s, feeds to Gemini Vision.
+ *    Values auto-copied to clipboard. User follows Gemini's instructions.
  */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { Language, UserAccount } from '../types';
 import { cacheService, CacheKey } from '../services/cacheService';
+
+// Replace with your actual published extension ID after publishing to Chrome Web Store
+// For sideloaded/developer mode: get from chrome://extensions
+const EXTENSION_ID_KEY = 'orin_agent_ext_id';
 
 interface AgentWorkspaceProps {
   user: UserAccount | null;
@@ -20,9 +32,34 @@ interface Step {
   target?: string;
   value?: string;
   description: string;
-  instruction?: string; // what the user should do manually if needed
-  status: 'pending' | 'running' | 'done' | 'error' | 'waiting';
-  clipboardValue?: string; // auto-copied to clipboard
+  instruction?: string;
+  status: 'pending' | 'running' | 'done' | 'error';
+}
+
+// Send a command to the Chrome extension
+async function extCmd(extId: string, action: string, data: Record<string, any> = {}): Promise<any> {
+  return new Promise((resolve) => {
+    if (!(window as any).chrome?.runtime?.sendMessage) {
+      resolve({ error: 'Chrome extension API not available' });
+      return;
+    }
+    (window as any).chrome.runtime.sendMessage(extId, { action, data }, (response: any) => {
+      const err = (window as any).chrome.runtime.lastError;
+      if (err) resolve({ error: err.message });
+      else resolve(response || { ok: true });
+    });
+  });
+}
+
+async function detectExtension(): Promise<string | null> {
+  // Check if user manually saved extension ID
+  const saved = localStorage.getItem(EXTENSION_ID_KEY);
+  if (saved) {
+    const resp = await extCmd(saved, 'ping');
+    if (resp?.ok) return saved;
+    localStorage.removeItem(EXTENSION_ID_KEY);
+  }
+  return null;
 }
 
 const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, initialPrompt = '' }) => {
@@ -32,222 +69,303 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
   const hasUsedOnce = cacheService.get<boolean>(CacheKey.AGENT_USED_ONCE, false);
   const canUseAgent = isPro || isBasic || !hasUsedOnce;
 
+  const [mode, setMode] = useState<'idle' | 'setup' | 'running' | 'done'>('idle');
+  const [extMode, setExtMode] = useState<'detecting' | 'found' | 'none'>('detecting');
+  const [extId, setExtId] = useState('');
+  const [extIdInput, setExtIdInput] = useState('');
+
   const [task, setTask] = useState(initialPrompt);
   const [steps, setSteps] = useState<Step[]>([]);
   const [summary, setSummary] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [currentStep, setCurrentStep] = useState(-1);
-  const [error, setError] = useState<string | null>(null);
+  const [currentStepIdx, setCurrentStepIdx] = useState(-1);
   const [log, setLog] = useState<string[]>([]);
-  const [screenshot, setScreenshot] = useState<string | null>(null);
-  const [waitingForScreenshot, setWaitingForScreenshot] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [screenshot, setScreenshot] = useState<string | null>(null); // last screenshot b64
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [agentThought, setAgentThought] = useState<string | null>(null);
   const [clipboardToast, setClipboardToast] = useState<string | null>(null);
-  const [agentReply, setAgentReply] = useState<string | null>(null);
+  const [totalStepsDone, setTotalStepsDone] = useState(0);
+
+  // Screen capture
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const logRef = useRef<HTMLDivElement>(null);
   const stopRef = useRef(false);
-  const screenshotResolveRef = useRef<((val: string | null) => void) | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const openedWindowRef = useRef<Window | null>(null);
 
-  useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
-  }, [log]);
-
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [log]);
   useEffect(() => { if (initialPrompt) setTask(initialPrompt); }, [initialPrompt]);
+  useEffect(() => {
+    detectExtension().then(id => {
+      if (id) { setExtId(id); setExtMode('found'); }
+      else setExtMode('none');
+    });
+  }, []);
 
   const addLog = useCallback((msg: string) => setLog(prev => [...prev, msg]), []);
 
-  const copyToClipboard = async (text: string, label?: string) => {
+  const copyToClipboard = async (text: string, label = 'Value') => {
     try {
       await navigator.clipboard.writeText(text);
-      const msg = `📋 ${label || 'Value'} copied to clipboard — paste it in the browser`;
+      const msg = `📋 "${label}" copied — paste it (Ctrl+V) in the browser`;
       setClipboardToast(msg);
-      addLog(msg);
       setTimeout(() => setClipboardToast(null), 4000);
-      return true;
-    } catch {
-      addLog(`   ⚠️ Could not auto-copy. Manually type: ${text}`);
-      return false;
+      addLog(msg);
+    } catch { addLog(`⚠️ Could not auto-copy "${label}". Type manually: ${text}`); }
+  };
+
+  // ── Take screenshot (extension or screen capture) ──────────────────────────
+  const takeScreenshot = async (): Promise<string | null> => {
+    if (extMode === 'found' && extId) {
+      const resp = await extCmd(extId, 'screenshot');
+      if (resp?.screenshot) {
+        setScreenshot(resp.screenshot);
+        setScreenshotPreview('data:image/png;base64,' + resp.screenshot);
+        return resp.screenshot;
+      }
+      addLog('⚠️ Extension screenshot failed: ' + (resp?.error || 'unknown'));
     }
+    // Fallback: capture from screen stream
+    if (screenStream && videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth || 1280;
+      canvas.height = video.videoHeight || 720;
+      canvas.getContext('2d')?.drawImage(video, 0, 0);
+      const dataUrl = canvas.toDataURL('image/png');
+      const b64 = dataUrl.replace('data:image/png;base64,', '');
+      setScreenshot(b64);
+      setScreenshotPreview(dataUrl);
+      return b64;
+    }
+    return null;
   };
 
-  const openUrl = (url: string) => {
-    addLog(`   🌐 Opening: ${url}`);
-    const w = window.open(url, '_blank', 'noopener,noreferrer');
-    if (w) openedWindowRef.current = w;
-    return w;
-  };
+  // ── Execute one action (extension or manual) ────────────────────────────────
+  const executeAction = async (action: string, target?: string, value?: string, instruction?: string) => {
+    const ext = extMode === 'found' && extId;
 
-  // Wait for user to paste a screenshot
-  const waitForScreenshot = (): Promise<string | null> => {
-    setWaitingForScreenshot(true);
-    return new Promise(resolve => {
-      screenshotResolveRef.current = resolve;
-    });
-  };
-
-  const handleScreenshotFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const dataUrl = ev.target?.result as string;
-      const b64 = dataUrl.split(',')[1];
-      setScreenshot(dataUrl);
-      setWaitingForScreenshot(false);
-      screenshotResolveRef.current?.(b64);
-      screenshotResolveRef.current = null;
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
-
-  const skipScreenshot = () => {
-    setWaitingForScreenshot(false);
-    screenshotResolveRef.current?.(null);
-    screenshotResolveRef.current = null;
-    addLog('   ⏭️ Screenshot skipped — continuing without visual feedback');
-  };
-
-  const planTask = async () => {
-    if (!task.trim() || !canUseAgent) return;
-    setError(null); setLoading(true); setSteps([]); setSummary(''); setLog([]);
-    setCurrentStep(-1); setScreenshot(null); setAgentReply(null);
-    if (!isPro && !isBasic) cacheService.set(CacheKey.AGENT_USED_ONCE, true);
-    try {
-      addLog('🤖 Gemini is planning your task...');
-      const result = await geminiService.agentPlan(task.trim());
-      setSummary(result.summary);
-      setSteps(result.steps.map(s => ({ ...s, status: 'pending' })));
-      addLog(`✅ Plan ready — ${result.steps.length} steps`);
-    } catch (e) {
-      setError(e instanceof AppError ? e.message : (e instanceof Error ? e.message : 'Planning failed'));
-    } finally { setLoading(false); }
-  };
-
-  const executeStep = async (step: Step): Promise<void> => {
-    switch (step.action) {
+    switch (action) {
       case 'navigate': {
-        if (step.target) {
-          openUrl(step.target);
-          await new Promise(r => setTimeout(r, 800));
+        if (ext && target) {
+          const resp = await extCmd(extId, 'navigate', { url: target });
+          addLog(resp?.ok ? `   🌐 Opened: ${target}` : `   ⚠️ Navigate failed: ${resp?.error}`);
+        } else if (target) {
+          window.open(target, '_blank', 'noopener');
+          addLog(`   🌐 Opened in new tab: ${target}`);
         }
+        await new Promise(r => setTimeout(r, 1500));
         break;
       }
       case 'search': {
-        const q = step.value || step.target || '';
-        openUrl('https://www.google.com/search?q=' + encodeURIComponent(q));
-        addLog(`   🔍 Searching Google for: ${q}`);
-        await new Promise(r => setTimeout(r, 800));
-        break;
-      }
-      case 'type': {
-        if (step.value) {
-          await copyToClipboard(step.value, `"${step.value.slice(0, 30)}${step.value.length > 30 ? '...' : ''}"`);
-          addLog(`   ⌨️ Paste (Ctrl+V) into: ${step.target || 'the field'}`);
-        }
+        const q = value || target || '';
+        const url = 'https://www.google.com/search?q=' + encodeURIComponent(q);
+        if (ext) await extCmd(extId, 'navigate', { url });
+        else window.open(url, '_blank', 'noopener');
+        addLog(`   🔍 Searched: ${q}`);
+        await new Promise(r => setTimeout(r, 1500));
         break;
       }
       case 'click': {
-        addLog(`   👆 Click: ${step.target}`);
-        if (step.instruction) addLog(`   💡 ${step.instruction}`);
+        if (ext) {
+          const resp = await extCmd(extId, 'click', { text: target, selector: target?.startsWith('.') || target?.startsWith('#') ? target : undefined });
+          addLog(resp?.ok ? `   👆 Clicked: ${target}` : `   ⚠️ Click failed: ${resp?.error}`);
+        } else {
+          addLog(`   👆 MANUAL: Click "${target}"${instruction ? ` — ${instruction}` : ''}`);
+        }
+        await new Promise(r => setTimeout(r, 800));
         break;
       }
+      case 'type':
       case 'fill': {
-        if (step.value) {
-          await copyToClipboard(step.value, `Value for ${step.target || 'field'}`);
-          addLog(`   📝 Fill "${step.target}" — value copied, paste it in`);
+        if (ext && value) {
+          const resp = await extCmd(extId, 'type', { selector: null, text: target, value });
+          addLog(resp?.ok ? `   ⌨️ Typed into "${target}"` : `   ⚠️ Type failed — copying to clipboard`);
+          if (!resp?.ok) await copyToClipboard(value, target || 'Value');
+        } else if (value) {
+          await copyToClipboard(value, target || 'Value');
+          addLog(`   ⌨️ MANUAL: Paste (Ctrl+V) into "${target}"`);
         }
+        await new Promise(r => setTimeout(r, 600));
         break;
       }
-      case 'screenshot': {
-        addLog('   📸 Take a screenshot of the browser tab and paste it below');
-        const b64 = await waitForScreenshot();
-        if (b64) {
-          addLog('   ✅ Screenshot received — Gemini is analyzing...');
-          // Feed screenshot to Gemini for guidance on next action
-          try {
-            const reply = await geminiService.computerUse({
-              prompt: `The user is trying to: "${task}". They are on step: "${step.description}". Analyze this screenshot and tell them exactly what to do next. Be specific about what to click, type, or do. Keep it to 2-3 short sentences.`,
-              screenshotBase64: b64,
-              mimeType: 'image/png',
-            });
-            if (reply.text) {
-              setAgentReply(reply.text);
-              addLog(`   🤖 Gemini says: ${reply.text}`);
-            }
-          } catch { addLog('   ⚠️ Could not analyze screenshot'); }
-        }
+      case 'scroll': {
+        if (ext) await extCmd(extId, 'scroll', { y: 400 });
+        addLog(`   ↕️ Scrolled down`);
+        await new Promise(r => setTimeout(r, 500));
+        break;
+      }
+      case 'press-enter': {
+        if (ext) await extCmd(extId, 'press-key', { key: 'Enter' });
+        else addLog(`   ↩️ MANUAL: Press Enter`);
+        await new Promise(r => setTimeout(r, 800));
         break;
       }
       case 'copy': {
-        if (step.value) await copyToClipboard(step.value, step.target || 'Value');
+        if (value) await copyToClipboard(value, target || 'Result');
         break;
       }
       case 'wait': {
-        addLog('   ⏳ Waiting 2 seconds...');
+        addLog(`   ⏳ Waiting 2s...`);
         await new Promise(r => setTimeout(r, 2000));
         break;
       }
       case 'done': {
-        addLog(`   🎉 ${step.description}`);
+        addLog(`   🎉 ${target || 'Task complete!'}`);
         break;
       }
-      default: {
-        addLog(`   ℹ️ ${step.description}`);
-        if (step.instruction) addLog(`   💡 ${step.instruction}`);
-      }
     }
   };
 
-  const executeSteps = async () => {
-    if (steps.length === 0) return;
-    setRunning(true); stopRef.current = false;
-    for (let i = 0; i < steps.length; i++) {
-      if (stopRef.current) { addLog('⛔ Stopped'); break; }
-      const step = steps[i];
-      setCurrentStep(i);
+  // ── Main autonomous loop ────────────────────────────────────────────────────
+  const runAgent = async () => {
+    if (!task.trim()) return;
+    setMode('running'); stopRef.current = false;
+    setLog([]); setSteps([]); setSummary(''); setError(null);
+    setTotalStepsDone(0); setAgentThought(null); setScreenshotPreview(null);
+    if (!isPro && !isBasic) cacheService.set(CacheKey.AGENT_USED_ONCE, true);
+
+    addLog('🤖 Gemini is planning your task...');
+    let plan: { summary: string; steps: Step[] };
+    try {
+      const result = await geminiService.agentPlan(task);
+      plan = { summary: result.summary, steps: result.steps.map(s => ({ ...s, status: 'pending' })) };
+      setSummary(plan.summary);
+      setSteps(plan.steps);
+      addLog(`✅ Plan ready — ${plan.steps.length} steps`);
+    } catch (e: any) {
+      setError(e instanceof AppError ? e.message : e.message || 'Planning failed');
+      setMode('idle');
+      return;
+    }
+
+    // Execute each step
+    for (let i = 0; i < plan.steps.length; i++) {
+      if (stopRef.current) { addLog('⛔ Stopped by user'); break; }
+      const step = plan.steps[i];
+      setCurrentStepIdx(i);
       setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s));
-      addLog(`▶ [${i + 1}/${steps.length}] ${step.description}`);
+      addLog(`▶ [${i + 1}/${plan.steps.length}] ${step.description}`);
+
       try {
-        await executeStep(step);
+        await executeAction(step.action, step.target, step.value, step.instruction);
+
+        // After key actions, take a screenshot and ask Gemini what happened
+        const needsVision = ['navigate', 'search', 'click', 'press-enter'].includes(step.action);
+        if (needsVision && i < plan.steps.length - 1) {
+          await new Promise(r => setTimeout(r, 500));
+          const b64 = await takeScreenshot();
+          if (b64) {
+            addLog(`   📸 Checking screen...`);
+            try {
+              // Get page context if extension is available
+              let pageCtx = '';
+              if (extMode === 'found' && extId) {
+                const ctx = await extCmd(extId, 'get-page-content');
+                if (ctx?.content) {
+                  pageCtx = `\nPage: ${ctx.content.title} (${ctx.content.url})\nVisible text: ${ctx.content.text?.slice(0, 500)}\nButtons: ${ctx.content.buttons?.join(', ')}\nInputs: ${ctx.content.inputs?.map((f: any) => f.placeholder || f.name).join(', ')}`;
+                }
+              }
+              const vision = await geminiService.computerUse({
+                prompt: `Task: "${task}"\nJust did: "${step.description}"\nNext planned step: "${plan.steps[i + 1]?.description || 'done'}"\n${pageCtx}\n\nLook at this screenshot and tell me in ONE sentence: did the last action succeed? If there's an error or unexpected state, describe it briefly so I can adapt. If all is fine, just say "OK, proceed."`,
+                screenshotBase64: b64,
+                mimeType: 'image/png',
+              });
+              if (vision.text && !vision.text.includes('OK, proceed')) {
+                setAgentThought(vision.text);
+                addLog(`   🧠 Gemini: ${vision.text.slice(0, 120)}`);
+              } else {
+                setAgentThought(null);
+              }
+            } catch { /* vision is best-effort */ }
+          }
+        }
+
         setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'done' } : s));
+        setTotalStepsDone(i + 1);
       } catch (e: any) {
         setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'error' } : s));
-        addLog(`❌ Step ${i + 1} error: ${e.message}`);
+        addLog(`❌ Step ${i + 1} error: ${e.message || String(e)}`);
       }
-      await new Promise(r => setTimeout(r, 400));
+
+      await new Promise(r => setTimeout(r, 300));
     }
-    setRunning(false); setCurrentStep(-1);
-    addLog('🏁 All steps done!');
+
+    // Final screenshot
+    const finalShot = await takeScreenshot();
+    if (finalShot) {
+      addLog('📸 Final screenshot taken');
+      try {
+        const final = await geminiService.computerUse({
+          prompt: `Task was: "${task}". Based on this final screenshot, in 2 sentences: was the task completed successfully? What was the outcome?`,
+          screenshotBase64: finalShot,
+          mimeType: 'image/png',
+        });
+        if (final.text) {
+          setAgentThought(final.text);
+          addLog(`🤖 Result: ${final.text}`);
+        }
+      } catch {}
+    }
+
+    addLog('🏁 Agent finished!');
+    setMode('done');
+    setCurrentStepIdx(-1);
   };
 
-  const stopExecution = () => { stopRef.current = true; };
+  // ── Start screen capture ────────────────────────────────────────────────────
+  const startScreenCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 5 }, audio: false });
+      setScreenStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+      addLog('📺 Screen capture started');
+      stream.getTracks()[0].onended = () => {
+        setScreenStream(null);
+        addLog('📺 Screen capture ended');
+      };
+    } catch (e: any) {
+      addLog('⚠️ Screen capture failed: ' + (e.message || 'Permission denied'));
+    }
+  };
+
+  const stopAgent = () => { stopRef.current = true; };
   const reset = () => {
-    setSteps([]); setSummary(''); setLog([]); setError(null);
-    setCurrentStep(-1); setTask(''); setScreenshot(null); setAgentReply(null);
-    setWaitingForScreenshot(false);
+    setMode('idle'); setSteps([]); setSummary(''); setLog([]); setError(null);
+    setCurrentStepIdx(-1); setTask(''); setAgentThought(null); setScreenshotPreview(null);
+    setTotalStepsDone(0);
+    if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); setScreenStream(null); }
   };
 
-  const stepIcon = (s: Step) => {
-    if (s.status === 'running') return <i className="fa-solid fa-circle-notch animate-spin text-indigo-500 text-sm" />;
-    if (s.status === 'done') return <i className="fa-solid fa-check-circle text-emerald-500 text-sm" />;
-    if (s.status === 'error') return <i className="fa-solid fa-circle-xmark text-red-500 text-sm" />;
-    if (s.status === 'waiting') return <i className="fa-solid fa-clock text-amber-500 text-sm" />;
-    return <i className="fa-regular fa-circle text-slate-300 dark:text-white/15 text-sm" />;
+  const saveExtId = () => {
+    const id = extIdInput.trim();
+    if (!id) return;
+    extCmd(id, 'ping').then(resp => {
+      if (resp?.ok) {
+        localStorage.setItem(EXTENSION_ID_KEY, id);
+        setExtId(id); setExtMode('found');
+        addLog('✅ Extension connected! ID: ' + id);
+      } else {
+        setError('Extension not found or not responding. Check the ID.');
+      }
+    });
   };
 
-  const actionColor: Record<string, string> = {
-    navigate: 'text-blue-500', search: 'text-indigo-500', type: 'text-amber-500',
-    fill: 'text-amber-500', click: 'text-rose-500', screenshot: 'text-cyan-500',
-    copy: 'text-purple-500', wait: 'text-slate-400', done: 'text-emerald-500',
+  const stepColor: Record<string, string> = {
+    navigate: 'text-blue-400', search: 'text-indigo-400', type: 'text-amber-400',
+    fill: 'text-amber-400', click: 'text-rose-400', screenshot: 'text-cyan-400',
+    copy: 'text-purple-400', wait: 'text-slate-400', done: 'text-emerald-400',
+    scroll: 'text-teal-400', 'press-enter': 'text-orange-400',
   };
-  const actionIcon: Record<string, string> = {
+  const stepIcon: Record<string, string> = {
     navigate: 'fa-globe', search: 'fa-magnifying-glass', type: 'fa-keyboard',
     fill: 'fa-pen', click: 'fa-arrow-pointer', screenshot: 'fa-camera',
     copy: 'fa-copy', wait: 'fa-hourglass-half', done: 'fa-flag-checkered',
+    scroll: 'fa-down-long', 'press-enter': 'fa-corner-down-left',
   };
 
   if (!user) return (
@@ -263,23 +381,22 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
         <i className="fa-solid fa-robot text-2xl text-amber-500" />
       </div>
       <h2 className="text-lg font-black text-slate-900 dark:text-white mb-2">Agent Mode</h2>
-      <p className="text-sm text-slate-500 mb-6">Agent mode automates browser tasks. Available on Basic and Pro plans.</p>
+      <p className="text-sm text-slate-500 mb-6">Automates browser tasks. Available on Basic and Pro plans.</p>
       <button onClick={() => { window.location.hash = 'pricing'; }} className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest">View Plans</button>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Clipboard Toast */}
+    <div className="flex flex-col h-full overflow-hidden bg-white dark:bg-slate-900">
+      {/* Clipboard toast */}
       {clipboardToast && (
-        <div className="absolute top-16 left-4 right-4 z-50 p-3 rounded-2xl bg-indigo-600 text-white text-xs font-black shadow-xl flex items-center gap-2 animate-slide-up">
-          <i className="fa-solid fa-clipboard-check text-sm" />
-          {clipboardToast}
+        <div className="absolute top-16 left-4 right-4 z-50 p-3 rounded-2xl bg-amber-500 text-white text-xs font-black shadow-2xl flex items-center gap-2">
+          <i className="fa-solid fa-clipboard-check" />{clipboardToast}
         </div>
       )}
 
       {/* Header */}
-      <div className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900">
+      <div className="shrink-0 flex items-center justify-between px-4 h-14 border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center gap-3">
           <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-500 hover:text-indigo-500 transition-colors">
             <i className="fa-solid fa-arrow-left text-sm" />
@@ -288,87 +405,150 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
             <h1 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest flex items-center gap-2">
               <i className="fa-solid fa-robot text-indigo-500" /> Agent Mode
             </h1>
-            <p className="text-[9px] text-slate-400">AI takes over your browser tasks</p>
+            <div className="flex items-center gap-2">
+              <div className={`w-1.5 h-1.5 rounded-full ${extMode === 'found' ? 'bg-emerald-500 shadow-sm shadow-emerald-500' : screenStream ? 'bg-amber-500' : 'bg-slate-400'}`} />
+              <p className="text-[9px] text-slate-400">
+                {extMode === 'found' ? '✓ Extension connected — full control' : screenStream ? 'Screen capture active' : 'No extension — clipboard mode'}
+              </p>
+            </div>
           </div>
         </div>
-        {steps.length > 0 && !running && (
-          <button onClick={reset} className="text-[9px] font-black text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest flex items-center gap-1">
-            <i className="fa-solid fa-rotate-left" /> New Task
+        {mode !== 'idle' && (
+          <button onClick={reset} className="text-[9px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest flex items-center gap-1">
+            <i className="fa-solid fa-rotate-left" /> Reset
           </button>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto">
 
-        {/* Task Input */}
-        {steps.length === 0 && (
+        {/* ── SETUP / IDLE ── */}
+        {mode === 'idle' && (
           <div className="p-4 space-y-4 max-w-xl mx-auto">
-            <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/50 space-y-1.5">
-              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">How it works</p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                Tell the agent what to do. It will plan steps, automatically open websites, copy values to your clipboard for pasting, and guide you through every action. You can also paste screenshots so Gemini sees what's on screen.
-              </p>
+
+            {/* Extension status card */}
+            <div className={`p-4 rounded-2xl border ${extMode === 'found' ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800' : 'bg-slate-50 dark:bg-white/3 border-slate-200 dark:border-white/10'}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className={`text-xs font-black ${extMode === 'found' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'}`}>
+                    {extMode === 'found' ? '✅ Orin Agent Extension Connected' : extMode === 'detecting' ? '⏳ Detecting extension...' : '⚡ Extension not connected'}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
+                    {extMode === 'found'
+                      ? 'Full browser control: clicks, typing, screenshots — all automatic.'
+                      : 'Install the extension for full takeover. Or use Screen Capture mode.'}
+                  </p>
+                </div>
+                {extMode === 'found' && <i className="fa-solid fa-plug text-emerald-500 text-lg" />}
+              </div>
+
+              {extMode === 'none' && (
+                <div className="mt-3 space-y-2">
+                  <a href="/orin-agent-extension.zip" download
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors">
+                    <i className="fa-solid fa-puzzle-piece" /> Download Orin Agent Extension
+                  </a>
+                  <p className="text-[9px] text-slate-400 text-center">
+                    Unzip → Chrome://extensions → Enable Developer Mode → Load Unpacked
+                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      value={extIdInput}
+                      onChange={e => setExtIdInput(e.target.value)}
+                      placeholder="Paste Extension ID from chrome://extensions"
+                      className="flex-1 px-3 py-2 rounded-xl text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                    />
+                    <button onClick={saveExtId} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black hover:bg-indigo-500">Connect</button>
+                  </div>
+                </div>
+              )}
             </div>
-            <textarea
-              value={task}
-              onChange={e => setTask(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) planTask(); }}
-              placeholder="e.g. Book the cheapest bus from Colombo to Kandy for Friday, Search for Python developer jobs in Sri Lanka, Fill out a contact form on example.com..."
-              rows={4}
-              className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
-            />
-            {error && <p className="text-xs text-red-500 font-bold px-1">{error}</p>}
-            <button onClick={planTask} disabled={loading || !task.trim()}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xs uppercase tracking-widest disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg">
-              {loading
-                ? <><i className="fa-solid fa-circle-notch animate-spin" /> Gemini is planning...</>
-                : <><i className="fa-solid fa-robot" /> Plan & Execute Task</>}
+
+            {/* Screen capture option */}
+            {extMode !== 'found' && (
+              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
+                <p className="text-xs font-black text-amber-600 dark:text-amber-400 mb-1.5">📺 Screen Capture Mode (no extension needed)</p>
+                <p className="text-[10px] text-slate-500 mb-3">Orin watches your screen and guides you with instructions. Values auto-copied to clipboard.</p>
+                {!screenStream
+                  ? <button onClick={startScreenCapture} className="w-full py-2.5 rounded-xl bg-amber-500 text-white text-xs font-black uppercase tracking-widest hover:bg-amber-400 transition-colors flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-display" /> Start Screen Share
+                    </button>
+                  : <div className="flex items-center gap-2 text-xs text-emerald-600 font-bold">
+                      <i className="fa-solid fa-circle text-emerald-500 animate-pulse" /> Screen capture active
+                    </div>
+                }
+              </div>
+            )}
+
+            {/* Task input */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 px-1">What should the agent do?</label>
+              <textarea
+                value={task}
+                onChange={e => setTask(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) runAgent(); }}
+                placeholder="e.g. Search for Python developer jobs in Colombo on LinkedIn and open the top 3 results&#10;e.g. Go to Wikipedia and find the population of Sri Lanka&#10;e.g. Search Amazon for wireless earbuds under $50 and find the best rated one"
+                rows={4}
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              />
+              {error && <p className="text-xs text-red-500 font-bold px-1">{error}</p>}
+            </div>
+
+            <button onClick={runAgent} disabled={!task.trim()}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black text-xs uppercase tracking-widest disabled:opacity-40 hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-indigo-500/20">
+              <i className="fa-solid fa-robot" /> Start Agent
             </button>
           </div>
         )}
 
-        {/* Steps + Execution */}
-        {steps.length > 0 && (
+        {/* ── RUNNING / DONE ── */}
+        {(mode === 'running' || mode === 'done') && (
           <div className="p-4 space-y-3 max-w-xl mx-auto">
 
             {/* Summary */}
             {summary && (
               <div className="p-3.5 rounded-2xl bg-slate-900 dark:bg-black/60 border border-white/10">
-                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <i className="fa-solid fa-robot" /> Gemini's Plan
+                <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <i className="fa-solid fa-robot" />Gemini's Plan
                 </p>
-                <p className="text-xs text-slate-300 leading-relaxed">{summary}</p>
+                <p className="text-xs text-slate-300">{summary}</p>
+                {mode === 'done' && (
+                  <div className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-400 font-black">
+                    <i className="fa-solid fa-check-circle" /> {totalStepsDone}/{steps.length} steps completed
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Steps List */}
-            <div className="space-y-2">
+            {/* Steps */}
+            <div className="space-y-1.5">
               {steps.map((step, i) => (
-                <div key={i} className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
-                  step.status === 'running' ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-700 shadow-sm' :
+                <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-xl border transition-all ${
+                  step.status === 'running' ? 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-300 dark:border-indigo-700 shadow-sm' :
                   step.status === 'done' ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-100 dark:border-emerald-900/30' :
-                  step.status === 'error' ? 'bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900/30' :
-                  step.status === 'waiting' ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-100 dark:border-amber-900/30' :
-                  'bg-slate-50 dark:bg-white/3 border-transparent'
+                  step.status === 'error' ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/30' :
+                  'bg-slate-50 dark:bg-white/3 border-transparent opacity-60'
                 }`}>
-                  <div className="mt-0.5 w-5 shrink-0 flex justify-center">{stepIcon(step)}</div>
+                  <div className="mt-0.5 w-4 shrink-0 flex justify-center text-sm">
+                    {step.status === 'running' ? <i className="fa-solid fa-circle-notch animate-spin text-indigo-500" /> :
+                     step.status === 'done' ? <i className="fa-solid fa-check-circle text-emerald-500" /> :
+                     step.status === 'error' ? <i className="fa-solid fa-circle-xmark text-red-500" /> :
+                     <i className="fa-regular fa-circle text-slate-300 dark:text-white/10" />}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <i className={`fa-solid ${actionIcon[step.action] || 'fa-gear'} text-[9px] ${actionColor[step.action] || 'text-slate-400'}`} />
-                      <span className={`text-[9px] font-black uppercase tracking-widest ${actionColor[step.action] || 'text-slate-400'}`}>{step.action}</span>
-                      {i === currentStep && step.status === 'running' && (
-                        <span className="text-[8px] font-black text-indigo-500 bg-indigo-100 dark:bg-indigo-900/30 px-1.5 py-0.5 rounded-full">NOW</span>
+                      <i className={`fa-solid ${stepIcon[step.action] || 'fa-gear'} text-[8px] ${stepColor[step.action] || 'text-slate-400'}`} />
+                      <span className={`text-[8px] font-black uppercase tracking-widest ${stepColor[step.action] || 'text-slate-400'}`}>{step.action}</span>
+                      {i === currentStepIdx && step.status === 'running' && (
+                        <span className="text-[7px] font-black text-white bg-indigo-500 px-1.5 py-0.5 rounded-full">RUNNING</span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{step.description}</p>
-                    {step.target && step.action !== 'navigate' && (
-                      <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">{step.target}</p>
-                    )}
-                    {step.value && (step.action === 'type' || step.action === 'fill' || step.action === 'copy') && (
+                    <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed">{step.description}</p>
+                    {step.value && ['type','fill','copy'].includes(step.action) && (
                       <div className="mt-1 flex items-center gap-1.5">
-                        <code className="text-[10px] bg-slate-200 dark:bg-white/10 px-2 py-0.5 rounded-lg text-slate-600 dark:text-slate-300 truncate max-w-[200px]">{step.value}</code>
-                        <button onClick={() => copyToClipboard(step.value!, 'Value')}
-                          className="text-[8px] font-black text-indigo-500 hover:text-indigo-600 uppercase tracking-widest">Copy</button>
+                        <code className="text-[9px] bg-slate-200 dark:bg-white/10 px-2 py-0.5 rounded-md text-slate-600 dark:text-slate-300 max-w-[180px] truncate">{step.value}</code>
+                        <button onClick={() => copyToClipboard(step.value!, step.target)}
+                          className="text-[8px] font-black text-indigo-400 hover:text-indigo-500 uppercase">Copy</button>
                       </div>
                     )}
                   </div>
@@ -376,71 +556,69 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
               ))}
             </div>
 
-            {/* Screenshot wait */}
-            {waitingForScreenshot && (
-              <div className="p-4 rounded-2xl bg-cyan-50 dark:bg-cyan-950/30 border border-cyan-200 dark:border-cyan-800 space-y-3">
-                <p className="text-xs font-black text-cyan-600 dark:text-cyan-400 flex items-center gap-1.5">
-                  <i className="fa-solid fa-camera" /> Gemini needs to see your screen
+            {/* Gemini's real-time analysis */}
+            {agentThought && (
+              <div className="p-3 rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800">
+                <p className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                  <i className="fa-solid fa-eye" /> Gemini sees
                 </p>
-                <p className="text-[10px] text-slate-600 dark:text-slate-400">
-                  Take a screenshot of the browser tab (press PrtScn or use Snipping Tool) then upload it below. Gemini will analyze it and tell you exactly what to do next.
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => fileInputRef.current?.click()}
-                    className="flex-1 py-2.5 rounded-xl bg-cyan-600 text-white text-xs font-black uppercase tracking-widest hover:bg-cyan-500 transition-colors flex items-center justify-center gap-1.5">
-                    <i className="fa-solid fa-upload" /> Upload Screenshot
-                  </button>
-                  <button onClick={skipScreenshot}
-                    className="px-4 py-2.5 rounded-xl bg-slate-200 dark:bg-white/10 text-slate-500 text-xs font-black hover:bg-slate-300 dark:hover:bg-white/20 transition-colors">
-                    Skip
-                  </button>
+                <p className="text-xs text-slate-700 dark:text-slate-300">{agentThought}</p>
+              </div>
+            )}
+
+            {/* Live screenshot preview */}
+            {screenshotPreview && (
+              <div className="rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10">
+                <div className="flex items-center justify-between px-3 py-1.5 bg-slate-100 dark:bg-white/5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Live Screen</span>
+                  <span className="text-[8px] text-slate-400">Last capture</span>
                 </div>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleScreenshotFile} />
+                <img src={screenshotPreview} alt="Screen" className="w-full max-h-48 object-contain bg-black" />
               </div>
             )}
 
-            {/* Gemini reply from screenshot analysis */}
-            {agentReply && !waitingForScreenshot && (
-              <div className="p-3.5 rounded-2xl bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800">
-                <p className="text-[9px] font-black text-violet-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                  <i className="fa-solid fa-eye" /> Gemini sees this
-                </p>
-                <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{agentReply}</p>
+            {/* Live screen stream (screen capture mode) */}
+            {screenStream && (
+              <div className="rounded-2xl overflow-hidden border border-amber-200 dark:border-amber-800">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-950/30">
+                  <i className="fa-solid fa-circle text-amber-500 animate-pulse text-[8px]" />
+                  <span className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Live Screen Feed</span>
+                </div>
+                <video ref={videoRef} muted autoPlay playsInline className="w-full max-h-48 object-contain bg-black" />
+                <canvas ref={canvasRef} className="hidden" />
               </div>
             )}
 
-            {/* Execution log */}
+            {/* Log */}
             {log.length > 0 && (
-              <div ref={logRef} className="rounded-xl bg-slate-900 dark:bg-black/60 p-3 max-h-36 overflow-y-auto">
+              <div ref={logRef} className="rounded-xl bg-slate-900 dark:bg-black/60 p-3 max-h-40 overflow-y-auto border border-white/5">
                 {log.map((l, i) => (
                   <p key={i} className={`text-[10px] font-mono leading-5 ${
                     l.startsWith('❌') ? 'text-red-400' :
                     l.startsWith('✅') || l.startsWith('🏁') ? 'text-emerald-400' :
                     l.startsWith('🤖') || l.startsWith('▶') ? 'text-indigo-400' :
                     l.startsWith('📋') ? 'text-amber-400' :
+                    l.startsWith('📸') || l.startsWith('🧠') ? 'text-cyan-400' :
+                    l.startsWith('⛔') ? 'text-red-400' :
                     'text-slate-400'
                   }`}>{l}</p>
                 ))}
               </div>
             )}
 
-            {/* Action buttons */}
+            {/* Controls */}
             <div className="flex gap-2 pt-1">
-              {!running ? (
-                <button onClick={executeSteps}
-                  className="flex-1 py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow">
-                  <i className="fa-solid fa-play" /> Run All Steps
-                </button>
-              ) : (
-                <button onClick={stopExecution}
-                  className="flex-1 py-3.5 rounded-xl bg-red-600 text-white text-xs font-black uppercase tracking-widest hover:bg-red-500 transition-colors flex items-center justify-center gap-2">
+              {mode === 'running' ? (
+                <button onClick={stopAgent}
+                  className="flex-1 py-3.5 rounded-xl bg-red-600 text-white text-xs font-black uppercase tracking-widest hover:bg-red-500 flex items-center justify-center gap-2">
                   <i className="fa-solid fa-stop" /> Stop Agent
                 </button>
+              ) : (
+                <button onClick={reset}
+                  className="flex-1 py-3.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest hover:bg-indigo-500 flex items-center justify-center gap-2">
+                  <i className="fa-solid fa-rotate-left" /> New Task
+                </button>
               )}
-              <button onClick={reset} disabled={running}
-                className="px-4 py-3.5 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-500 text-xs font-black hover:bg-slate-200 dark:hover:bg-white/10 transition-colors disabled:opacity-40">
-                <i className="fa-solid fa-xmark" />
-              </button>
             </div>
           </div>
         )}
