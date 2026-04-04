@@ -71,14 +71,42 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
   useEffect(() => { if (initialPrompt) setTask(initialPrompt); }, [initialPrompt]);
 
   useEffect(() => {
+    let detected = false;
+
+    // Method 1: Listen for content script announcement (auto, no copy-paste needed)
+    const onReady = (e: Event) => {
+      const id = (e as CustomEvent).detail?.extId;
+      if (id && !detected) {
+        detected = true;
+        localStorage.setItem(EXT_ID_KEY, id);
+        setExtId(id); setExtStatus('connected');
+      }
+    };
+    window.addEventListener('orin-agent-ready', onReady);
+
+    // Method 2: Read from DOM attribute (set by content script)
+    const attrId = document.documentElement.getAttribute('data-orin-agent-id');
+    if (attrId && !detected) {
+      detected = true;
+      localStorage.setItem(EXT_ID_KEY, attrId);
+      setExtId(attrId); setExtStatus('connected');
+    }
+
+    // Method 3: Ping saved ID
     const saved = localStorage.getItem(EXT_ID_KEY);
-    if (saved) {
+    if (saved && !detected) {
       extCmd(saved, 'ping').then(r => {
-        if (r?.ok) { setExtId(saved); setExtStatus('connected'); }
-        else { localStorage.removeItem(EXT_ID_KEY); setExtStatus('none'); }
+        if (r?.ok && !detected) { detected = true; setExtId(saved); setExtStatus('connected'); }
+        else if (!detected) { localStorage.removeItem(EXT_ID_KEY); setExtStatus('none'); }
       });
-    } else setExtStatus('none');
-  }, []);
+    } else if (!attrId) {
+      // Ask content script to re-announce (in case it loaded before we started listening)
+      window.dispatchEvent(new CustomEvent('orin-agent-ping'));
+      setTimeout(() => { if (!detected) setExtStatus('none'); }, 1000);
+    }
+
+    return () => window.removeEventListener('orin-agent-ready', onReady);
+  }, []); // eslint-disable-line
 
   const addLog = useCallback((msg: string) => setLog(p => [...p, msg]), []);
 
@@ -383,11 +411,9 @@ Only include deals with real http/https URLs.`,
                     <i className="fa-solid fa-puzzle-piece" /> Download Extension (v2.0)
                   </a>
                   <p className="text-[9px] text-slate-400 text-center mb-3">Unzip → chrome://extensions → Developer Mode ON → Load Unpacked → Copy ID below</p>
-                  <div className="flex gap-2">
-                    <input value={extIdInput} onChange={e => setExtIdInput(e.target.value)} placeholder="Paste Extension ID from chrome://extensions"
-                      className="flex-1 px-3 py-2 rounded-xl text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-400" />
-                    <button onClick={connectExt} className="px-3 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black hover:bg-indigo-500">Connect</button>
-                  </div>
+                  <p className="text-[9px] text-emerald-500 font-black text-center">
+                    ✓ Once installed, Orin AI detects the extension automatically — no ID needed.
+                  </p>
                 </>
               )}
             </div>

@@ -149,11 +149,11 @@ function timeAgo(ts: any) {
   if (s<86400) return `${Math.floor(s/3600)}h`;
   return `${Math.floor(s/86400)}d`;
 }
-const MAX_MB = 20;
-const ALLOWED = ['image/','video/','audio/'];
+const MAX_MB = 500; // 500 MB for video support
+const ALLOWED = ['image/','video/','audio/']; // covers all common formats
 function validateFile(f: File): string|null {
   if (!ALLOWED.some(t => f.type.startsWith(t))) return 'Only images, videos and audio files are allowed.';
-  if (f.size > MAX_MB*1024*1024) return `File must be under ${MAX_MB} MB.`;
+  if (f.size > MAX_MB*1024*1024) return `File too large (max ${MAX_MB} MB). Videos must be under 500 MB.`;
   return null;
 }
 
@@ -267,13 +267,20 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
     const f = e.target.files?.[0]; if (!f) return;
     const err = validateFile(f);
     if (err) { dispatch({type:'set',key:'error',value:err}); return; }
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const preview = ev.target?.result as string;
-      const mediaType: Creation['mediaType'] = f.type.startsWith('video') ? 'video' : f.type.startsWith('audio') ? 'music' : 'image';
-      dispatch({ type:'setFile', file:f, preview, mediaType });
-    };
-    reader.readAsDataURL(f);
+    const mediaType: Creation['mediaType'] = f.type.startsWith('video') ? 'video' : f.type.startsWith('audio') ? 'music' : 'image';
+    // Use object URL for video/audio (base64 encoding 500MB video would crash the browser)
+    if (f.type.startsWith('video') || f.type.startsWith('audio')) {
+      const objectUrl = URL.createObjectURL(f);
+      dispatch({ type:'setFile', file:f, preview: objectUrl, mediaType });
+    } else {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const preview = ev.target?.result as string;
+        dispatch({ type:'setFile', file:f, preview, mediaType });
+      };
+      reader.readAsDataURL(f);
+    }
+    e.target.value = '';
   };
 
   /* ── Upload file to Vercel Blob, then save to Firestore ── */
@@ -326,6 +333,8 @@ const CreationFeed: React.FC<CreationFeedProps> = ({ onClose, user, onUsePrompt 
         const h = [form.originalPrompt, ...promptHist].slice(0,200);
         setPromptHist(h); localStorage.setItem(HIST_KEY, JSON.stringify(h));
       }
+      // Revoke object URL if it was created for video/audio
+      if (form.preview?.startsWith('blob:')) URL.revokeObjectURL(form.preview);
       dispatch({type:'reset'});
       setTab('feed');
       loadPosts(true);

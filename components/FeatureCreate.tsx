@@ -277,6 +277,9 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setVideoFirstFrame(null);
         setVideoLastFrame(null);
       }
+
+      // ── Auto-save every generation to Creations (background, silent) ──────
+      autoSaveToCreations(url, finalPrompt, activeTab as 'image' | 'video' | 'music' | 'text').catch(() => {});
       // Generate embedding for new images (same vector space as text for search)
       if (activeTab === 'image' && url.startsWith('data:image')) {
         const base64 = url.split(',')[1];
@@ -399,6 +402,55 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
       setIsLoading(false);
       setExtendingTimestamp(null);
     }
+  };
+
+  /** Auto-saves every generation to Creations (background, no popup) */
+  const autoSaveToCreations = async (url: string, prompt: string, mediaType: 'image' | 'video' | 'music' | 'text') => {
+    try {
+      const cachedUser = JSON.parse(localStorage.getItem('orin_user') || '{}');
+      const uid = cachedUser?.id || 'guest';
+      if (uid === 'guest') return; // don't save for guests
+
+      const { firebaseService } = await import('../services/firebaseService');
+
+      // Upload to Vercel Blob (convert base64 data URL to blob)
+      let mediaUrl = url;
+      if (url.startsWith('data:')) {
+        try {
+          const res = await fetch(url);
+          const blob = await res.blob();
+          const ext = mediaType === 'video' ? 'mp4' : mediaType === 'music' ? 'wav' : 'png';
+          const mime = mediaType === 'video' ? 'video/mp4' : mediaType === 'music' ? 'audio/wav' : 'image/png';
+          const file = new File([blob], `orin-gen-${Date.now()}.${ext}`, { type: mime });
+          const fd = new FormData();
+          fd.append('file', file);
+          const uploadRes = await fetch('/api/upload-blob', { method: 'POST', body: fd });
+          if (uploadRes.ok) {
+            const data = await uploadRes.json();
+            if (data.url) mediaUrl = data.url;
+          }
+        } catch { /* keep data URL as fallback */ }
+      }
+
+      await (firebaseService as any).createCreation({
+        title: prompt.slice(0, 60) || 'Generated',
+        caption: '',
+        originalPrompt: prompt,
+        mediaUrl,
+        mediaType,
+        tags: [],
+        aiGenerated: true,
+        userId: uid,
+        userName: cachedUser?.name || cachedUser?.email || 'Creator',
+        userAvatar: cachedUser?.avatar || '',
+      });
+
+      // Award creator points
+      const PTS_KEY = 'orin_creator_pts';
+      const pts = JSON.parse(localStorage.getItem(PTS_KEY) || '{}');
+      pts[uid] = (pts[uid] || 0) + (mediaType === 'video' ? 20 : mediaType === 'music' ? 15 : 10);
+      localStorage.setItem(PTS_KEY, JSON.stringify(pts));
+    } catch { /* silent — never block generation */ }
   };
 
   const publishToFeed = async () => {
@@ -933,6 +985,10 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                       <div className="relative rounded-[40px] overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/40 flex items-center justify-center transition-all duration-700 min-h-[300px]">
                         
                         {/* Type Badge */}
+                        {/* Auto-saved badge */}
+                        <div className="absolute top-3 right-3 z-20 px-2 py-1 bg-emerald-500 rounded-lg text-white text-[8px] font-black flex items-center gap-1 opacity-80">
+                          <i className="fa-solid fa-check text-[7px]" /> Saved to Creations
+                        </div>
                         <div className="absolute top-6 left-6 z-20 px-3 py-1.5 bg-black/70 rounded-lg text-white text-[9px] font-black uppercase tracking-widest flex items-center gap-2">
                            <i className={`fa-solid ${asset.type === 'video' ? 'fa-video' : asset.type === 'audio' ? 'fa-headphones' : 'fa-image'}`}></i>
                            {asset.type}
