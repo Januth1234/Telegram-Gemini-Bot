@@ -1243,30 +1243,90 @@ If multiple methods, add a second block. Steps ARE the answer.`;
     return text || 'No solution returned. Try again.';
   }
 
-  /** Agent: plan a task into executable browser steps */
-  async agentPlan(task: string): Promise<{ steps: Array<{ action: string; target?: string; value?: string; description: string }>; summary: string }> {
+  /** Agent: plan a task into rich, executable browser steps with clipboard + screenshot support */
+  async agentPlan(task: string): Promise<{ steps: Array<{ action: string; target?: string; value?: string; description: string; instruction?: string; clipboardValue?: string }>; summary: string }> {
     const plan = this.currentUser?.plan?.toLowerCase() ?? '';
-    if (plan !== 'pro' && plan !== 'pro_yearly') {
-      throw new AppError('Agent mode is Pro only.', 'plan_required');
+    if (plan !== 'pro' && plan !== 'pro_yearly' && plan !== 'basic' && plan !== 'basic_yearly') {
+      throw new AppError('Agent mode requires Basic or Pro plan.', 'plan_required');
     }
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ parts: [{ text: `Break this task into concrete browser steps. Task: ${task}
+      contents: [{ parts: [{ text: `You are a browser automation agent. Break this task into concrete, executable steps.
 
-Reply ONLY with valid JSON (no markdown):
-{"summary":"brief summary","steps":[{"action":"navigate","target":"https://...","description":"Go to..."},{"action":"search","value":"query","description":"Search for..."},{"action":"done","description":"Task complete"}]}
+TASK: ${task}
 
-Valid actions: navigate, search, click, type, wait, done.` }] }],
-      config: { systemInstruction: 'Output only valid JSON. No markdown fences.' },
+Reply ONLY with valid JSON (no markdown fences, no explanation):
+{
+  "summary": "One sentence: what will be accomplished",
+  "steps": [
+    {
+      "action": "navigate",
+      "target": "https://exact-url.com",
+      "description": "Go to the website"
+    },
+    {
+      "action": "type",
+      "target": "search box / field name",
+      "value": "exact text to type",
+      "description": "Type the search query",
+      "instruction": "Click the search box first, then paste"
+    },
+    {
+      "action": "fill",
+      "target": "Name field",
+      "value": "John",
+      "description": "Fill in the name"
+    },
+    {
+      "action": "click",
+      "target": "Submit button / exact label",
+      "description": "Click submit",
+      "instruction": "The button is at the bottom of the form"
+    },
+    {
+      "action": "screenshot",
+      "description": "Take a screenshot so Gemini can see the current state"
+    },
+    {
+      "action": "copy",
+      "target": "result",
+      "value": "text to copy to clipboard",
+      "description": "Copy the result"
+    },
+    {
+      "action": "done",
+      "description": "Task complete — describe what was accomplished"
+    }
+  ]
+}
+
+VALID ACTIONS: navigate, search, type, fill, click, screenshot, copy, wait, done
+
+RULES:
+- Use real URLs (https://...)
+- For type/fill: put EXACT text in "value" field — it will be auto-copied to clipboard
+- Add "instruction" for click steps to say WHERE exactly to click
+- Include a screenshot step after navigation to complex pages
+- Be specific and actionable
+- 5-12 steps max` }] }],
+      config: { systemInstruction: 'Output only valid JSON. No markdown. No explanation.' },
     });
     const text = (response.candidates?.[0]?.content?.parts?.[0] as any)?.text || '';
     try {
       const clean = text.replace(/```json|```/g, '').trim();
       return JSON.parse(clean);
     } catch {
-      return { summary: task, steps: [{ action: 'search', value: task, description: 'Search for: ' + task }] };
+      // Fallback to a basic search plan
+      return {
+        summary: `Search for: ${task}`,
+        steps: [
+          { action: 'search', value: task, description: 'Search Google for: ' + task },
+          { action: 'screenshot', description: 'Take a screenshot of the results' },
+          { action: 'done', description: 'Review the search results' }
+        ]
+      };
     }
   }
 
