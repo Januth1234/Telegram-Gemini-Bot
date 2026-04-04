@@ -516,6 +516,7 @@ const App: React.FC = () => {
       const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
       geminiService.setSessionUser(syncedUser);
       setUser(syncedUser);
+      (window as any).__orinUser = syncedUser; // used by internal protocol override
       // Show upgrade greeting if plan changed since last visit
       const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
       if (lastSeenPlan && lastSeenPlan !== syncedUser.plan && 

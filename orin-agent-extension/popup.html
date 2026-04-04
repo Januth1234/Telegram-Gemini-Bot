@@ -1,40 +1,58 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
+<title>Orin AI Agent</title>
 <style>
-  body { width: 300px; font-family: -apple-system, sans-serif; margin: 0; background: #0f172a; color: white; }
-  .header { background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 16px; }
-  .logo { font-size: 18px; font-weight: 900; letter-spacing: -0.5px; }
-  .sub { font-size: 10px; opacity: 0.8; margin-top: 2px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
-  .body { padding: 16px; }
-  .status { display: flex; align-items: center; gap: 8px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.05); margin-bottom: 12px; font-size: 12px; font-weight: 700; }
-  .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex-shrink: 0; box-shadow: 0 0 6px #10b981; }
-  .dot.inactive { background: #6b7280; box-shadow: none; }
-  .btn { display: block; width: 100%; padding: 10px; border-radius: 10px; border: none; cursor: pointer; font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
-  .btn-primary { background: #6366f1; color: white; }
-  .btn-secondary { background: rgba(255,255,255,0.08); color: white; }
-  .btn:hover { opacity: 0.85; }
-  .info { font-size: 10px; color: #64748b; line-height: 1.5; }
-  .tab-info { font-size: 10px; color: #94a3b8; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; margin-bottom: 8px; word-break: break-all; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { width: 320px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #f1f5f9; }
+.hdr { background: linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%); padding: 18px 16px 14px; }
+.hdr-title { font-size: 16px; font-weight: 900; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px; }
+.hdr-sub { font-size: 10px; opacity: .8; margin-top: 3px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.body { padding: 14px; space-y: 10px; }
+.status-row { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: rgba(255,255,255,.06); border-radius: 10px; margin-bottom: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot.green { background: #10b981; box-shadow: 0 0 6px #10b981; }
+.dot.grey { background: #64748b; }
+.status-text { font-size: 11px; font-weight: 700; }
+.tab-info { font-size: 10px; color: #94a3b8; padding: 7px 10px; background: rgba(255,255,255,.04); border-radius: 8px; margin-bottom: 10px; word-break: break-all; line-height: 1.4; }
+.btn { display: block; width: 100%; padding: 10px 14px; border-radius: 10px; border: none; cursor: pointer; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px; transition: opacity .15s; }
+.btn:hover { opacity: .85; }
+.btn-primary { background: #6366f1; color: #fff; }
+.btn-outline { background: rgba(255,255,255,.07); color: #cbd5e1; border: 1px solid rgba(255,255,255,.1); }
+.btn-sm { font-size: 10px; padding: 7px 12px; }
+.divider { height: 1px; background: rgba(255,255,255,.07); margin: 10px 0; }
+.label { font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: #64748b; margin-bottom: 6px; }
+.input { width: 100%; padding: 9px 12px; border-radius: 9px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); color: #f1f5f9; font-size: 11px; outline: none; }
+.input:focus { border-color: #6366f1; }
+.input::placeholder { color: #475569; }
+.row { display: flex; gap: 6px; margin-top: 6px; }
+.flex-1 { flex: 1; }
+.note { font-size: 9px; color: #475569; line-height: 1.5; margin-top: 8px; }
+.version { font-size: 9px; color: #334155; text-align: center; margin-top: 12px; }
 </style>
 </head>
 <body>
-<div class="header">
-  <div class="logo">🤖 Orin AI Agent</div>
-  <div class="sub">Browser Automation</div>
+<div class="hdr">
+  <div class="hdr-title">🤖 Orin AI Agent</div>
+  <div class="hdr-sub">Browser Automation v2.0</div>
 </div>
 <div class="body">
-  <div class="status">
-    <div class="dot" id="dot"></div>
-    <span id="status-text">Ready to connect</span>
+  <div class="status-row">
+    <div class="dot grey" id="dot"></div>
+    <span class="status-text" id="status">Checking...</span>
   </div>
-  <div class="tab-info" id="tab-info">No tab selected</div>
-  <button class="btn btn-primary" id="open-orin">Open Orin AI</button>
-  <button class="btn btn-secondary" id="set-tab">Set Active Tab as Target</button>
-  <div class="info">
-    Once connected, Orin AI can click, type, navigate, and take screenshots in any browser tab — all under your supervision.
-  </div>
+  <div class="tab-info" id="tab-info">No target tab set</div>
+
+  <button class="btn btn-primary" id="btn-open">Open Orin AI → Agent Mode</button>
+  <button class="btn btn-outline btn-sm" id="btn-set-tab">Set Current Tab as Target</button>
+
+  <div class="divider"></div>
+  <div class="label">Extension ID (for manual connection)</div>
+  <input class="input" id="ext-id" readonly placeholder="Loading..." />
+  <div class="note">Copy this ID, then paste it in Orin AI → Agent → Connect Extension.</div>
+
+  <div class="version" id="ver">v2.0.0</div>
 </div>
 <script src="popup.js"></script>
 </body>

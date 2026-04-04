@@ -437,7 +437,7 @@ EXPLANATION STYLE:
         // Image-to-image: user supplied a reference image — use gemini-2.0-flash-exp
         // which supports vision input + image output in one call
         const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash-exp',
+          model: 'gemini-2.0-flash',
           contents: [{
             parts: [
               { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
@@ -473,7 +473,7 @@ EXPLANATION STYLE:
         } catch {
           // Fallback: gemini-2.0-flash-exp
           const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-2.0-flash',
             contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
             config: { responseModalities: ['IMAGE', 'TEXT'] } as any,
           });
