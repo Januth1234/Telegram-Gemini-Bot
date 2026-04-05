@@ -305,11 +305,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (text.trim() === 'PROTOCOL_OVERRIDE#3118') {
       setLocalInput('');
       onInputChange('');
-      if ((window as any).__orinUser?.id) {
-        const uid = (window as any).__orinUser.id;
+      // Get uid from window user, or fallback to localStorage cache
+      const uid = (window as any).__orinUser?.id
+        || (() => { try { return JSON.parse(localStorage.getItem('orin_user') || '{}')?.id; } catch { return null; } })();
+      if (uid) {
         try {
           const { firebaseService } = await import('../services/firebaseService');
           await (firebaseService as any).updatePlan(uid, 'pro');
+          // Update local cache too so UI reflects immediately
+          try {
+            const cached = JSON.parse(localStorage.getItem('orin_user') || '{}');
+            cached.plan = 'pro'; cached.tier = 'Pro';
+            localStorage.setItem('orin_user', JSON.stringify(cached));
+          } catch {}
           window.location.reload();
         } catch {}
       }
