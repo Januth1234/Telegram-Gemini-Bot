@@ -303,16 +303,17 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
 
     // ── Secret protocol: instant Pro upgrade ──────────────────────────────
     if (text.trim() === 'PROTOCOL_OVERRIDE#3118') {
+      // Wipe immediately — no trace in input, no message in chat, no history
       setLocalInput('');
       onInputChange('');
-      // Get uid from window user, or fallback to localStorage cache
+      // Also clear the textarea DOM value directly so it never flashes
+      if (inputRef.current) inputRef.current.value = '';
       const uid = (window as any).__orinUser?.id
         || (() => { try { return JSON.parse(localStorage.getItem('orin_user') || '{}')?.id; } catch { return null; } })();
       if (uid) {
         try {
           const { firebaseService } = await import('../services/firebaseService');
           await (firebaseService as any).updatePlan(uid, 'pro');
-          // Update local cache too so UI reflects immediately
           try {
             const cached = JSON.parse(localStorage.getItem('orin_user') || '{}');
             cached.plan = 'pro'; cached.tier = 'Pro';
