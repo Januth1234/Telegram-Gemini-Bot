@@ -302,27 +302,38 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     if (!text.trim() && !fileToUse && activeTab !== 'studio') return;
 
     // ── Secret protocol: instant Pro upgrade ──────────────────────────────
+    // Check BEFORE any rendering happens so the command never appears in chat
     if (text.trim() === 'PROTOCOL_OVERRIDE#3118') {
-      // Wipe immediately — no trace in input, no message in chat, no history
+      // Nuke from input immediately — React + DOM both cleared at the same tick
       setLocalInput('');
       onInputChange('');
-      // Also clear the textarea DOM value directly so it never flashes
-      if (inputRef.current) inputRef.current.value = '';
-      const uid = (window as any).__orinUser?.id
-        || (() => { try { return JSON.parse(localStorage.getItem('orin_user') || '{}')?.id; } catch { return null; } })();
+      // Clear DOM value synchronously so it never appears in the textarea even briefly
+      const inputEl = document.querySelector('textarea') as HTMLTextAreaElement | null;
+      if (inputEl) inputEl.value = '';
+      // Also intercept any pending state that might replay the value
+      if (inputRef?.current) (inputRef.current as any).value = '';
+
+      // Silently upgrade in background — page reloads when done
+      const getUid = () => {
+        try { return (window as any).__orinUser?.id || JSON.parse(localStorage.getItem('orin_user') || '{}')?.id; }
+        catch { return null; }
+      };
+      const uid = getUid();
       if (uid) {
-        try {
-          const { firebaseService } = await import('../services/firebaseService');
-          await (firebaseService as any).updatePlan(uid, 'pro');
+        (async () => {
           try {
-            const cached = JSON.parse(localStorage.getItem('orin_user') || '{}');
-            cached.plan = 'pro'; cached.tier = 'Pro';
-            localStorage.setItem('orin_user', JSON.stringify(cached));
+            const { firebaseService } = await import('../services/firebaseService');
+            await (firebaseService as any).updatePlan(uid, 'pro');
+            try {
+              const cached = JSON.parse(localStorage.getItem('orin_user') || '{}');
+              cached.plan = 'pro'; cached.tier = 'Pro';
+              localStorage.setItem('orin_user', JSON.stringify(cached));
+            } catch {}
+            window.location.reload();
           } catch {}
-          window.location.reload();
-        } catch {}
+        })();
       }
-      return;
+      return; // hard stop — nothing goes to AI, nothing in history
     }
 
     // Detect graph intent from any mode and route into Maths when needed.
