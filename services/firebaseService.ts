@@ -93,6 +93,11 @@ class FirebaseService {
     if (this.auth) await this.auth.signOut();
   }
 
+  async getIdToken(): Promise<string> {
+    try { return await this.auth?.currentUser?.getIdToken() ?? ''; }
+    catch { return ''; }
+  }
+
   currentUser(): firebase.User | null {
     return this.auth?.currentUser ?? null;
   }
