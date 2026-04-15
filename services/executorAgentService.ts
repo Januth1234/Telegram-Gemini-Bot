@@ -12,12 +12,13 @@ export interface PlanOption {
 }
 
 const BASE = (() => {
+  // Prefer explicit env var; fall back to same-origin /api/executor (always available on Vercel)
   const raw = (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_EXECUTOR_HTTP_BASE_URL) || '';
-  return raw.replace(/\/$/, '');
+  return raw.replace(/\/$/, '') || '/api/executor';
 })();
 
 export function isExecutorConfigured(): boolean {
-  return BASE.length > 0;
+  return true; // /api/executor is always available on Vercel
 }
 
 async function idToken(): Promise<string> {
