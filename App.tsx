@@ -153,6 +153,16 @@ const App: React.FC = () => {
     document.documentElement.lang = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
   }, [lang]);
 
+  // OAuth callback (Spotify / Google) — redirect back clears URL + opens account
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('code')) {
+      sessionStorage.setItem('oauth_callback_code', params.get('code')!);
+      window.history.replaceState({}, '', '/');
+      if (!window.location.hash.includes('account')) window.location.hash = 'account';
+    }
+  }, []);
+
   // When theme is 'auto', update autoDark from local time every minute
   useEffect(() => {
     if (theme !== 'auto') return;

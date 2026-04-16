@@ -34,7 +34,8 @@ const INTEGRATIONS = [
 const GOOGLE_MODULE_IDS: GoogleModuleId[] = ['gmail','drive','calendar','docs','slides','sheets','youtube','fitness'];
 
 const SPOTIFY_CLIENT_ID = (import.meta as any).env?.VITE_SPOTIFY_CLIENT_ID || '';
-const REDIRECT_URI = typeof window !== 'undefined' ? `${window.location.origin}/auth/spotify/callback` : '';
+// Spotify redirect: user can enter Client ID inline; PKCE needs no secret
+const REDIRECT_URI = typeof window !== 'undefined' ? `${window.location.origin}` : '';
 
 const AIProviderSettings: React.FC = () => {
   const [keys, setKeys]           = useState<AIProviderKey[]>([]);
@@ -78,8 +79,13 @@ const AIProviderSettings: React.FC = () => {
   };
 
   // Spotify PKCE OAuth
+  const [spotifyClientId, setSpotifyClientId] = React.useState(SPOTIFY_CLIENT_ID || localStorage.getItem('orin_spotify_cid') || '');
+  const [showSpotifySetup, setShowSpotifySetup] = React.useState(false);
+
   const connectSpotify = async () => {
-    if (!SPOTIFY_CLIENT_ID) { alert('Set VITE_SPOTIFY_CLIENT_ID in Vercel env vars.'); return; }
+    const cid = spotifyClientId.trim();
+    if (!cid) { setShowSpotifySetup(true); return; }
+    localStorage.setItem('orin_spotify_cid', cid);
     const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2,'0')).join('');
     const encoder = new TextEncoder();
     const data = encoder.encode(verifier);
@@ -87,7 +93,7 @@ const AIProviderSettings: React.FC = () => {
     const challenge = btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
     localStorage.setItem('spotify_verifier', verifier);
     const scopes = 'user-read-playback-state user-modify-playback-state user-read-currently-playing streaming';
-    const url = `https://accounts.spotify.com/authorize?client_id=${SPOTIFY_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${challenge}`;
+    const url = `https://accounts.spotify.com/authorize?client_id=${cid}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${challenge}`;
     window.location.href = url;
   };
 
@@ -95,13 +101,13 @@ const AIProviderSettings: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
     const verifier = localStorage.getItem('spotify_verifier');
-    if (!code || !verifier || !SPOTIFY_CLIENT_ID) return;
+    const cid2 = SPOTIFY_CLIENT_ID || localStorage.getItem('orin_spotify_cid') || ''; if (!code || !verifier || !cid2) return;
     try {
       const r = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ grant_type:'authorization_code', code, redirect_uri: REDIRECT_URI,
-          client_id: SPOTIFY_CLIENT_ID, code_verifier: verifier }),
+          client_id: cid2, code_verifier: verifier }),
       });
       const data = await r.json();
       if (data.access_token) {
@@ -248,7 +254,17 @@ const AIProviderSettings: React.FC = () => {
                   </div>
                   {connected
                     ? <button onClick={() => disconnectInteg(integ.id)} className="text-[9px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest">Disconnect</button>
-                    : <button onClick={connectSpotify} className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-green-500">Connect</button>
+                    : <>
+                      {showSpotifySetup && (
+                        <div className="flex gap-1.5">
+                          <input value={spotifyClientId} onChange={e=>setSpotifyClientId(e.target.value)}
+                            placeholder="Spotify Client ID"
+                            className="flex-1 px-2 py-1 rounded-lg text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-1 focus:ring-green-500 w-36" />
+                          <button onClick={connectSpotify} className="px-2 py-1 rounded-lg bg-green-600 text-white text-[9px] font-black hover:bg-green-500">→</button>
+                        </div>
+                      )}
+                      {!showSpotifySetup && <button onClick={connectSpotify} className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-green-500">Connect</button>}
+                    </>
                   }
                 </div>
               );
