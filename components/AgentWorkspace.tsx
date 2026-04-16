@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Language, UserAccount } from '../types';
 import BrowserAgentWorkspace from './BrowserAgentWorkspace';
+import BrowserAIWorkspace from './BrowserAIWorkspace';
 import ExecutorControllerPage from './ExecutorControllerPage';
 import { getAppShellKind } from '../services/appShellContext';
 
@@ -11,7 +12,7 @@ interface AgentWorkspaceProps {
   initialPrompt?: string;
 }
 
-type AgentPanel = 'browser' | 'desktop';
+type AgentPanel = 'browser' | 'desktop' | 'ai';
 
 type LocalPcAgentStartResult = {
   ok: boolean;
@@ -157,6 +158,15 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
             >
               Desktop Agent
             </button>
+            <button
+              type="button"
+              onClick={() => { setPanel('ai'); setHashPanel('ai' as any); }}
+              className={`flex-1 rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.25em] transition-colors ${
+                panel === 'ai' ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-900' : 'text-slate-500'
+              }`}
+            >
+              Browser AI
+            </button>
           </div>
 
           <div className="rounded-2xl border border-indigo-500/20 bg-indigo-500/10 p-3 text-xs text-indigo-950 dark:text-indigo-100">
@@ -173,20 +183,11 @@ const AgentWorkspace: React.FC<AgentWorkspaceProps> = ({ user, onClose, lang, in
 
       <div className="flex-1 min-h-0 overflow-hidden">
         {panel === 'browser' ? (
-          <BrowserAgentWorkspace
-            user={user}
-            onClose={onClose}
-            lang={lang}
-            initialPrompt={initialPrompt}
-            embedded
-          />
+          <BrowserAgentWorkspace user={user} onClose={onClose} lang={lang} initialPrompt={initialPrompt} embedded />
+        ) : panel === 'desktop' ? (
+          <ExecutorControllerPage onClose={onClose} lang={lang} embedded onActivate={ensureDesktopAgent} />
         ) : (
-          <ExecutorControllerPage
-            onClose={onClose}
-            lang={lang}
-            embedded
-            onActivate={ensureDesktopAgent}
-          />
+          <BrowserAIWorkspace />
         )}
       </div>
     </div>

@@ -21,6 +21,7 @@ const CreatorPage = lazy(() => import('./components/CreatorPage').then(m => ({ d
 const PricingPage = lazy(() => import('./components/PricingPage').then(m => ({ default: m.default })));
 const DownloadsPage = lazy(() => import('./components/DownloadsPage').then(m => ({ default: m.default })));
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m => ({ default: m.default })));
+const ExecutorControllerPage = lazy(() => import('./components/ExecutorControllerPage').then(m => ({ default: m.default })));
 const AgentWorkspace = lazy(() => import('./components/AgentWorkspace').then(m => ({ default: m.default })));
 const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
 const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
@@ -69,7 +70,7 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   community: 'chat',
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor'];
 const AUTH_TIMEOUT_MS = 8000;
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
@@ -668,6 +669,8 @@ const App: React.FC = () => {
     if (view === 'telegram-bot') return <TelegramBotPage onClose={() => window.location.hash = 'home'} lang={lang} />;
 
     switch (view) {
+      case 'executor':
+        return <ExecutorControllerPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'agent':
         return <AgentWorkspace user={user} onClose={() => window.location.hash = 'chat'} lang={lang} initialPrompt={globalPrompt} />;
       case 'chat': case 'translator': case 'art': case 'camera': case 'math':

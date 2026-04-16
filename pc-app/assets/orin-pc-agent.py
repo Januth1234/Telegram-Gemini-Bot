@@ -315,60 +315,6 @@ def exec_custom(params: dict) -> dict:
         return {"error": str(e), "traceback": traceback.format_exc()[:500]}
 
 
-
-def exec_spotify(params: dict) -> dict:
-    """Control Spotify via spotipy (requires: pip install spotipy)"""
-    try:
-        import spotipy
-        from spotipy.oauth2 import SpotifyOAuth
-    except ImportError:
-        return {"error": "spotipy not installed. Run: pip install spotipy"}
-    
-    client_id     = params.get("client_id", os.getenv("SPOTIFY_CLIENT_ID", ""))
-    client_secret = params.get("client_secret", os.getenv("SPOTIFY_CLIENT_SECRET", ""))
-    redirect_uri  = params.get("redirect_uri", "http://localhost:8888/callback")
-    action        = params.get("action", "status")  # play|pause|next|prev|search_play|status|volume
-    query         = params.get("query", "")
-    volume        = params.get("volume", None)
-    
-    if not client_id or not client_secret:
-        return {"error": "Set SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET env vars or pass in params."}
-    
-    scope = "user-read-playback-state,user-modify-playback-state,user-read-currently-playing,streaming"
-    sp = spotipy.Spotify(auth_manager=SpotifyOAuth(
-        client_id=client_id, client_secret=client_secret,
-        redirect_uri=redirect_uri, scope=scope, cache_path=str(Path.home()/".orin_spotify_cache")
-    ))
-    
-    # Get active device
-    devices = sp.devices().get("devices", [])
-    active  = next((d for d in devices if d["is_active"]), devices[0] if devices else None)
-    dev_id  = active["id"] if active else None
-    
-    if action == "search_play" and query:
-        results = sp.search(q=query, type="track", limit=1)
-        items = results["tracks"]["items"]
-        if not items: return {"error": f"No track found: {query}"}
-        track = items[0]
-        sp.start_playback(device_id=dev_id, uris=[track["uri"]])
-        return {"message": f"▶ {track['name']} by {', '.join(a['name'] for a in track['artists'])}"}
-    elif action == "pause":
-        sp.pause_playback(device_id=dev_id); return {"message": "⏸ Paused"}
-    elif action == "play":
-        sp.start_playback(device_id=dev_id); return {"message": "▶ Resumed"}
-    elif action == "next":
-        sp.next_track(device_id=dev_id); return {"message": "⏭ Next track"}
-    elif action == "prev":
-        sp.previous_track(device_id=dev_id); return {"message": "⏮ Previous track"}
-    elif action == "volume" and volume is not None:
-        sp.volume(int(volume), device_id=dev_id); return {"message": f"🔊 Volume {volume}%"}
-    elif action == "status":
-        cur = sp.current_user_playing_track()
-        if cur and cur["is_playing"]:
-            t = cur["item"]; return {"message": f"▶ {t['name']} by {', '.join(a['name'] for a in t['artists'])}"}
-        return {"message": "⏸ Nothing playing"}
-    return {"error": f"Unknown action: {action}"}
-
 EXECUTORS = {
     "run_command": exec_run_command,
     "open_app":    exec_open_app,
@@ -377,7 +323,6 @@ EXECUTORS = {
     "create_ppt":  exec_create_ppt,
     "create_doc":  exec_create_doc,
     "web_search":  exec_web_search,
-    "spotify":     exec_spotify,
     "custom":      exec_custom,
 }
 

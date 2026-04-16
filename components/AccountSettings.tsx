@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { firebaseService } from '../services/firebaseService';
 import { UserAccount, Language, UserThemeId } from '../types';
 import FilesWorkspace from './FilesWorkspace';
+import AIProviderSettings from './AIProviderSettings';
+import TaskScheduler from './TaskScheduler';
 import { translations } from '../translations';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -27,6 +29,8 @@ const MEMORY_MAX_LENGTH = 2000; // Keeps system instructions in chat() from bloa
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError, onSignInWithUser, userTheme = 'classic', onThemeChange, themeMode, onThemeModeChange }) => {
   const t = translations[lang];
   const [memory, setMemory] = useState("");
+  const [settingsTab, setSettingsTab] = useState<'profile'|'ai'|'schedule'>('profile');
+  const pairId = typeof window !== 'undefined' ? localStorage.getItem('orin_exec_pair_id') : null;
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ text: number; images: number; videos: number } | null>(null);
 
