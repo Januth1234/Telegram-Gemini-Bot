@@ -444,7 +444,19 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
       // ── Standard chat ──────────────────────────────────────────────────
       else {
-        const res = await geminiService.chat(text || "Continue.", {
+        // Inject file-store context if user has files and the message looks like a search
+        let chatText = text || "Continue.";
+        try {
+          const storedFiles: Array<{name:string}> = JSON.parse(localStorage.getItem('orin_uploaded_files') || '[]');
+          const storeName = localStorage.getItem('orin_file_store_name') || '';
+          if (storedFiles.length > 0 && storeName && chatText.length > 10 && !fileToUse) {
+            const fileNames = storedFiles.slice(0,5).map(f=>f.name).join(', ');
+            chatText = `[User has ${storedFiles.length} file(s) in their library: ${fileNames}. Use the file search tool if the question might be answered by these files.]
+
+${chatText}`;
+          }
+        } catch {}
+        const res = await geminiService.chat(chatText, {
           fileData: fileToUse || undefined,
           useThinking: isChatMode ? thinkingMode : false,
           descriptive: isChatMode ? descriptiveMode : false,

@@ -45,6 +45,7 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
   const [searchesUsedToday, setSearchesUsedToday] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<Array<{ name: string; size: string; date: string }>>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const storageLimitMB = getStorageLimitMB(user);
   const searchLimit = getSearchLimit(user);
@@ -113,6 +114,15 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
     setIsUploading(false);
     setTimeout(() => setUploadProgress(null), 2000);
   }, [storeName, user]);
+
+  const handleDelete = (idx: number) => {
+    const updated = uploadedFiles.filter((_, i) => i !== idx);
+    setUploadedFiles(updated);
+    localStorage.setItem('orin_uploaded_files', JSON.stringify(updated));
+    setDeleteConfirmId(null);
+    // Note: Gemini File API doesn't expose a delete endpoint in current SDK;
+    // removing locally so it won't appear in searches. Store will be rebuilt on next upload.
+  };
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -211,12 +221,25 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
               <p className="text-[11px] text-slate-400 text-center py-4">No files yet</p>
             ) : (
               uploadedFiles.map((f, i) => (
-                <div key={i} className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-white/5">
-                  <i className="fa-solid fa-file-lines text-indigo-400 text-xs shrink-0" />
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{f.name}</p>
-                    <p className="text-[9px] text-slate-400">{f.size} · {f.date}</p>
+                <div key={i} className="group relative">
+                  <div className="flex items-center gap-2 p-2 rounded-xl bg-slate-50 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors">
+                    <i className="fa-solid fa-file-lines text-indigo-400 text-xs shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate">{f.name}</p>
+                      <p className="text-[9px] text-slate-400">{f.size} · {f.date}</p>
+                    </div>
+                    <button onClick={() => setDeleteConfirmId(deleteConfirmId === i ? null : i)}
+                      className="shrink-0 w-6 h-6 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all">
+                      <i className="fa-solid fa-trash text-[10px]" />
+                    </button>
                   </div>
+                  {deleteConfirmId === i && (
+                    <div className="mt-1 flex items-center gap-2 px-2 py-2 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                      <p className="text-[10px] text-red-600 flex-1">Remove "{f.name}"?</p>
+                      <button onClick={() => handleDelete(i)} className="px-2.5 py-1 rounded-lg bg-red-500 text-white text-[9px] font-black">Delete</button>
+                      <button onClick={() => setDeleteConfirmId(null)} className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-white/10 text-slate-500 text-[9px] font-black">Cancel</button>
+                    </div>
+                  )}
                 </div>
               ))
             )}

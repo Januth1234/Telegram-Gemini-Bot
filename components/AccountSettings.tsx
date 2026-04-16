@@ -135,7 +135,26 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                <p className="text-[10px] font-bold text-slate-400">By continuing, you agree to our Terms & Privacy Protocol.</p>
             </div>
           ) : (
-            <div className="w-full space-y-8">
+            <div className="w-full">
+            {/* Settings Tabs */}
+            <div className="flex gap-1 p-1 rounded-2xl bg-slate-100 dark:bg-white/5 mb-6">
+              {([['profile','👤 Profile'],['ai','🔑 AI & Services'],['schedule','🕐 Scheduler']] as const).map(([id,label]) => (
+                <button key={id} onClick={() => setSettingsTab(id)}
+                  className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${
+                    settingsTab===id ? 'bg-white dark:bg-slate-800 text-indigo-600 shadow-sm' : 'text-slate-400'}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* === AI & Services Tab === */}
+            {settingsTab === 'ai' && <AIProviderSettings />}
+
+            {/* === Scheduler Tab === */}
+            {settingsTab === 'schedule' && <TaskScheduler pairId={pairId} />}
+
+            {/* === Profile Tab === */}
+            {settingsTab === 'profile' && <div className="w-full space-y-8">
               <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 flex flex-col items-center gap-4 text-center animate-reveal">
                  <div className="relative">
                     <img src={user.avatar} className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-xl object-cover" alt="Avatar" />
@@ -287,6 +306,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  </div>
               </div>
 
+            </div>}
             </div>
           )}
         </div>
