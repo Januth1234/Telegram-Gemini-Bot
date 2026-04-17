@@ -64,13 +64,22 @@ class FirebaseService {
   async loginWithGoogle(): Promise<firebase.User | null> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.addScope('email');
+    provider.addScope('profile');
+    // In Electron / mobile WebView — always use redirect (popup is blocked by Google)
+    const isEmbedded = !!(window as any).orinDesktop || !!(window as any).orinMobile
+      || /Electron/.test(navigator.userAgent)
+      || window.location.protocol === 'file:';
+    if (isEmbedded) {
+      await this.auth.signInWithRedirect(provider);
+      return null; // result handled by getRedirectResult() on next load
+    }
     try {
       const result = await this.auth.signInWithPopup(provider);
       return result.user ?? null;
     } catch (err: any) {
       const code = err?.code || '';
-      const useRedirect = code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request' || code === 'auth/web-storage-unsupported';
-      if (useRedirect) {
+      if (['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request','auth/web-storage-unsupported'].includes(code)) {
         await this.auth.signInWithRedirect(provider);
         return null;
       }

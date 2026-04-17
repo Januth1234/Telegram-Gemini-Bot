@@ -26,7 +26,13 @@ function createWindow() {
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
   });
   win.loadURL(APP_URL + '/#agent?panel=desktop');
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    // Spoof UA so Google/Firebase treat this as a real Chrome browser
+    win.webContents.setUserAgent(
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+    );
+    win.show();
+  });
   win.webContents.on('did-finish-load', () => {
     win.webContents.executeJavaScript(`
       if(!window.orinDesktop) window.orinDesktop = {
@@ -39,9 +45,22 @@ function createWindow() {
       };
     `).catch(()=>{});
   });
+  // Intercept Google OAuth + any auth URLs → open in system default browser
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith(APP_URL)) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
+  });
+
+  // Also intercept navigation to Google accounts / OAuth in the main frame
+  win.webContents.on('will-navigate', (event, url) => {
+    const isGoogle = url.includes('accounts.google.com') || url.includes('oauth2') || url.includes('openid-connect');
+    const isOAuth  = url.includes('access_token') || url.includes('code=') || url.includes('error=');
+    if (isGoogle) {
+      // Open Google sign-in in system browser — Google blocks embedded webviews
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+    // Allow redirect back to orinai.org after auth
   });
   win.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); win.hide(); } });
 }
