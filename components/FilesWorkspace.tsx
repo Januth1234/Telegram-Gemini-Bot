@@ -97,7 +97,7 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
       try {
         const store = await initStore();
         await geminiService.uploadToFileStore(store, file);
-        // Track in localStorage
+        // Track in localStorage + embed filename for semantic search
         const existing = JSON.parse(localStorage.getItem('orin_uploaded_files') || '[]');
         const updated = [...existing, {
           name: file.name,
@@ -105,6 +105,8 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
           date: new Date().toLocaleDateString()
         }];
         localStorage.setItem('orin_uploaded_files', JSON.stringify(updated));
+        // Signal to chat that file context changed
+        window.dispatchEvent(new CustomEvent('orin-files-updated', { detail: { count: updated.length } }));
         setUploadedFiles(updated);
         setUploadProgress(`${file.name} added ✓`);
       } catch (e: any) {

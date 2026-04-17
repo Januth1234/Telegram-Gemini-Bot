@@ -3,7 +3,7 @@
  * Stores in Firestore via executor API. Polls pair status.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { executorExecute, executorJobStatus } from '../services/executorAgentService';
+import { dispatchTask, scheduleTask, listTasks, cancelTask } from '../services/brokerClient';
 
 interface ScheduledTask {
   id: string;
@@ -52,7 +52,7 @@ const TaskScheduler: React.FC<{ pairId: string | null }> = ({ pairId }) => {
       const pending = loadTasks().filter(t => t.status === 'approved' && t.scheduleTime <= now);
       for (const t of pending) {
         try {
-          const { job_id } = await executorExecute(pairId, t.task, t.params);
+          const res2 = await dispatchTask({ task: t.task, params: t.params, deviceId: pairId || '' }); const job_id = res2.jobId;
           updateTask(t.id, { status: 'queued', id: job_id });
         } catch {}
       }
