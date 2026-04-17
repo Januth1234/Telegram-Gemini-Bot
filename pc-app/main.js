@@ -1,7 +1,6 @@
 /**
- * Orin AI Desktop — Electron main process
- * Loads orinai.org in a persistent WebView, preserves session,
- * bridges window.orinDesktop for PC agent control.
+ * Orin AI Desktop — Electron main.js
+ * Persistent WebView + auto-starting Python executor
  */
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
@@ -9,112 +8,117 @@ const { spawn } = require('child_process');
 const fs = require('fs');
 
 const APP_URL = 'https://orinai.org';
-const SESSION_PARTITION = 'persist:orin-main'; // preserves Google login across launches
+const SESSION_PARTITION = 'persist:orin-main';
 
-let win = null;
-let tray = null;
-let agentProc = null;
+let win = null, tray = null, agentProc = null;
+app.isQuitting = false;
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1280, height: 860,
-    minWidth: 800, minHeight: 600,
-    title: 'Orin AI',
-    icon: path.join(__dirname, 'assets', 'icon.png'),
+    width: 1300, height: 880, minWidth: 900, minHeight: 600,
+    title: 'Orin AI', icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
-      partition: SESSION_PARTITION,  // persistent session — Google login survives
-      contextIsolation: true,
-      nodeIntegration: false,
-      webSecurity: true,
-      // Allow cookies + localStorage on orinai.org
+      partition: SESSION_PARTITION,
+      contextIsolation: true, nodeIntegration: false, webSecurity: true,
     },
-    show: false,
-    backgroundColor: '#0f172a',
-    frame: true,
+    show: false, backgroundColor: '#0f172a',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
   });
-
-  win.loadURL(APP_URL + '#agent?panel=desktop');
+  win.loadURL(APP_URL + '/#agent?panel=desktop');
   win.once('ready-to-show', () => win.show());
-
-  // Open external links in default browser, not in the app
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.executeJavaScript(`
+      if(!window.orinDesktop) window.orinDesktop = {
+        version:1, shell:'desktop',
+        startLocalPcAgent: () => new Promise(r => {
+          window._orinAgentResolve = r;
+          window.dispatchEvent(new CustomEvent('orin-start-agent'));
+        }),
+        stopLocalPcAgent: () => window.dispatchEvent(new CustomEvent('orin-stop-agent')),
+      };
+    `).catch(()=>{});
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (!url.startsWith(APP_URL)) { shell.openExternal(url); return { action: 'deny' }; }
     return { action: 'allow' };
   });
-
-  // Inject orinDesktop bridge after every navigation (SPA navigations too)
-  win.webContents.on('did-finish-load', () => {
-    win.webContents.executeJavaScript(`
-      window.orinDesktop = window.orinDesktop || {
-        version: 1,
-        shell: 'desktop',
-        startLocalPcAgent: () => window._orinDesktop_startAgent(),
-      };
-    `).catch(() => {});
-  });
-
-  win.on('close', (e) => {
-    if (!app.isQuitting) { e.preventDefault(); win.hide(); }
-  });
+  win.on('close', (e) => { if (!app.isQuitting) { e.preventDefault(); win.hide(); } });
 }
 
 function createTray() {
   const iconPath = path.join(__dirname, 'assets', 'tray.png');
   const img = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : nativeImage.createEmpty();
-  tray = new Tray(img);
+  tray = new Tray(img.resize({ width: 16, height: 16 }));
   tray.setToolTip('Orin AI');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Orin AI', click: () => win?.show() },
-    { label: 'Agent Mode', click: () => { win?.show(); win?.webContents.loadURL(APP_URL + '#agent?panel=desktop'); } },
+  const rebuild = () => tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Orin AI',   click: () => { win?.show(); win?.focus(); } },
+    { label: 'Agent Mode',     click: () => { win?.show(); win?.loadURL(APP_URL + '/#agent?panel=desktop'); } },
+    { type: 'separator' },
+    { label: agentProc ? '● PC Agent running' : '○ PC Agent stopped', enabled: false },
+    { label: agentProc ? 'Stop Agent' : 'Start Agent',
+      click: () => agentProc ? stopAgent() : startAgent() },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]));
-  tray.on('click', () => win?.show());
+  rebuild(); tray.on('click', () => win?.show());
+  ipcMain.on('agent-state-changed', rebuild);
 }
 
-// ── IPC: start/stop local Python agent ────────────────────────────────────────
-ipcMain.handle('start-local-agent', async () => {
+function findPython() {
+  const candidates = ['python3','python','py'];
+  const { execSync } = require('child_process');
+  for (const c of candidates) {
+    try { execSync(`${c} --version`, { stdio:'ignore' }); return c; } catch {}
+  }
+  return 'python';
+}
+
+function startAgent() {
   if (agentProc) return { ok: true, status: 'already_running' };
-  const agentPath = path.join(app.getPath('userData'), 'orin-pc-agent.py');
-  // If not installed yet, copy bundled version
-  const bundled = path.join(__dirname, 'assets', 'orin-pc-agent.py');
-  if (!fs.existsSync(agentPath) && fs.existsSync(bundled)) {
-    fs.copyFileSync(bundled, agentPath);
+  const agentPath = path.join(app.getPath('userData'), 'agent.py');
+  const bundled = path.join(__dirname, 'assets', 'agent.py');
+  const execPy  = path.join(__dirname, 'assets', 'executor.py');
+  const brokerPy = path.join(__dirname, 'assets', 'broker_client.py');
+
+  // Copy agent files to userData if not present
+  for (const [src, dst] of [
+    [bundled, agentPath],
+    [execPy,  path.join(app.getPath('userData'), 'executor.py')],
+    [brokerPy, path.join(app.getPath('userData'), 'broker_client.py')],
+  ]) {
+    if (fs.existsSync(src) && !fs.existsSync(dst)) fs.copyFileSync(src, dst);
   }
-  if (!fs.existsSync(agentPath)) {
-    return { ok: false, error: 'orin-pc-agent.py not found. Download from orinai.org → Agent.' };
-  }
-  return new Promise(resolve => {
-    agentProc = spawn('python', [agentPath], {
-      detached: false,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    agentProc.stdout.once('data', () => resolve({ ok: true, status: 'running' }));
-    agentProc.on('error', (e) => { agentProc = null; resolve({ ok: false, error: e.message }); });
-    agentProc.on('exit', () => { agentProc = null; });
-    setTimeout(() => resolve({ ok: true, status: 'starting' }), 3000);
+
+  if (!fs.existsSync(agentPath))
+    return { ok: false, error: 'agent.py not found. Download from orinai.org/agent' };
+
+  const py = findPython();
+  agentProc = spawn(py, [agentPath], {
+    cwd: app.getPath('userData'), detached: false,
+    stdio: ['pipe', 'pipe', 'pipe'],
   });
-});
+  agentProc.stdout?.on('data', d => console.log('[agent]', d.toString().trim()));
+  agentProc.stderr?.on('data', d => console.warn('[agent err]', d.toString().trim()));
+  agentProc.on('exit', () => { agentProc = null; ipcMain.emit('agent-state-changed'); });
+  ipcMain.emit('agent-state-changed');
+  return { ok: true, status: 'running' };
+}
 
-ipcMain.handle('stop-local-agent', () => {
+function stopAgent() {
   if (agentProc) { agentProc.kill(); agentProc = null; }
-  return { ok: true };
-});
+  ipcMain.emit('agent-state-changed');
+}
 
-ipcMain.handle('agent-status', () => ({ running: !!agentProc }));
+ipcMain.handle('start-local-agent', async () => startAgent());
+ipcMain.handle('stop-local-agent',  async () => { stopAgent(); return { ok: true }; });
+ipcMain.handle('agent-status',      async () => ({ running: !!agentProc }));
 
-// ── App lifecycle ─────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
-  createWindow();
-  createTray();
-  // Auto-start agent on launch
-  setTimeout(() => ipcMain.emit('start-local-agent'), 2000);
+  createWindow(); createTray();
+  // Auto-start agent 3s after launch
+  setTimeout(() => startAgent(), 3000);
 });
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('activate', () => { if (!win) createWindow(); else win.show(); });
-app.on('before-quit', () => { app.isQuitting = true; });
+app.on('before-quit', () => { app.isQuitting = true; stopAgent(); });

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
+import { buildIntegrationContext, executeApprovedAction } from '../services/integrationActions';
 
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
@@ -208,6 +209,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   
   // Private Mode State
   const [isPrivate, setIsPrivate] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<{ action: string; payload: object; label: string } | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryPopup, setSummaryPopup] = useState<string | null>(null);
   const [privateMessages, setPrivateMessages] = useState<ChatMessage[]>([]);
@@ -444,8 +446,20 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       }
       // ── Standard chat ──────────────────────────────────────────────────
       else {
-        // Inject file-store context if user has files and the message looks like a search
+        // ── Integration context (Gmail / Calendar / Drive / Spotify) ──────
         let chatText = text || "Continue.";
+        try {
+          const intCtx = await buildIntegrationContext(text);
+          if (intCtx) {
+            if (intCtx.requiresApproval && intCtx.action !== 'none') {
+              setPendingApproval({ action: intCtx.action!, payload: intCtx.approvalPayload!, label: intCtx.data });
+            }
+            chatText = `${intCtx.data}
+
+${chatText}`;
+          }
+        } catch {}
+        // Inject file-store context if user has files and the message looks like a search
         try {
           const storedFiles: Array<{name:string}> = JSON.parse(localStorage.getItem('orin_uploaded_files') || '[]');
           const storeName = localStorage.getItem('orin_file_store_name') || '';
@@ -992,6 +1006,26 @@ ${chatText}`;
         )}
       </div>
     </div>
+
+      {/* Integration Approval Banner */}
+      {pendingApproval && (
+        <div className="absolute bottom-20 left-4 right-4 z-50 p-4 rounded-2xl bg-slate-900 border border-indigo-500/40 shadow-2xl">
+          <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1.5">Confirm Action</p>
+          <p className="text-xs text-slate-300 mb-3">{pendingApproval.label}</p>
+          <div className="flex gap-2">
+            <button onClick={async () => {
+              const result = await executeApprovedAction(pendingApproval.action, pendingApproval.payload).catch(e => '❌ ' + e.message);
+              setPendingApproval(null);
+              setMessages(prev => [...prev, { id: Date.now().toString(), role: 'assistant', content: result, timestamp: new Date(), type: 'text' }]);
+            }} className="flex-1 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500">
+              Confirm
+            </button>
+            <button onClick={() => setPendingApproval(null)} className="px-4 py-2 rounded-xl bg-slate-700 text-slate-300 text-[10px] font-black hover:bg-slate-600">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Summary Popup */}
       {summaryPopup && (
