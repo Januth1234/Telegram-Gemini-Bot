@@ -66,14 +66,12 @@ class FirebaseService {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
-    // In Electron / mobile WebView — always use redirect (popup is blocked by Google)
-    const isEmbedded = !!(window as any).orinDesktop || !!(window as any).orinMobile
-      || /Electron/.test(navigator.userAgent)
-      || window.location.protocol === 'file:';
-    if (isEmbedded) {
-      await this.auth.signInWithRedirect(provider);
-      return null; // result handled by getRedirectResult() on next load
-    }
+    // Electron blocks OAuth popups AND signInWithRedirect fails with sessionStorage partition error.
+    // Fix: set LOCAL persistence first, then always try popup.
+    // In Electron the will-navigate hook opens google.com in system browser automatically.
+    try {
+      await this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+    } catch {}
     try {
       const result = await this.auth.signInWithPopup(provider);
       return result.user ?? null;

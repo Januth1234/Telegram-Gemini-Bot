@@ -147,11 +147,9 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
               ))}
             </div>
 
-            {/* === AI & Services Tab === */}
-            {settingsTab === 'ai' && <AIProviderSettings />}
+            {settingsTab === 'ai' && <div className="w-full text-slate-900 dark:text-slate-100"><AIProviderSettings /></div>}
 
-            {/* === Scheduler Tab === */}
-            {settingsTab === 'schedule' && <TaskScheduler pairId={pairId} />}
+            {settingsTab === 'schedule' && <div className="w-full text-slate-900 dark:text-slate-100"><TaskScheduler pairId={pairId} /></div>}
 
             {/* === Profile Tab === */}
             {settingsTab === 'profile' && <div className="w-full space-y-8">

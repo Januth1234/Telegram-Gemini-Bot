@@ -49,7 +49,14 @@ const AIProviderSettings: React.FC = () => {
   useEffect(() => {
     setKeys(getProviderKeys());
     setIntegs(getIntegrations());
-    if (window.location.search.includes('spotify_callback')) handleSpotifyCallback();
+    setGrantedModules(getGrantedModules());
+    // Handle Spotify callback
+    const code = sessionStorage.getItem('oauth_callback_code') || new URLSearchParams(window.location.search).get('code');
+    if (code) { sessionStorage.removeItem('oauth_callback_code'); handleSpotifyCallback(); }
+    // Re-check Google vault every time settings opens (catches post-redirect state)
+    const onStorage = () => { setGrantedModules(getGrantedModules()); setIntegs(getIntegrations()); };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const [grantedModules, setGrantedModules] = React.useState<GoogleModuleId[]>(() => getGrantedModules());
@@ -114,14 +121,13 @@ const AIProviderSettings: React.FC = () => {
         saveIntegration({ service:'spotify', enabled:true, accessToken: data.access_token,
           refreshToken: data.refresh_token, expiresAt: Date.now() + data.expires_in * 1000,
           scope: data.scope, connectedAt: Date.now() });
-        refresh();
-        // Clean URL
+        setIntegs(getIntegrations()); // force re-render
         window.history.replaceState({}, '', window.location.pathname);
       }
     } catch {}
   };
 
-  const disconnectInteg = (service: string) => { removeIntegration(service); refresh(); };
+  const disconnectInteg = (service: string) => { removeIntegration(service); setIntegs(getIntegrations()); };
 
   const toggleInteg = (service: string, current: IntegrationToken | undefined) => {
     if (!current?.accessToken) return;
@@ -227,8 +233,8 @@ const AIProviderSettings: React.FC = () => {
                     {active
                       ? <button onClick={() => { disableModule(mid); refreshGoogleState(); }}
                           className="text-[8px] font-black text-red-400 hover:text-red-500 uppercase shrink-0">Off</button>
-                      : <button onClick={() => requestModuleConsent(mid)}
-                          className="text-[8px] font-black text-indigo-500 hover:text-indigo-600 uppercase shrink-0">Allow</button>
+                      : <button onClick={async () => { await requestModuleConsent(mid); }}
+                          className="text-[8px] font-black text-indigo-500 hover:text-indigo-600 uppercase shrink-0 border border-indigo-300 dark:border-indigo-700 px-2 py-0.5 rounded-lg">Allow</button>
                     }
                   </div>
                 );

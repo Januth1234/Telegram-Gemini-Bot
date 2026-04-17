@@ -81,6 +81,19 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
     return fallback;
   };
 
+  const ensureStore = async (): Promise<string> => {
+    let storeName = localStorage.getItem('orin_file_store_name') || '';
+    if (!storeName || storeName.startsWith('orin_')) {
+      // Create a real Gemini FileSearchStore
+      try {
+        const uid = (window as any).__orinUser?.id || 'user';
+        const name = await geminiService.createFileSearchStore(`orin-files-${uid}`);
+        if (name) { localStorage.setItem('orin_file_store_name', name); storeName = name; }
+      } catch {}
+    }
+    return storeName;
+  };
+
   const handleUpload = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setError(null);
@@ -105,8 +118,12 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
           date: new Date().toLocaleDateString()
         }];
         localStorage.setItem('orin_uploaded_files', JSON.stringify(updated));
-        // Signal to chat that file context changed
         window.dispatchEvent(new CustomEvent('orin-files-updated', { detail: { count: updated.length } }));
+        // Upload to Gemini FileSearchStore for real RAG
+        try {
+          const store = await ensureStore();
+          if (store) await geminiService.uploadToFileStore(store, file);
+        } catch { /* non-blocking */ }
         setUploadedFiles(updated);
         setUploadProgress(`${file.name} added ✓`);
       } catch (e: any) {
@@ -127,6 +144,12 @@ const FilesWorkspace: React.FC<FilesWorkspaceProps> = ({ onClose, user }) => {
   };
 
   const handleSearch = async () => {
+    const storeName = localStorage.getItem('orin_file_store_name') || '';
+    const files = JSON.parse(localStorage.getItem('orin_uploaded_files') || '[]');
+    if (!storeName || files.length === 0) {
+      setError('No files uploaded yet. Upload files first.');
+      return;
+    }
     if (!query.trim()) return;
 
     // Check daily limit
