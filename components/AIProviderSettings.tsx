@@ -1,3 +1,4 @@
+import { firebaseService } from '../services/firebaseService';
 /**
  * AIProviderSettings — tab inside AccountSettings.
  * Add/remove API keys for multiple providers.
@@ -85,20 +86,29 @@ const AIProviderSettings: React.FC = () => {
     setShowKeys(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   };
 
-  // Spotify PKCE OAuth
-  const [spotifyClientId, setSpotifyClientId] = React.useState(SPOTIFY_CLIENT_ID || localStorage.getItem('orin_spotify_cid') || '');
+  // Spotify PKCE OAuth — token exchange via /api/auth/spotify (server-side, keeps client_secret safe)
   const [showSpotifySetup, setShowSpotifySetup] = React.useState(false);
+  const [spotifyConnected, setSpotifyConnected] = React.useState(false);
+
+  React.useEffect(() => {
+    // Check Spotify connection status from backend
+    (async () => {
+      try {
+        const tok = await (firebaseService as any).getIdToken?.();
+        if (!tok) return;
+        const r = await fetch('/api/auth/spotify', { headers: { Authorization: `Bearer ${tok}` } });
+        if (r.ok) setSpotifyConnected((await r.json()).connected === true);
+      } catch {}
+    })();
+  }, []);
 
   const connectSpotify = async () => {
-    const cid = spotifyClientId.trim();
+    const cid = SPOTIFY_CLIENT_ID;
     if (!cid) { setShowSpotifySetup(true); return; }
-    localStorage.setItem('orin_spotify_cid', cid);
     const verifier = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2,'0')).join('');
-    const encoder = new TextEncoder();
-    const data = encoder.encode(verifier);
-    const digest = await crypto.subtle.digest('SHA-256', data);
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
     const challenge = btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-    localStorage.setItem('spotify_verifier', verifier);
+    sessionStorage.setItem('spotify_pkce_verifier', verifier);
     const scopes = 'user-read-playback-state user-modify-playback-state user-read-currently-playing streaming';
     const url = `https://accounts.spotify.com/authorize?client_id=${cid}&response_type=code&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${encodeURIComponent(scopes)}&code_challenge_method=S256&code_challenge=${challenge}`;
     window.location.href = url;
@@ -107,27 +117,39 @@ const AIProviderSettings: React.FC = () => {
   const handleSpotifyCallback = async () => {
     const params = new URLSearchParams(window.location.search);
     const code = params.get('code');
-    const verifier = localStorage.getItem('spotify_verifier');
-    const cid2 = SPOTIFY_CLIENT_ID || localStorage.getItem('orin_spotify_cid') || ''; if (!code || !verifier || !cid2) return;
+    const verifier = sessionStorage.getItem('spotify_pkce_verifier');
+    if (!code || !verifier) return;
     try {
-      const r = await fetch('https://accounts.spotify.com/api/token', {
+      const tok = await (firebaseService as any).getIdToken?.();
+      const r = await fetch('/api/auth/spotify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type:'authorization_code', code, redirect_uri: REDIRECT_URI,
-          client_id: cid2, code_verifier: verifier }),
+        headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+        body: JSON.stringify({ action: 'exchange', code, redirectUri: REDIRECT_URI }),
       });
-      const data = await r.json();
-      if (data.access_token) {
-        saveIntegration({ service:'spotify', enabled:true, accessToken: data.access_token,
-          refreshToken: data.refresh_token, expiresAt: Date.now() + data.expires_in * 1000,
-          scope: data.scope, connectedAt: Date.now() });
-        setIntegs(getIntegrations()); // force re-render
+      if (r.ok) {
+        sessionStorage.removeItem('spotify_pkce_verifier');
+        setSpotifyConnected(true);
         window.history.replaceState({}, '', window.location.pathname);
       }
     } catch {}
   };
 
-  const disconnectInteg = (service: string) => { removeIntegration(service); setIntegs(getIntegrations()); };
+  const disconnectInteg = async (service: string) => {
+    if (service === 'spotify') {
+      try {
+        const tok = await (firebaseService as any).getIdToken?.();
+        await fetch('/api/auth/spotify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+          body: JSON.stringify({ action: 'disconnect' }),
+        });
+        setSpotifyConnected(false);
+      } catch {}
+    } else {
+      removeIntegration(service);
+      setIntegs(getIntegrations());
+    }
+  };
 
   const toggleInteg = (service: string, current: IntegrationToken | undefined) => {
     if (!current?.accessToken) return;

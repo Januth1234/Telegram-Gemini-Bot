@@ -128,6 +128,19 @@ export default async function handler(req, res) {
   const verifiedUid = await verifyUser(req);
   const safeUid = verifiedUid || null;
 
+  // ── mode routing ────────────────────────────────────────────────────────────
+  const mode = req.body?.mode || 'chat';
+
+  if (mode === 'code') {
+    return handleCodeExecution(req, res, apiKey);
+  }
+  if (mode === 'url') {
+    return handleUrlContext(req, res, apiKey);
+  }
+  if (mode === 'research') {
+    return handleDeepResearch(req, res, apiKey);
+  }
+
   try {
     const ai = new GoogleGenAI({ apiKey });
 
@@ -209,5 +222,94 @@ export default async function handler(req, res) {
     if (msg.includes('API_KEY') || msg.includes('401')) return res.status(401).json({ error: 'API key invalid', type: 'auth' });
     if (msg.includes('SAFETY')) return res.status(400).json({ error: 'Safety filter triggered', type: 'safety' });
     return res.status(500).json({ error: msg, type: 'generic' });
+  }
+}
+
+
+
+// ── Code Execution ────────────────────────────────────────────────────────────
+async function handleCodeExecution(req, res, apiKey) {
+  const { prompt, history = [], plan = 'free' } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const model = plan === 'pro' || plan === 'pro_yearly' ? 'gemini-2.5-pro'
+                : plan.includes('basic') ? 'gemini-2.5-flash' : 'gemini-2.0-flash';
+    const contents = (history || []).slice(-10).map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content || '' }],
+    }));
+    contents.push({ role: 'user', parts: [{ text: prompt }] });
+    const response = await ai.models.generateContent({
+      model, contents,
+      config: {
+        tools: [{ codeExecution: {} }],
+        systemInstruction: 'You are a coding assistant. Use the code execution tool. Show code and output clearly.',
+      },
+    });
+    let text = '', code = '', output = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text) text += part.text;
+      if (part.executableCode?.code) code = part.executableCode.code;
+      if (part.codeExecutionResult?.output) output = part.codeExecutionResult.output;
+    }
+    return res.status(200).json({ text: text.trim(), code, output });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Code execution failed' });
+  }
+}
+
+// ── URL Context ───────────────────────────────────────────────────────────────
+async function handleUrlContext(req, res, apiKey) {
+  const { url, question, history = [], plan = 'free' } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const model = plan.includes('pro') ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const prompt = `Fetch this URL and answer the question based on its content.\nURL: ${url}\nQuestion: ${question || 'Summarise this page'}`;
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      config: {
+        tools: [{ urlContext: {} }],
+        systemInstruction: 'Fetch the URL using url_context and answer thoroughly.',
+      },
+    });
+    let text = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text && !part.thought) text += part.text;
+    }
+    const meta = response.candidates?.[0]?.urlContextMetadata;
+    return res.status(200).json({ text: text.trim(), urlSource: meta?.urlMetadata?.[0]?.retrievedUrl });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'URL context failed' });
+  }
+}
+
+// ── Deep Research ─────────────────────────────────────────────────────────────
+async function handleDeepResearch(req, res, apiKey) {
+  const { prompt, plan = 'free' } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    // Fallback to grounded chat — interactions API not stable in current SDK
+    const model = plan.includes('pro') ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
+    const response = await ai.models.generateContent({
+      model,
+      contents: [{ role: 'user', parts: [{ text: `[DEEP RESEARCH] ${prompt}\n\nConduct thorough research. Use web search extensively. Provide a comprehensive, well-structured report with sources.` }] }],
+      config: {
+        tools: [{ googleSearch: {} }],
+        systemInstruction: 'You are a deep research assistant. Search extensively and produce a detailed, sourced report.',
+        thinkingConfig: { thinkingBudget: plan.includes('pro') ? 8192 : 4096 },
+      },
+    });
+    let text = '';
+    const links = [];
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text && !part.thought) text += part.text;
+    }
+    for (const chunk of response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
+      if (chunk.web?.uri) links.push({ uri: chunk.web.uri, title: chunk.web.title || chunk.web.uri });
+    }
+    return res.status(200).json({ text: text.trim(), links });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Deep research failed' });
   }
 }

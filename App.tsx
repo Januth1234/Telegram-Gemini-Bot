@@ -153,14 +153,26 @@ const App: React.FC = () => {
     document.documentElement.lang = lang === 'si' ? 'si' : lang === 'ta' ? 'ta' : 'en';
   }, [lang]);
 
-  // OAuth callback (Spotify / Google) — redirect back clears URL + opens account
+  // OAuth callback — route code to the correct backend handler
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('code')) {
-      sessionStorage.setItem('oauth_callback_code', params.get('code')!);
-      window.history.replaceState({}, '', '/');
-      if (!window.location.hash.includes('account')) window.location.hash = 'account';
+    const code = params.get('code');
+    if (!code) return;
+
+    // Google OAuth callback (path-based)
+    if (window.location.pathname.includes('/auth/google/callback')) {
+      import('./services/googleIntegrationService').then(({ handleOAuthCallback }) => {
+        handleOAuthCallback().then(result => {
+          if (result) window.location.hash = 'account';
+        });
+      });
+      return;
     }
+
+    // Spotify callback — store code for AIProviderSettings to exchange via /api/auth/spotify
+    sessionStorage.setItem('oauth_callback_code', code);
+    window.history.replaceState({}, '', '/');
+    if (!window.location.hash.includes('account')) window.location.hash = 'account';
   }, []);
 
   // When theme is 'auto', update autoDark from local time every minute

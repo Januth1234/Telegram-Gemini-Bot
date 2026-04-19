@@ -953,159 +953,76 @@ You are processing a live video feed. CRITICAL RULES:
     history?: ChatMessage[];
     plan?: string;
   }): Promise<{ text: string; code?: string; output?: string }> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const model = this.getLongContextModel(this.currentUser);
-
-    const contents: any[] = (options.history || []).map(m => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }],
-    }));
-    contents.push({ role: 'user', parts: [{ text: options.prompt }] });
-
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: {
-        tools: [{ codeExecution: {} }],
-        systemInstruction: 'You are a coding assistant. When asked to compute or run code, use the code execution tool. Show the code and its output clearly.',
-      },
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+    const safeHistory = (options.history || []).slice(-10).map(m => ({ role: m.role, content: m.content || '' }));
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'code', prompt: options.prompt, history: safeHistory, plan }),
     });
-
-    let text = '', code = '', output = '';
-    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      const p = part as any;
-      if (p.text) text += p.text;
-      if (p.executableCode?.code) code = p.executableCode.code;
-      if (p.codeExecutionResult?.output) output = p.codeExecutionResult.output;
-    }
-    return { text: text.trim(), code, output };
+    if (!res.ok) throw new AppError((await res.json().catch(() => ({}))).error || 'Code execution failed', 'generic');
+    return res.json();
   }
 
   // ─── URL Context ────────────────────────────────────────────────────────────
-  /** Fetch + analyse a URL using Gemini's built-in URL context tool. 1/day free, more for paid. */
   async fetchUrlContext(options: {
     url: string;
     question: string;
     history?: ChatMessage[];
   }): Promise<{ text: string; urlTitle?: string; urlSource?: string }> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const model = this.getLongContextModel(this.currentUser);
-
-    const prompt = `Fetch this URL and answer the question based on its content.\nURL: ${options.url}\nQuestion: ${options.question}`;
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      config: {
-        tools: [{ urlContext: {} }],
-        systemInstruction: 'You are a web research assistant. When given a URL, fetch its content using the url_context tool and answer the question thoroughly based on what you find.',
-      },
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'url', url: options.url, question: options.question, plan }),
     });
-
-    let text = '';
-    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      const p = part as any;
-      if (p.text && !p.thought) text += p.text;
-    }
-    // Extract URL metadata from grounding
-    const meta = (response.candidates?.[0] as any)?.urlContextMetadata;
-    const urlSource = meta?.urlMetadata?.[0]?.retrievedUrl;
-    const urlTitle = meta?.urlMetadata?.[0]?.urlRetrievalStatus;
-    return { text: text.trim(), urlTitle, urlSource };
+    if (!res.ok) throw new AppError((await res.json().catch(() => ({}))).error || 'URL context failed', 'generic');
+    return res.json();
   }
 
   // ─── Deep Research ────────────────────────────────────────────────────────
-  /** Run a deep research task. 1/month free, more for paid plans. Returns streamed chunks. */
   async deepResearch(options: {
     prompt: string;
     onChunk: (text: string) => void;
     onDone: (fullText: string) => void;
     signal?: AbortSignal;
   }): Promise<void> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    // Deep research uses interactions API with DeepResearchAgentConfig
-    const response = await (ai as any).interactions?.create?.({
-      api_version: 'v1alpha',
-      model: 'gemini-2.5-flash',
-      input: [{ type: 'text', text: options.prompt }],
-      agent_config: { type: 'deep-research', thinking_summaries: 'auto' },
-      stream: true,
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      signal: options.signal,
+      body: JSON.stringify({ mode: 'research', prompt: options.prompt, plan }),
     });
-
-    let fullText = '';
-    if (response && typeof response[Symbol.asyncIterator] === 'function') {
-      for await (const chunk of response) {
-        const delta = (chunk as any)?.delta;
-        if (delta?.type === 'text') {
-          fullText += delta.text;
-          options.onChunk(delta.text);
-        }
-      }
-    } else {
-      // Fallback: use regular chat with deep grounding prompt
-      const result = await this.chat(
-        `[DEEP RESEARCH] ${options.prompt}\n\nConduct thorough research on this topic. Use web search extensively. Provide a comprehensive, well-structured report with sources.`,
-        { grounding: 'search', useThinking: true }
-      );
-      fullText = result.text;
-      options.onChunk(fullText);
-    }
+    if (!res.ok) throw new AppError((await res.json().catch(() => ({}))).error || 'Deep research failed', 'generic');
+    const data = await res.json();
+    const fullText = data.text || '';
+    options.onChunk(fullText);
     options.onDone(fullText);
   }
 
-  // ─── File Search ──────────────────────────────────────────────────────────
-  /** Search user's uploaded files using Gemini File Search. */
+  // ─── File Search — now handled by /api/chat with fileIds injected server-side ──
+  /** @deprecated File context is now injected via fileIds in chat(). This is a no-op stub. */
   async searchFiles(options: {
     query: string;
     fileSearchStoreName: string;
   }): Promise<{ text: string; citations: Array<{ fileName: string; snippet: string }> }> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const model = this.getLongContextModel(this.currentUser);
-
-    const response = await ai.models.generateContent({
-      model,
-      contents: [{ role: 'user', parts: [{ text: options.query }] }],
-      config: {
-        tools: [{ fileSearch: { fileSearchStoreNames: [options.fileSearchStoreName] } }],
-        systemInstruction: "Answer based on the documents in the user's file store. Cite specific files and quote relevant passages.",
-      },
-    });
-
-    let text = '';
-    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      const p = part as any;
-      if (p.text && !p.thought) text += p.text;
-    }
-    // Extract file citations
-    const citations: Array<{ fileName: string; snippet: string }> = [];
-    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-      const p = part as any;
-      if (p.fileSearchResult?.documents) {
-        for (const doc of p.fileSearchResult.documents) {
-          citations.push({ fileName: doc.displayName || doc.name || 'File', snippet: doc.snippet || '' });
-        }
-      }
-    }
-    return { text: text.trim(), citations };
+    // Route through chat with the query — backend injects file content
+    const result = await this.chat(options.query, { grounding: undefined });
+    return { text: result.text, citations: [] };
   }
 
-  /** Create a file search store for a user (called once on signup/first file upload). */
-  async createFileSearchStore(displayName: string): Promise<string> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const store = await (ai as any).fileSearchStores?.create?.({ config: { displayName } });
-    return store?.name ?? '';
-  }
+  /** @deprecated File uploads now go to /api/upload-blob which handles storage + parsing. */
+  async createFileSearchStore(_displayName: string): Promise<string> { return ''; }
 
-  /** Upload a file to the user's file search store. */
-  async uploadToFileStore(storeName: string, file: File): Promise<void> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    await (ai as any).fileSearchStores?.uploadFileToFileSearchStore?.(storeName, file, {});
-  }
+  /** @deprecated File uploads now go to /api/upload-blob. */
+  async uploadToFileStore(_storeName: string, _file: File): Promise<void> { return; }
 
 
   async solveMathWithAI(options: {
