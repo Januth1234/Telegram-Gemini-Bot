@@ -288,7 +288,6 @@ export class GeminiService {
       throw new AppError(msg || "Failed to chat.", 'generic');
     }
   }
-  }
 
   /** Computer Use (Agent Mode): Pro-only. Screenshot → Gemini suggests UI actions (click, type, navigate). */
   async computerUse(params: {
@@ -302,43 +301,15 @@ export class GeminiService {
     if (plan !== 'pro' && plan !== 'pro_yearly') {
       throw new AppError("Agent mode (Computer Use) is a Pro-only feature. Upgrade to use browser automation.", "plan_required");
     }
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const model = 'gemini-2.5-flash'; // flash works for CUA planning
-    const tools = [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' as any } }];
-    let contents: Array<{ role: 'user' | 'model'; parts: unknown[] }>;
-    if (params.contents && params.contents.length > 0) {
-      contents = params.contents;
-    } else {
-      const parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }> = [{ text: params.prompt }];
-      if (params.screenshotBase64 && params.screenshotBase64.length > 0) {
-        parts.push({ inlineData: { data: params.screenshotBase64, mimeType: params.mimeType || 'image/png' } });
-      }
-      contents = [{ role: 'user' as const, parts }];
-    }
-    const response = await ai.models.generateContent({
-      model,
-      contents,
-      config: { tools },
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'computer-use', prompt: params.prompt, screenshotBase64: params.screenshotBase64, mimeType: params.mimeType, contents: params.contents }),
     });
-    const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts) {
-      return { text: '', functionCalls: [], safetyDecisions: [] };
-    }
-    let text = '';
-    const functionCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
-    const safetyDecisions: Array<{ explanation?: string; decision?: string }> = [];
-    for (const part of candidate.content.parts) {
-      const p = part as { text?: string; functionCall?: { name: string; args?: Record<string, unknown> }; function_call?: { name: string; args?: Record<string, unknown> } };
-      if (p.text) text += p.text;
-      const fc = p.functionCall || p.function_call;
-      if (fc) {
-        functionCalls.push({ name: fc.name, args: fc.args || {} });
-        const args = fc.args as { safety_decision?: { explanation?: string; decision?: string } } | undefined;
-        if (args?.safety_decision) safetyDecisions.push(args.safety_decision);
-      }
-    }
-    return { text: text.trim(), functionCalls, safetyDecisions };
+    if (!r.ok) return { text: '', functionCalls: [], safetyDecisions: [] };
+    return r.json();
   }
 
   async generateImagePro(prompt: string, aspectRatio: AspectRatio, size: ImageSize, signal?: AbortSignal, referenceImage?: { data: string; mimeType: string }): Promise<string> {
@@ -352,75 +323,20 @@ export class GeminiService {
     }
 
     try {
-      const apiKey = await this.getApiKey();
-      const ai = new GoogleGenAI({ apiKey });
-
-      let dataUrl = '';
-
-      if (referenceImage) {
-        // Image-to-image: user supplied a reference image — use gemini-2.0-flash-exp
-        // which supports vision input + image output in one call
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.0-flash',
-          contents: [{
-            parts: [
-              { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
-              { text: `Edit or transform this image based on the following instruction: ${prompt}. Output only the modified image.` },
-            ],
-          }],
-          config: { responseModalities: ['IMAGE', 'TEXT'] } as any,
-        });
-        for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-          const p = part as any;
-          if (p.inlineData?.data) {
-            dataUrl = `data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`;
-            break;
-          }
-        }
-        if (!dataUrl) throw new Error('Image editing failed — try a clearer instruction or different image.');
-      } else {
-        // Text-to-image: Primary Imagen 3, fallback to flash-exp
-        try {
-          const imgRes = await (ai.models as any).generateImages({
-            model: 'imagen-3.0-generate-002',
-            prompt,
-            config: {
-              numberOfImages: 1,
-              aspectRatio: aspectRatio as any,
-              outputMimeType: 'image/png',
-            },
-          });
-          const imgData =
-            imgRes?.generatedImages?.[0]?.image?.imageBytes ??
-            imgRes?.generatedImages?.[0]?.image?.imageData;
-          if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
-        } catch {
-          // Fallback: gemini-2.0-flash-exp
-          const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash',
-            contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
-            config: { responseModalities: ['IMAGE', 'TEXT'] } as any,
-          });
-          for (const part of response.candidates?.[0]?.content?.parts ?? []) {
-            const p = part as any;
-            if (p.inlineData?.data) {
-              dataUrl = `data:${p.inlineData.mimeType || 'image/png'};base64,${p.inlineData.data}`;
-              break;
-            }
-          }
-        }
-        if (!dataUrl) throw new Error('No image returned. Try a different prompt.');
-      }
-
-      if (!dataUrl) throw new Error('No image returned. Try a different prompt.');
-
-      if (!this.currentUser) {
-        this.resetGuestWindows();
-        this.guestUsage.uploadCount++;
-      } else {
-        firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {});
-      }
-      return dataUrl;
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        signal,
+        body: JSON.stringify({ mode: 'image', prompt, aspectRatio, referenceImage: referenceImage || null, plan }),
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error || 'Image generation failed'); }
+      const data = await r.json();
+      if (!this.currentUser) { this.resetGuestWindows(); this.guestUsage.uploadCount++; }
+      else { firebaseService.incrementUsage(this.currentUser.id, 'images').catch(() => {}); }
+      return data.dataUrl;
     } catch (err: any) {
       const msg = err?.message || String(err);
       throw new AppError(msg.includes('limit') ? msg : `Generation failed: ${msg}`, 'generic');
@@ -457,71 +373,30 @@ export class GeminiService {
     }
 
     try {
-      const apiKey = await this.getApiKey();
-      const ai = new GoogleGenAI({ apiKey });
-      const model = isExtend || resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
-
-      const config: { numberOfVideos: number; resolution: string; aspectRatio: string; lastFrame?: { imageBytes: string; mimeType: string } } = {
-        numberOfVideos: 1,
-        resolution,
-        aspectRatio,
-      };
-      if (lastFrame) config.lastFrame = lastFrame;
-
-      const params: {
-        model: string;
-        prompt: string;
-        image?: { imageBytes: string; mimeType: string };
-        video?: { videoBytes: string; mimeType: string };
-        config: typeof config;
-      } = { model, prompt, config };
-      if (image) params.image = image;
-      if (video) params.video = video;
-
-      let operation = await ai.models.generateVideos(params);
-
-      // Poll for completion with timeout + max attempts to avoid infinite spinner.
-      const pollIntervalMs = 8000;
-      const maxPollMs = 5 * 60 * 1000; // 5 minutes
-      const startedAt = Date.now();
-      let attempts = 0;
-      const maxAttempts = Math.ceil(maxPollMs / pollIntervalMs);
-
-      while (!operation.done) {
-        if (Date.now() - startedAt > maxPollMs || attempts >= maxAttempts) {
-          throw new AppError("Video generation is taking longer than expected. Please try again.", "generic");
-        }
-        attempts++;
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
-        operation = await ai.operations.getVideosOperation({ operation });
-        // If the operation itself reports an error, surface it.
-        const opError = (operation as any)?.error;
-        if (opError?.message) {
-          throw new AppError("Video generation failed: " + opError.message, "generic");
-        }
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'video', prompt, aspectRatio, resolution, image: image || null, lastFrame: lastFrame || null, video: video || null, plan }),
+      });
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new AppError(e.error || 'Video generation failed', 'generic'); }
+      const d = await r.json();
+      if (!this.currentUser) { this.resetGuestWindows(); this.guestUsage.uploadCount++; }
+      // Backend returns base64; create blob URL for playback
+      if (d.videoBase64) {
+        const byteStr = atob(d.videoBase64);
+        const ab = new ArrayBuffer(byteStr.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+        return URL.createObjectURL(new Blob([ab], { type: 'video/mp4' }));
       }
-
-      if (!this.currentUser) {
-        this.resetGuestWindows();
-        this.guestUsage.uploadCount++;
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
-          } catch {
-            // ignore
-          }
-        }
-      }
-
-      const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (!videoUri) throw new Error("No video generated.");
-
-      const response = await fetch(`${videoUri}&key=${apiKey}`);
-      const blob = await response.blob();
-      return URL.createObjectURL(blob);
+      throw new AppError('No video returned', 'generic');
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      throw new AppError("Video generation failed: " + msg, 'generic');
+      if (e instanceof AppError) throw e;
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      throw new AppError('Video generation failed: ' + msg, 'generic');
     }
   }
 
@@ -536,140 +411,79 @@ export class GeminiService {
     const { text, stylePrompt, voiceName = 'Kore', multiSpeaker, model = 'flash' } = options;
     if (!text.trim()) throw new AppError("No text to speak.", 'generic');
 
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    // TTS models: pro gets higher quality, flash is default
-    const ttsModels = model === 'pro'
-      ? ['gemini-2.5-flash-preview-tts', 'gemini-2.5-flash-preview-tts']
-      : ['gemini-2.5-flash-preview-tts'];
-    const ttsModel = ttsModels[0]; // Use first; error handling below falls back
-
-    const promptText = stylePrompt?.trim()
-      ? `${stylePrompt.trim()}\n\n${text.trim()}`
-      : text.trim();
-
-    const config: {
-      responseModalities: string[];
-      speechConfig: {
-        voiceConfig?: { prebuiltVoiceConfig: { voiceName: string } };
-        multiSpeakerVoiceConfig?: {
-          speakerVoiceConfigs: { speaker: string; voiceConfig: { prebuiltVoiceConfig: { voiceName: string } } }[];
-        };
-      };
-    } = {
-      responseModalities: ['AUDIO'],
-      speechConfig: multiSpeaker?.length
-        ? {
-            multiSpeakerVoiceConfig: {
-              speakerVoiceConfigs: multiSpeaker.map(({ speaker, voiceName: v }) => ({
-                speaker,
-                voiceConfig: { prebuiltVoiceConfig: { voiceName: v } },
-              })),
-            },
-          }
-        : {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName },
-            },
-          },
-    };
-
-    const response = await ai.models.generateContent({
-      model: ttsModel,
-      contents: [{ role: 'user', parts: [{ text: promptText }] }],
-      config,
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'tts', text, stylePrompt, voiceName, multiSpeaker }),
     });
-
-    const part = response.candidates?.[0]?.content?.parts?.[0];
-    const data = (part as { inlineData?: { data?: string } })?.inlineData?.data;
-    if (!data) throw new AppError("No audio generated.", 'generic');
-    return data;
+    if (!r.ok) throw new AppError((await r.json().catch(() => ({}))).error || 'TTS failed', 'generic');
+    const d = await r.json();
+    if (!d.audioBase64) throw new AppError('No audio generated.', 'generic');
+    return d.audioBase64;
   }
 
   private async updateMemoryFromExchange(uid: string, previousMemory: string, userPrompt: string, assistantReply: string): Promise<void> {
-    const apiKey = await this.getApiKey().catch(() => null);
-    if (!apiKey) return;
-    const ai = new GoogleGenAI({ apiKey });
-    const systemInstruction = `You are a memory manager for a personal AI assistant. Update the user's memory profile.
-
-RULES:
-- Output ONLY the updated memory — no explanation, no commentary
-- Keep it SHORT (3-6 sentences max) and USEFUL for future conversations
-- Include: name, job/projects, preferences, important context they shared
-- IGNORE: greetings, one-off questions, math problems, translation requests
-- REMOVE: outdated info replaced by newer info
-- NEVER include: passwords, sensitive data, trivial facts
-- Write in third person: "User is a developer in Sri Lanka who..."`;
-    const userContent = `PREVIOUS MEMORY:\n${previousMemory || "(none)"}\n\nUSER: ${userPrompt}\n\nASSISTANT: ${assistantReply}`;
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: { role: 'user', parts: [{ text: userContent }] },
-        config: { systemInstruction },
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'memory-update', previousMemory, userPrompt, assistantReply, uid }),
       });
-      let newMemory = (response as { text?: string }).text ?? "";
-      if (!newMemory && response.candidates?.[0]?.content?.parts) {
-        newMemory = response.candidates[0].content.parts
-          .map((p: { text?: string }) => (p?.text ?? ""))
-          .join("")
-          .trim();
-      }
-      if (newMemory) await firebaseService.updateUserMemory(uid, newMemory);
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.newMemory) await firebaseService.updateUserMemory(uid, d.newMemory);
     } catch (err) {
-      // Log for diagnostics; chat flow should not break if memory sync fails.
       console.error("Orin memory update pipeline failed:", err);
-      throw err;
     }
   }
 
   async generateTitle(messages: ChatMessage[], modes: WorkspaceMode[], lang: Language): Promise<string> {
     try {
-      const apiKey = await this.getApiKey();
-      const ai = new GoogleGenAI({ apiKey });
-      const firstMsg = (messages[0]?.content || '').slice(0, 120);
-      const prompt = `Reply with ONLY a 2-4 word title for this chat. No punctuation, no quotes, no explanation — just the title words.\nChat: "${firstMsg}"`;
-      const response = await ai.models.generateContent({ model: 'gemini-2.0-flash-lite', contents: prompt, config: { maxOutputTokens: 12 } });
-      const raw = ((response as { text?: string }).text ?? response.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text).join("") ?? "").trim();
-      const clean = raw.replace(/^["'`*•\-–—]|["'`*•]$/g, '').replace(/^title[:\s]*/i, '').trim();
-      return clean.slice(0, 40) || "New Chat";
-    } catch { return "New Chat"; }
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'title', firstMessage: messages[0]?.content || '' }),
+      });
+      if (!r.ok) return 'New Chat';
+      return (await r.json()).title || 'New Chat';
+    } catch { return 'New Chat'; }
   }
 
   /** Embed text(s) with Gemini Embedding 2 for semantic search. Returns one vector per input. */
   async embedText(texts: string[], options?: { outputDimensionality?: number }): Promise<number[][]> {
     if (texts.length === 0) return [];
-    const apiKey = await this.getApiKey().catch(() => null);
-    if (!apiKey) return texts.map(() => []);
-    const ai = new GoogleGenAI({ apiKey });
-    const config = options?.outputDimensionality != null ? { outputDimensionality: options.outputDimensionality } : undefined;
     try {
-      const response = await ai.models.embedContent({
-        model: 'gemini-embedding-2-preview',
-        contents: texts,
-        config,
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'embed', texts, outputDimensionality: options?.outputDimensionality }),
       });
-      const embeddings = response.embeddings ?? [];
-      return embeddings.map((e) => e.values ?? []);
-    } catch {
-      return texts.map(() => []);
-    }
+      if (!r.ok) return texts.map(() => []);
+      return (await r.json()).embeddings ?? texts.map(() => []);
+    } catch { return texts.map(() => []); }
   }
 
   /** Embed a single image (base64) into the same vector space as text for cross-modal search. */
   async embedImage(imageBase64: string, mimeType: string = 'image/png'): Promise<number[]> {
-    const apiKey = await this.getApiKey().catch(() => null);
-    if (!apiKey) return [];
-    const ai = new GoogleGenAI({ apiKey });
     try {
-      const response = await ai.models.embedContent({
-        model: 'gemini-embedding-2-preview',
-        contents: [{ inlineData: { mimeType, data: imageBase64 } }],
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'embed', imageBase64, mimeType }),
       });
-      const vec = response.embeddings?.[0]?.values;
-      return Array.isArray(vec) ? vec : [];
-    } catch {
-      return [];
-    }
+      if (!r.ok) return [];
+      return (await r.json()).embeddings?.[0] ?? [];
+    } catch { return []; }
   }
 
   /**
@@ -680,159 +494,41 @@ RULES:
     text?: string,
     fileData?: { data: string; mimeType: string; name?: string }
   ): Promise<MathExtractResult> {
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-
-    const extractionPrompt = `You are a mathematical expression extractor.
-Your ONLY job is to read the input and return a JSON object.
-Do NOT solve anything. Do NOT explain anything.
-Return ONLY raw JSON with no markdown, no backticks, no extra text.
-
-Extract and return this structure:
-{
-  "type": "quadratic" | "linear" | "system" | "calculus" | "trigonometry" | "matrix" | "statistics" | "unknown",
-  "expression": "the raw mathematical expression as a standard string e.g. x^2 + 5*x + 6",
-  "latexExpression": "the expression in LaTeX format e.g. x^2 + 5x + 6",
-  "variable": "the variable to solve for e.g. x",
-  "operation": "solve" | "simplify" | "differentiate" | "integrate" | "factor" | "expand",
-  "extraValues": {},
-  "confidence": 0.0,
-  "unreadable": false
-}
-
-If the input is unclear or unreadable set "unreadable": true.
-If it is a system of equations, expression should be an array of strings.`;
-
-    const contents: Array<{ role: 'user'; parts: any[] }> = [];
-    if (fileData) {
-      contents.push({
-        role: 'user',
-        parts: [
-          { inlineData: { data: fileData.data, mimeType: fileData.mimeType } },
-          { text: extractionPrompt },
-        ],
-      });
-    } else {
-      contents.push({
-        role: 'user',
-        parts: [{ text: `${extractionPrompt}\n\nInput: ${text ?? ''}` }],
-      });
-    }
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents,
-      config: {
-        systemInstruction:
-          'You are a JSON-only extractor for maths. Never output anything except a single valid JSON object.',
-      },
-    });
-
-    let raw = (response as { text?: string }).text ?? "";
-    if (!raw && response.candidates?.[0]?.content?.parts) {
-      raw = response.candidates[0].content.parts
-        .map((p: { text?: string }) => (p.text != null ? p.text : ""))
-        .join("");
-    }
-    raw = raw.trim().replace(/```json/gi, "").replace(/```/g, "").trim();
-
     try {
-      const parsed = JSON.parse(raw) as Partial<MathExtractResult>;
-      return {
-        type: parsed.type ?? 'unknown',
-        expression: parsed.expression ?? (text ?? ''),
-        latexExpression: parsed.latexExpression,
-        variable: parsed.variable ?? 'x',
-        operation: parsed.operation as MathOperation | undefined,
-        extraValues: parsed.extraValues ?? {},
-        confidence: typeof parsed.confidence === 'number' ? parsed.confidence : 1,
-        unreadable: !!parsed.unreadable,
-      };
+      let idToken: string | null = null;
+      try { idToken = await firebaseService.getIdToken(); } catch {}
+      const r = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+        body: JSON.stringify({ mode: 'math-extract', text: text || '', fileData: fileData || null }),
+      });
+      if (!r.ok) throw new Error('Math extract failed');
+      return r.json();
     } catch {
-      return {
-        type: 'unknown',
-        expression: text ?? '',
-        variable: 'x',
-        operation: undefined,
-        extraValues: {},
-        confidence: 0,
-        unreadable: false,
-      };
+      return { type: 'unknown', expression: text || '', latexExpression: '', variable: 'x', operation: 'solve', extraValues: {}, confidence: 0, unreadable: true };
     }
   }
 
-  private getVoiceSystemInstruction(tone: string, sessionContext?: { timezone: string; localTime: string; country: string; currency: string; locale: string }) {
-    const tonePart = getToneInstruction(tone || 'neutral');
-    const now = new Date();
-    const tz = sessionContext?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-    const localTime = sessionContext?.localTime || now.toLocaleString('en-US', { timeZone: tz, dateStyle: 'full', timeStyle: 'short' });
-    const country = sessionContext?.country || 'user\'s region';
-    const currency = sessionContext?.currency || 'local currency';
-    const locale = sessionContext?.locale || (typeof navigator !== 'undefined' ? navigator.language : 'en');
-    return `${tonePart}
-
-VOICE RULES (CRITICAL):
-1. LANGUAGE: ALWAYS reply in the SAME language the user speaks. If they speak Sinhala, reply in Sinhala. If Tamil, reply in Tamil. If English, reply in English. NEVER switch languages mid-conversation.
-2. SPEED: Answer in 1–2 short sentences. Be fast and concise. No long monologues.
-3. NOISE: Ignore background noise, coughs, barks, TV sounds. Only respond to clear directed speech. If input seems like noise/incomplete, say "Yes?" or stay silent.
-4. INTERRUPTION: If the user starts speaking, stop immediately. Do not repeat yourself.
-
-SESSION CONTEXT (use for answers about time, place, money, weather):
-- User's timezone: ${tz}
-- Local date and time: ${localTime}
-- User's region/country: ${country}
-- Local currency: ${currency}
-- Locale: ${locale}
-When the user asks about time, date, weather, or prices, use this context. For weather, infer typical conditions for the region if not provided.
-
-ORIN AI FACTS (use when asked about Orin AI features, pricing, privacy, terms, or creator):
-- Orin AI is a Sri Lankan bilingual AI assistant at orinai.org. Creator: Januth Nimnal (only mention if asked).
-- Features: Chat, Camera (live vision AI), Voice (real-time), Studio (image/video/audio gen), Math, Translator, Agent (browser tasks), Creations (social feed), Files.
-- Plans: Free (daily limits), Basic (500 chats/day, 30 images/month, LKR), Pro (unlimited everything, LKR).
-- Privacy: Chat saved in Firebase for signed-in users only. No data sold.
-- If asked about Orin AI privacy, terms, pricing or features — use above facts only, not generic web knowledge.`;
-  }
-
-  /** Live audio models — try native audio first (best quality), fall back to stable. */
-  // SDK-documented model for Gemini API (non-Vertex) live sessions
-  // SDK-documented live model for Gemini API (not Vertex AI)
-  // Live model — try native audio first (what the working build used), fallback to preview
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
-    // Use default v1beta (works for standard Live API per Google docs)
     const ai = new GoogleGenAI({ apiKey });
     const systemInstruction = config.systemInstruction != null
       ? config.systemInstruction
       : this.getVoiceSystemInstruction(config.tone || 'neutral', config.sessionContext);
-
     const liveConfig = {
       responseModalities: [Modality.AUDIO],
       speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: config.voiceName || 'Zephyr' } } },
       systemInstruction,
-      // VAD tuning: high sensitivity for instant response
       realtimeInputConfig: {
         automaticActivityDetection: {
-          // START_SENSITIVITY_HIGH picks up speech fast — good for responsiveness
           startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH' as any,
-          // END_SENSITIVITY_HIGH cuts off quickly after speech ends — fast response
           endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH' as any,
-          // 600ms silence before turn ends — fast but allows natural pauses
           silenceDurationMs: 600,
-          // 250ms of sustained audio required before triggering
-          // Dog barks / claps / short noises are typically < 200ms — this filters them
-          // Human speech syllables are 200-400ms+ — this still captures them
           prefixPaddingMs: 250,
         },
       },
     };
-
-    // Model confirmed working in official Google docs (March 2026)
-    // gemini-live-2.5-flash-preview was removed; use native audio model
-    // Add Google Search grounding so voice can answer current events
-    const liveConfigWithTools = {
-      ...liveConfig,
-      tools: [{ googleSearch: {} }],
-    };
+    const liveConfigWithTools = { ...liveConfig, tools: [{ googleSearch: {} }] };
     const model = 'gemini-2.5-flash-native-audio-preview-12-2025';
     return ai.live.connect({ model, callbacks, config: liveConfigWithTools });
   }
@@ -1054,34 +750,19 @@ Final Answer: …
 ---ENDMETHOD---
 If multiple methods, add a second block. Steps ARE the answer.`;
 
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const parts: any[] = [];
-    if (options.fileData)
-      parts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
-    parts.push({ text: options.prompt });
-
-    let text = '';
-    let lastErr: unknown;
-    for (const model of this.getModelsToTry(this.currentUser)) {
-      try {
-        const res = await ai.models.generateContent({
-          model, contents: [{ role: 'user', parts }],
-          config: { systemInstruction: MATH_SYS },
-        });
-        text = (res as any).text ?? '';
-        if (!text && res.candidates?.[0]?.content?.parts)
-          text = res.candidates[0].content.parts.map((p: any) => p.text ?? '').join('');
-        if (text) break;
-      } catch (e) { lastErr = e; }
-    }
-    if (!text && lastErr) throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
-
-    if (this.currentUser)
-      firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'math', prompt: options.prompt, fileData: options.fileData || null, plan }),
+    });
+    if (!r.ok) throw new AppError((await r.json().catch(() => ({}))).error || 'Math solve failed', 'generic');
+    const d = await r.json();
+    if (this.currentUser) firebaseService.incrementUsage(this.currentUser.id, 'text').catch(() => {});
     else { this.resetGuestWindows(); this.guestUsage.textCount++; }
-
-    return text || 'No solution returned. Try again.';
+    return d.text || 'No solution returned. Try again.';
   }
 
   /** Agent: plan a task into rich, executable browser steps with clipboard + screenshot support */
@@ -1090,74 +771,16 @@ If multiple methods, add a second block. Steps ARE the answer.`;
     if (plan !== 'pro' && plan !== 'pro_yearly' && plan !== 'basic' && plan !== 'basic_yearly') {
       throw new AppError('Agent mode requires Basic or Pro plan.', 'plan_required');
     }
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [{ parts: [{ text: `You are a browser automation agent. Break this task into concrete, executable steps.
-
-TASK: ${task}
-
-Reply ONLY with valid JSON (no markdown fences, no explanation):
-{
-  "summary": "One sentence: what will be accomplished",
-  "steps": [
-    {
-      "action": "navigate",
-      "target": "https://exact-url.com",
-      "description": "Go to the website"
-    },
-    {
-      "action": "type",
-      "target": "search box / field name",
-      "value": "exact text to type",
-      "description": "Type the search query",
-      "instruction": "Click the search box first, then paste"
-    },
-    {
-      "action": "fill",
-      "target": "Name field",
-      "value": "John",
-      "description": "Fill in the name"
-    },
-    {
-      "action": "click",
-      "target": "Submit button / exact label",
-      "description": "Click submit",
-      "instruction": "The button is at the bottom of the form"
-    },
-    {
-      "action": "screenshot",
-      "description": "Take a screenshot so Gemini can see the current state"
-    },
-    {
-      "action": "copy",
-      "target": "result",
-      "value": "text to copy to clipboard",
-      "description": "Copy the result"
-    },
-    {
-      "action": "done",
-      "description": "Task complete — describe what was accomplished"
-    }
-  ]
-}
-
-VALID ACTIONS: navigate, search, type, fill, click, screenshot, copy, wait, done
-
-RULES:
-- Use real URLs (https://...)
-- For type/fill: put EXACT text in "value" field — it will be auto-copied to clipboard
-- Add "instruction" for click steps to say WHERE exactly to click
-- Include a screenshot step after navigation to complex pages
-- Be specific and actionable
-- 5-12 steps max` }] }],
-      config: { systemInstruction: 'Output only valid JSON. No markdown. No explanation.' },
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
+    const r = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}) },
+      body: JSON.stringify({ mode: 'agent-plan', task }),
     });
-    const text = (response.candidates?.[0]?.content?.parts?.[0] as any)?.text || '';
+    if (!r.ok) return { steps: [], summary: '' };
     try {
-      const clean = text.replace(/```json|```/g, '').trim();
-      return JSON.parse(clean);
+      return await r.json();
     } catch {
       // Fallback to a basic search plan
       return {

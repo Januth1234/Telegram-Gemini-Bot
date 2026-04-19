@@ -131,15 +131,19 @@ export default async function handler(req, res) {
   // ── mode routing ────────────────────────────────────────────────────────────
   const mode = req.body?.mode || 'chat';
 
-  if (mode === 'code') {
-    return handleCodeExecution(req, res, apiKey);
-  }
-  if (mode === 'url') {
-    return handleUrlContext(req, res, apiKey);
-  }
-  if (mode === 'research') {
-    return handleDeepResearch(req, res, apiKey);
-  }
+  if (mode === 'code')        return handleCodeExecution(req, res, apiKey);
+  if (mode === 'url')         return handleUrlContext(req, res, apiKey);
+  if (mode === 'research')    return handleDeepResearch(req, res, apiKey);
+  if (mode === 'image')       return handleImageGen(req, res, apiKey);
+  if (mode === 'tts')         return handleTts(req, res, apiKey);
+  if (mode === 'computer-use')return handleComputerUse(req, res, apiKey);
+  if (mode === 'agent-plan')  return handleAgentPlan(req, res, apiKey);
+  if (mode === 'title')       return handleTitle(req, res, apiKey);
+  if (mode === 'embed')       return handleEmbed(req, res, apiKey);
+  if (mode === 'math')        return handleMath(req, res, apiKey);
+  if (mode === 'memory-update') return handleMemoryUpdate(req, res, apiKey);
+  if (mode === 'video')         return handleVideoGen(req, res, apiKey);
+  if (mode === 'math-extract')  return handleMathExtract(req, res, apiKey);
 
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -311,5 +315,259 @@ async function handleDeepResearch(req, res, apiKey) {
     return res.status(200).json({ text: text.trim(), links });
   } catch (err) {
     return res.status(500).json({ error: err?.message || 'Deep research failed' });
+  }
+}
+
+
+// ── Image Generation ──────────────────────────────────────────────────────────
+export async function handleImageGen(req, res, apiKey) {
+  const { prompt, aspectRatio = '1:1', referenceImage, plan = 'free' } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    let dataUrl = '';
+
+    if (referenceImage?.data) {
+      const r = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ parts: [
+          { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
+          { text: `Edit or transform this image: ${prompt}. Output only the modified image.` },
+        ]}],
+        config: { responseModalities: ['IMAGE', 'TEXT'] },
+      });
+      for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+        if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
+      }
+    } else {
+      try {
+        const imgRes = await ai.models.generateImages({
+          model: 'imagen-3.0-generate-002',
+          prompt,
+          config: { numberOfImages: 1, aspectRatio, outputMimeType: 'image/png' },
+        });
+        const imgData = imgRes?.generatedImages?.[0]?.image?.imageBytes ?? imgRes?.generatedImages?.[0]?.image?.imageData;
+        if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
+      } catch {
+        const r = await ai.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+          config: { responseModalities: ['IMAGE', 'TEXT'] },
+        });
+        for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+          if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
+        }
+      }
+    }
+    if (!dataUrl) return res.status(400).json({ error: 'No image returned. Try a different prompt.' });
+    return res.status(200).json({ dataUrl });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Image generation failed' });
+  }
+}
+
+// ── TTS ───────────────────────────────────────────────────────────────────────
+export async function handleTts(req, res, apiKey) {
+  const { text, stylePrompt, voiceName = 'Kore', multiSpeaker } = req.body || {};
+  if (!text?.trim()) return res.status(400).json({ error: 'No text to speak' });
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const promptText = stylePrompt?.trim() ? `${stylePrompt.trim()}\n\n${text.trim()}` : text.trim();
+    const speechConfig = multiSpeaker?.length
+      ? { multiSpeakerVoiceConfig: { speakerVoiceConfigs: multiSpeaker.map(({ speaker, voiceName: v }) => ({ speaker, voiceConfig: { prebuiltVoiceConfig: { voiceName: v } } })) } }
+      : { voiceConfig: { prebuiltVoiceConfig: { voiceName } } };
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-preview-tts',
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      config: { responseModalities: ['AUDIO'], speechConfig },
+    });
+    const data = r.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!data) return res.status(400).json({ error: 'No audio generated' });
+    return res.status(200).json({ audioBase64: data });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'TTS failed' });
+  }
+}
+
+// ── computerUse (agent screenshot → action plan) ──────────────────────────────
+export async function handleComputerUse(req, res, apiKey) {
+  const { prompt, screenshotBase64, mimeType = 'image/png', contents: contentsIn } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const contents = contentsIn?.length ? contentsIn : [{
+      role: 'user',
+      parts: [
+        ...(screenshotBase64 ? [{ inlineData: { data: screenshotBase64, mimeType } }] : []),
+        { text: prompt || '' },
+      ],
+    }];
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+      config: { tools: [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' } }] },
+    });
+    let text = '';
+    const functionCalls = [];
+    const safetyDecisions = [];
+    for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text) text += part.text;
+      const fc = part.functionCall || part.function_call;
+      if (fc) {
+        functionCalls.push({ name: fc.name, args: fc.args || {} });
+        if (fc.args?.safety_decision) safetyDecisions.push(fc.args.safety_decision);
+      }
+    }
+    return res.status(200).json({ text: text.trim(), functionCalls, safetyDecisions });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Computer use failed' });
+  }
+}
+
+// ── agentPlan ─────────────────────────────────────────────────────────────────
+export async function handleAgentPlan(req, res, apiKey) {
+  const { task } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ parts: [{ text: `You are a browser automation agent. Break this task into concrete, executable steps.\n\nTASK: ${task}\n\nReply ONLY with valid JSON (no markdown fences, no explanation):\n{"summary":"One sentence summary","steps":[{"action":"navigate","target":"https://url","description":"desc"},{"action":"click","target":"element","description":"desc"},{"action":"type","target":"field","value":"text","description":"desc"},{"action":"screenshot","description":"desc"},{"action":"done","description":"desc"}]}\n\nVALID ACTIONS: navigate, search, type, fill, click, screenshot, copy, wait, done` }] }],
+      config: { systemInstruction: 'Output only valid JSON. No markdown. No explanation.' },
+    });
+    const text = r.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const clean = text.replace(/```json|```/g, '').trim();
+    return res.status(200).json(JSON.parse(clean));
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Agent planning failed', steps: [], summary: '' });
+  }
+}
+
+// ── generateTitle ─────────────────────────────────────────────────────────────
+export async function handleTitle(req, res, apiKey) {
+  const { firstMessage } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.0-flash-lite',
+      contents: `Reply with ONLY a 2-4 word title. No punctuation, no quotes.\nChat: "${(firstMessage || '').slice(0, 120)}"`,
+      config: { maxOutputTokens: 12 },
+    });
+    const raw = (r.text ?? r.candidates?.[0]?.content?.parts?.map(p => p.text).join('') ?? '').trim();
+    return res.status(200).json({ title: raw.replace(/^[\"'`*•\-–—]|[\"'`*•]$/g, '').replace(/^title[:\s]*/i, '').trim().slice(0, 40) || 'New Chat' });
+  } catch { return res.status(200).json({ title: 'New Chat' }); }
+}
+
+// ── embedText ─────────────────────────────────────────────────────────────────
+export async function handleEmbed(req, res, apiKey) {
+  const { texts, imageBase64, mimeType = 'image/png', outputDimensionality } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const config = outputDimensionality != null ? { outputDimensionality } : undefined;
+    if (imageBase64) {
+      const r = await ai.models.embedContent({ model: 'gemini-embedding-2-preview', contents: [{ inlineData: { mimeType, data: imageBase64 } }] });
+      return res.status(200).json({ embeddings: [r.embeddings?.[0]?.values ?? []] });
+    }
+    const r = await ai.models.embedContent({ model: 'gemini-embedding-2-preview', contents: texts || [], config });
+    return res.status(200).json({ embeddings: (r.embeddings ?? []).map(e => e.values ?? []) });
+  } catch (err) {
+    return res.status(200).json({ embeddings: (texts || []).map(() => []) });
+  }
+}
+
+// ── solveMathWithAI ───────────────────────────────────────────────────────────
+export async function handleMath(req, res, apiKey) {
+  const { prompt, fileData, plan = 'free' } = req.body || {};
+  const MATH_SYS = `You are a professional math tutor like Symbolab or Wolfram Alpha.\nSolve math problems with COMPLETE step-by-step working.\n1. Show EVERY algebraic step.\n2. For quadratic: compute Δ = b²−4ac, then both roots.\n3. For calculus: name the rule then apply it.\n4. End with "Final Answer:" clearly labelled.\nFormat:\n---METHOD: [Name] ---\nStep 1: …\nFinal Answer: …\n---ENDMETHOD---`;
+  const models = plan.includes('pro') ? ['gemini-2.5-flash', 'gemini-2.0-flash'] : plan.includes('basic') ? ['gemini-2.5-flash', 'gemini-2.0-flash'] : ['gemini-2.0-flash'];
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const parts = [];
+    if (fileData?.data) parts.push({ inlineData: { data: fileData.data, mimeType: fileData.mimeType } });
+    parts.push({ text: prompt });
+    for (const model of models) {
+      try {
+        const r = await ai.models.generateContent({ model, contents: [{ role: 'user', parts }], config: { systemInstruction: MATH_SYS } });
+        const text = r.text ?? r.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('') ?? '';
+        if (text) return res.status(200).json({ text });
+      } catch {}
+    }
+    return res.status(400).json({ error: 'No solution returned' });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Math solve failed' });
+  }
+}
+
+
+// ── Memory update ──────────────────────────────────────────────────────────────
+async function handleMemoryUpdate(req, res, apiKey) {
+  const { previousMemory, userPrompt, assistantReply } = req.body || {};
+  const SYS = `You are a memory manager for a personal AI assistant.
+RULES: Output ONLY the updated memory (3-6 sentences max). Include: name, job, preferences, context.
+IGNORE: greetings, math, one-off questions. REMOVE outdated info. Write in third person.`;
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: { role: 'user', parts: [{ text: `PREVIOUS MEMORY:\n${previousMemory || '(none)'}\n\nUSER: ${userPrompt}\n\nASSISTANT: ${assistantReply}` }] },
+      config: { systemInstruction: SYS },
+    });
+    const newMemory = (r.text ?? r.candidates?.[0]?.content?.parts?.map(p => p.text ?? '').join('') ?? '').trim();
+    return res.status(200).json({ newMemory });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message });
+  }
+}
+
+
+// ── Video Generation ──────────────────────────────────────────────────────────
+async function handleVideoGen(req, res, apiKey) {
+  const { prompt, aspectRatio = '16:9', resolution = '720p', image, lastFrame, video: videoIn, plan = 'free' } = req.body || {};
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const isExtend = !!videoIn;
+    const model = isExtend || resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+    const config = { numberOfVideos: 1, resolution, aspectRatio };
+    if (lastFrame) config.lastFrame = lastFrame;
+    const params = { model, prompt, config };
+    if (image) params.image = image;
+    if (videoIn) params.video = videoIn;
+
+    let operation = await ai.models.generateVideos(params);
+    const startedAt = Date.now();
+    while (!operation.done) {
+      if (Date.now() - startedAt > 300000) return res.status(408).json({ error: 'Video generation timed out' });
+      await new Promise(r => setTimeout(r, 8000));
+      operation = await ai.operations.getVideosOperation({ operation });
+      if (operation?.error?.message) return res.status(400).json({ error: operation.error.message });
+    }
+    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!videoUri) return res.status(400).json({ error: 'No video generated' });
+    const vr = await fetch(`${videoUri}&key=${apiKey}`);
+    const buf = Buffer.from(await vr.arrayBuffer());
+    return res.status(200).json({ videoBase64: buf.toString('base64') });
+  } catch (err) {
+    return res.status(500).json({ error: err?.message || 'Video generation failed' });
+  }
+}
+
+// ── Math Expression Extractor ─────────────────────────────────────────────────
+async function handleMathExtract(req, res, apiKey) {
+  const { text, fileData } = req.body || {};
+  const EXTRACT_PROMPT = `You are a mathematical expression extractor. Return ONLY raw JSON, no markdown.
+{"type":"quadratic|linear|system|calculus|trigonometry|matrix|statistics|unknown","expression":"raw math string","latexExpression":"LaTeX","variable":"x","operation":"solve|simplify|differentiate|integrate|factor|expand","extraValues":{},"confidence":0.9,"unreadable":false}`;
+  try {
+    const ai = new GoogleGenAI({ apiKey });
+    const parts = [];
+    if (fileData?.data) parts.push({ inlineData: { data: fileData.data, mimeType: fileData.mimeType } });
+    parts.push({ text: `${EXTRACT_PROMPT}
+
+Input: ${text || ''}` });
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{ role: 'user', parts }],
+      config: { systemInstruction: 'Output only valid JSON. No markdown. No explanation.' },
+    });
+    const raw = (r.text ?? r.candidates?.[0]?.content?.parts?.[0]?.text ?? '').replace(/```json|```/g, '').trim();
+    return res.status(200).json(JSON.parse(raw));
+  } catch (err) {
+    return res.status(200).json({ type: 'unknown', expression: text || '', latexExpression: '', variable: 'x', operation: 'solve', extraValues: {}, confidence: 0, unreadable: true });
   }
 }
