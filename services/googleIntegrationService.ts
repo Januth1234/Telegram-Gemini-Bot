@@ -117,6 +117,11 @@ export async function disableModule(module: GoogleModuleId): Promise<void> {
   } catch {}
 }
 
+export async function enableModule(module: GoogleModuleId): Promise<void> {
+  // Re-request consent to re-enable a disconnected module
+  await requestModuleConsent(module);
+}
+
 // ── Get a valid token (server handles refresh automatically) ──────────────────
 export async function getValidToken(module: GoogleModuleId): Promise<string | null> {
   try {

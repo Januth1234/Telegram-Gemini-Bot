@@ -12,7 +12,7 @@ import {
 } from '../services/aiProviderService';
 import {
   GOOGLE_MODULES, GoogleModuleId,
-  isModuleEnabled, getGrantedModules,
+  isModuleEnabled, getGrantedModules, fetchModuleStatus,
   requestModuleConsent, disableModule, enableModule,
 } from '../services/googleIntegrationService';
 
@@ -49,19 +49,19 @@ const AIProviderSettings: React.FC = () => {
 
   useEffect(() => {
     setKeys(getProviderKeys());
-    setIntegs(getIntegrations());
-    setGrantedModules(getGrantedModules());
     // Handle Spotify callback
     const code = sessionStorage.getItem('oauth_callback_code') || new URLSearchParams(window.location.search).get('code');
     if (code) { sessionStorage.removeItem('oauth_callback_code'); handleSpotifyCallback(); }
-    // Re-check Google vault every time settings opens (catches post-redirect state)
-    const onStorage = () => { setGrantedModules(getGrantedModules()); setIntegs(getIntegrations()); };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    // Load Google module status from backend
+    refreshGoogleState();
   }, []);
 
-  const [grantedModules, setGrantedModules] = React.useState<GoogleModuleId[]>(() => getGrantedModules());
-  const refreshGoogleState = () => setGrantedModules(getGrantedModules());
+  const [grantedModules, setGrantedModules] = React.useState<GoogleModuleId[]>([]);
+  const refreshGoogleState = () => {
+    fetchModuleStatus().then(status => {
+      setGrantedModules(Object.entries(status).filter(([,v]) => v).map(([k]) => k as GoogleModuleId));
+    }).catch(() => {});
+  };
 
   const refresh = () => { setKeys(getProviderKeys()); setIntegs(getIntegrations()); };
 
@@ -253,7 +253,7 @@ const AIProviderSettings: React.FC = () => {
                       <p className={`text-[8px] ${active ? 'text-emerald-500' : 'text-slate-400'}`}>{active ? 'Connected' : 'Not connected'}</p>
                     </div>
                     {active
-                      ? <button onClick={() => { disableModule(mid); refreshGoogleState(); }}
+                      ? <button onClick={async () => { await disableModule(mid); refreshGoogleState(); }}
                           className="text-[8px] font-black text-red-400 hover:text-red-500 uppercase shrink-0">Off</button>
                       : <button onClick={async () => { await requestModuleConsent(mid); }}
                           className="text-[8px] font-black text-indigo-500 hover:text-indigo-600 uppercase shrink-0 border border-indigo-300 dark:border-indigo-700 px-2 py-0.5 rounded-lg">Allow</button>

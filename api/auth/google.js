@@ -143,10 +143,16 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  // ── disable ───────────────────────────────────────────────────────────────
+  // ── disable / enable ─────────────────────────────────────────────────────
   if (action === 'disable') {
     if (!module) return res.status(400).json({ error: 'module required' });
     await tokensCol().doc(module).set({ enabled: false }, { merge: true });
+    return res.status(200).json({ ok: true });
+  }
+
+  if (action === 'enable') {
+    if (!module) return res.status(400).json({ error: 'module required' });
+    await tokensCol().doc(module).set({ enabled: true }, { merge: true });
     return res.status(200).json({ ok: true });
   }
 
