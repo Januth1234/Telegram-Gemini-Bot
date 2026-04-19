@@ -58,35 +58,17 @@ export function getDecryptedKey(provider: string, label?: string): string | null
   return match ? dec(match.key) : null;
 }
 
-// ── Integration tokens ────────────────────────────────────────────────────────
+// ── Integration tokens — now handled server-side ─────────────────────────────
+// Spotify tokens are stored encrypted in Firestore via /api/auth/spotify.
+// These stubs remain for backward compat with any callers.
 
-export function getIntegrations(): IntegrationToken[] {
-  try { return JSON.parse(localStorage.getItem(INTEGRATIONS_KEY) || '[]'); }
-  catch { return []; }
-}
-
-export function getIntegration(service: string): IntegrationToken | null {
-  return getIntegrations().find(i => i.service === service) || null;
-}
-
-export function saveIntegration(token: IntegrationToken): void {
-  const list = getIntegrations().filter(i => i.service !== token.service);
-  list.push({ ...token, accessToken: token.accessToken ? enc(token.accessToken) : undefined,
-    refreshToken: token.refreshToken ? enc(token.refreshToken) : undefined });
-  localStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(list));
-  _syncToFirestore();
-}
-
-export function removeIntegration(service: string): void {
-  const list = getIntegrations().filter(i => i.service !== service);
-  localStorage.setItem(INTEGRATIONS_KEY, JSON.stringify(list));
-  _syncToFirestore();
-}
-
-export function getDecryptedToken(service: string): { access: string; refresh: string } | null {
-  const t = getIntegration(service);
-  if (!t || !t.accessToken) return null;
-  return { access: dec(t.accessToken), refresh: t.refreshToken ? dec(t.refreshToken) : '' };
+export function getIntegrations(): IntegrationToken[] { return []; }
+export function getIntegration(service: string): IntegrationToken | null { return null; }
+export function saveIntegration(_token: IntegrationToken): void { /* no-op: use /api/auth/spotify */ }
+export function removeIntegration(_service: string): void { /* no-op */ }
+export function getDecryptedToken(_service: string): { access: string; refresh: string } | null {
+  // Tokens now live server-side. Use /api/auth/spotify?action=getToken instead.
+  return null;
 }
 
 // ── Sync to Firestore (background) ───────────────────────────────────────────

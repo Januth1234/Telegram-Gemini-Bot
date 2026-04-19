@@ -201,169 +201,93 @@ export class GeminiService {
     /** Internal/system calls (e.g. release summaries) should not consume user quota. */
     internal?: boolean;
   } = {}): Promise<{ text: string; links: GroundingLink[]; reasoning_details?: any }> {
-    
+    // ── Plan / guest limit check ──────────────────────────────────────────
     if (this.currentUser) {
-        // Use checkLimit (read-only) to avoid Firestore write permission issues
-        // incrementUsage fires after successful response
-        const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
-        if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
-      } else {
-        this.resetGuestWindows();
-        if (this.guestUsage.textCount >= this.guestUsage.textMax) {
-          throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
-        }
-      }
-
-    const apiKey = await this.getApiKey();
-    const ai = new GoogleGenAI({ apiKey });
-    
-    let memory = "";
-    if (this.currentUser && !options.isPrivate) {
-       memory = await firebaseService.getUserMemory(this.currentUser.id);
+      const limitReached = await firebaseService.checkLimit(this.currentUser.id, 'text');
+      if (limitReached) throw new AppError("Plan limit reached. Upgrade to continue.", "limit_reached");
+    } else {
+      this.resetGuestWindows();
+      if (this.guestUsage.textCount >= this.guestUsage.textMax)
+        throw new AppError("Guest demo limit reached. Sign in to continue.", "limit_reached");
     }
 
-    const useThinking = !!options.useThinking;
-    const descriptive = !!options.descriptive;
+    // ── Sanitise history: strip base64 blobs to keep payload small ────────
+    const contextLimit = this.getContextMessageLimit(this.currentUser);
+    const safeHistory = (options.history || []).slice(-contextLimit).map(msg => ({
+      role: msg.role,
+      content: msg.content || '',
+    }));
 
-    let systemInstruction = getSystemInstruction('neutral', memory);
-    systemInstruction += `
+    // ── Auth token for backend ────────────────────────────────────────────
+    let idToken: string | null = null;
+    try { idToken = await firebaseService.getIdToken(); } catch {}
 
-EXPLANATION STYLE:
-- Descriptive mode: ${descriptive ? 'ON' : 'OFF'}.
-- When descriptive mode is ON, give clear, step-by-step explanations with short examples or analogies when helpful, but avoid unnecessary repetition.
-- When descriptive mode is OFF, keep answers short and focused unless the user explicitly asks for more detail.
-- Never include your internal reasoning steps or chain-of-thought—only the final explanation.`;
-
-    const promptText = (prompt || "Continue.").trim();
+    const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
 
     try {
-      const contextLimit = this.getContextMessageLimit(this.currentUser);
-      const contents: { role: 'user' | 'model'; parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] }[] = [];
-      if (options.history && options.history.length > 0) {
-        for (const msg of options.history.slice(-contextLimit)) {
-          const role = msg.role === 'user' ? 'user' : 'model';
-          const text = msg.role === 'user' && msg.imageUrl ? (msg.content + " [Image sent]") : msg.content;
-          if (text) contents.push({ role, parts: [{ text }] });
-        }
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        signal: options.signal,
+        body: JSON.stringify({
+          prompt,
+          history:     safeHistory,
+          fileData:    options.fileData || null,
+          fileIds:     (options as any).fileIds || [],
+          tone:        (options as any).tone || 'neutral',
+          plan,
+          useThinking: !!options.useThinking,
+          descriptive: !!options.descriptive,
+          grounding:   options.grounding || null,
+          isPrivate:   !!options.isPrivate,
+          uid:         this.currentUser?.id || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Server error', type: 'generic' }));
+        if (err.type === 'quota' || res.status === 429) throw new AppError(err.error, 'quota');
+        if (err.type === 'auth'  || res.status === 401) throw new AppError(err.error, 'auth');
+        if (err.type === 'safety')                      throw new AppError(err.error, 'safety');
+        throw new AppError(err.error || 'Chat failed.', 'generic');
       }
 
-      const currentParts: { text?: string; inlineData?: { data: string; mimeType: string } }[] = [];
-      if (options.fileData) {
-        currentParts.push({ inlineData: { data: options.fileData.data, mimeType: options.fileData.mimeType } });
-      }
-      currentParts.push({ text: promptText });
-      contents.push({ role: 'user', parts: currentParts });
+      const data = await res.json();
 
-      const lowerPrompt = promptText.toLowerCase();
-      const looksTimeSensitive = /job|jobs|vacanc|career|internship|news|weather|stock|price|exchange rate|results|live|current|latest|today|now|status of|what.s happening|middle east|ukraine|war|crisis|election|conflict/i.test(lowerPrompt);
-
-      const config: { systemInstruction: string; tools?: unknown[] } = { systemInstruction };
-
-      // Only attach tools when needed: maps by request, search only for time-sensitive or explicit search.
-      // Never enable search for private mode or file attachments (saves quota, keeps answers local).
-      const allowSearch =
-        !options.isPrivate &&
-        !options.fileData &&
-        (options.grounding === 'search' || looksTimeSensitive);
-
-      if (options.grounding === 'maps') {
-        config.tools = [{ googleMaps: {} }];
-      } else if (allowSearch) {
-        config.tools = [{ googleSearch: {} }];
-      }
-
-      const modelsToTry = this.getModelsToTry(this.currentUser);
-      // Native thinking API: plan-based budget. Free=0, Basic=4096, Pro=8192. Toggle off = 0.
-      const plan = this.currentUser?.plan?.toLowerCase() ?? 'free';
-      const thinkingBudget = !useThinking ? 0
-        : plan === 'pro' || plan === 'pro_yearly' ? 8192
-        : plan === 'basic' || plan === 'basic_yearly' ? 4096
-        : 0;
-      const thinkingConfig = { thinkingBudget };
-
-      let lastError: unknown = null;
-      let response: Awaited<ReturnType<typeof ai.models.generateContent>> | null = null;
-
-      for (const modelName of modelsToTry) {
-        try {
-          const requestConfig = { ...config, thinkingConfig } as typeof config & { thinkingConfig: { thinkingBudget: number } };
-          response = await ai.models.generateContent({
-            model: modelName,
-            contents,
-            config: requestConfig,
-          });
-          break;
-        } catch (err) {
-          lastError = err;
-          continue;
-        }
-      }
-
-      if (!response) {
-        throw lastError instanceof Error ? lastError : new Error(String(lastError));
-      }
-
+      // Guest usage tracking
       if (!this.currentUser) {
-        this.resetGuestWindows();
         this.guestUsage.textCount++;
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage));
-          } catch {
-            // ignore
-          }
-        }
+        try { window.localStorage.setItem('orin-guest-usage', JSON.stringify(this.guestUsage)); } catch {}
       }
 
-      const links: GroundingLink[] = [];
-      for (const chunk of response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
-        if (chunk.web) links.push({ title: chunk.web.title, uri: chunk.web.uri });
-        else if (chunk.maps) links.push({ title: chunk.maps.title, uri: chunk.maps.uri });
-      }
-
-      let text = (response as { text?: string }).text ?? "";
-      if (response.candidates?.[0]?.content?.parts) {
-        const parts = response.candidates[0].content.parts as any[];
-        // Try to get clean text-only parts (skip thinking/code execution)
-        const textOnly = parts
-          .filter((p: any) => p.text != null && !p.thought && !p.executableCode && !p.codeExecutionResult)
-          .map((p: any) => p.text as string)
-          .join("");
-        if (textOnly.trim()) {
-          text = textOnly;
-        } else if (!text.trim()) {
-          // Fallback: extract code execution output if that's all we got
-          const codeOutput = parts
-            .filter((p: any) => p.codeExecutionResult?.output)
-            .map((p: any) => p.codeExecutionResult.output as string)
-            .join("\n").trim();
-          if (codeOutput) text = codeOutput;
-        }
-      }
-      // Strip raw tool_code fences the model sometimes wraps around Python
-      text = text.replace(/\`\`\`tool_code[\s\S]*?\`\`\`/g, '').trim();
-      if (!text.trim()) text = "I couldn't generate a response. Please try again.";
-
-      if (this.currentUser && !options.isPrivate && memory !== undefined) {
+      // Memory update — fire-and-forget
+      if (this.currentUser && !options.isPrivate) {
         const uid = this.currentUser.id;
         const now = Date.now();
         const last = this.lastMemoryUpdateByUser.get(uid) ?? 0;
-        const cooldownOk = now - last >= MEMORY_UPDATE_COOLDOWN_MS;
-        if (shouldUpdateMemoryFromExchange(promptText) && cooldownOk) {
+        if (shouldUpdateMemoryFromExchange(prompt || '') && now - last >= MEMORY_UPDATE_COOLDOWN_MS) {
           this.lastMemoryUpdateByUser.set(uid, now);
-          this.updateMemoryFromExchange(uid, memory, promptText, text).catch((err) => {
-            // Surface memory update failures for observability without breaking chat.
-            console.error("Orin memory update failed:", err);
-          });
+          firebaseService.getUserMemory(uid).then(mem =>
+            this.updateMemoryFromExchange(uid, mem, prompt || '', data.text || '')
+          ).catch(console.error);
         }
       }
 
-      return { text, links };
+      return {
+        text:              data.text || "I couldn't generate a response. Please try again.",
+        links:             data.links || [],
+        reasoning_details: data.reasoning_details,
+      };
     } catch (e: unknown) {
       if (e instanceof Error && e.name === 'AbortError') throw e;
+      if (e instanceof AppError) throw e;
       const msg = e instanceof Error ? e.message : String(e);
       throw new AppError(msg || "Failed to chat.", 'generic');
     }
+  }
   }
 
   /** Computer Use (Agent Mode): Pro-only. Screenshot → Gemini suggests UI actions (click, type, navigate). */

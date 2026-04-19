@@ -2,9 +2,25 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Existing user data (keep as is) ──────────────────────────────────────
+    // ── User profile + subcollections ─────────────────────────────────────────
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+
+      // File library metadata — backend (Admin SDK) writes, owner can read/delete
+      match /files/{fileId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if false; // only backend via Admin SDK
+      }
+
+      // Google OAuth tokens — never readable/writable by client
+      match /google_tokens/{module} {
+        allow read, write: if false; // only backend via Admin SDK
+      }
+
+      // Spotify + other integration tokens — never readable/writable by client
+      match /integrations/{integration} {
+        allow read, write: if false; // only backend via Admin SDK
+      }
     }
 
     match /conversations/{userId}/{document=**} {
@@ -31,33 +47,19 @@ service cloud.firestore {
 
     // ── Creations (social feed) ───────────────────────────────────────────────
     match /creations/{creationId} {
-      // Anyone can read — public feed
       allow read: if true;
-
-      // Only signed-in users can create
       allow create: if request.auth != null
         && request.resource.data.userId == request.auth.uid;
-
-      // Only the owner can update or delete
       allow update: if request.auth != null
         && resource.data.userId == request.auth.uid;
-
       allow delete: if request.auth != null
         && resource.data.userId == request.auth.uid;
 
-      // Comments subcollection
       match /comments/{commentId} {
-        // Anyone can read comments
         allow read: if true;
-
-        // Signed-in users can add comments
         allow create: if request.auth != null
           && request.resource.data.userId == request.auth.uid;
-
-        // Comment owner can update (e.g. toggle like on own comment)
         allow update: if request.auth != null;
-
-        // Comment owner or creation owner can delete
         allow delete: if request.auth != null;
       }
     }
