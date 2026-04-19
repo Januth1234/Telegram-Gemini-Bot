@@ -268,8 +268,8 @@ const AIProviderSettings: React.FC = () => {
           <div className="space-y-1.5">
             <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-1">Other Services</p>
             {INTEGRATIONS.map(integ => {
-              const tok = getInteg(integ.id);
-              const connected = !!(tok?.accessToken);
+              // Spotify status comes from backend state; other integrations are legacy stubs
+              const connected = integ.id === 'spotify' ? spotifyConnected : !!(getInteg(integ.id)?.accessToken);
               return (
                 <div key={integ.id} className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
                   connected ? 'border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/20' : 'border-slate-200 dark:border-white/10'}`}>
@@ -282,17 +282,9 @@ const AIProviderSettings: React.FC = () => {
                   </div>
                   {connected
                     ? <button onClick={() => disconnectInteg(integ.id)} className="text-[9px] font-black text-red-500 hover:text-red-600 uppercase tracking-widest">Disconnect</button>
-                    : <>
-                      {showSpotifySetup && (
-                        <div className="flex gap-1.5">
-                          <input value={spotifyClientId} onChange={e=>setSpotifyClientId(e.target.value)}
-                            placeholder="Spotify Client ID"
-                            className="flex-1 px-2 py-1 rounded-lg text-[10px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 focus:outline-none focus:ring-1 focus:ring-green-500 w-36" />
-                          <button onClick={connectSpotify} className="px-2 py-1 rounded-lg bg-green-600 text-white text-[9px] font-black hover:bg-green-500">→</button>
-                        </div>
-                      )}
-                      {!showSpotifySetup && <button onClick={connectSpotify} className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-green-500">Connect</button>}
-                    </>
+                    : SPOTIFY_CLIENT_ID
+                      ? <button onClick={connectSpotify} className="px-3 py-1.5 rounded-xl bg-green-600 text-white text-[9px] font-black uppercase tracking-widest hover:bg-green-500">Connect</button>
+                      : <span className="text-[9px] text-amber-500">Set VITE_SPOTIFY_CLIENT_ID in Vercel</span>
                   }
                 </div>
               );

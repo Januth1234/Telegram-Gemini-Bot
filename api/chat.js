@@ -320,7 +320,7 @@ async function handleDeepResearch(req, res, apiKey) {
 
 
 // ── Image Generation ──────────────────────────────────────────────────────────
-export async function handleImageGen(req, res, apiKey) {
+async function handleImageGen(req, res, apiKey) {
   const { prompt, aspectRatio = '1:1', referenceImage, plan = 'free' } = req.body || {};
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -366,7 +366,7 @@ export async function handleImageGen(req, res, apiKey) {
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
-export async function handleTts(req, res, apiKey) {
+async function handleTts(req, res, apiKey) {
   const { text, stylePrompt, voiceName = 'Kore', multiSpeaker } = req.body || {};
   if (!text?.trim()) return res.status(400).json({ error: 'No text to speak' });
   try {
@@ -389,7 +389,7 @@ export async function handleTts(req, res, apiKey) {
 }
 
 // ── computerUse (agent screenshot → action plan) ──────────────────────────────
-export async function handleComputerUse(req, res, apiKey) {
+async function handleComputerUse(req, res, apiKey) {
   const { prompt, screenshotBase64, mimeType = 'image/png', contents: contentsIn } = req.body || {};
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -423,7 +423,7 @@ export async function handleComputerUse(req, res, apiKey) {
 }
 
 // ── agentPlan ─────────────────────────────────────────────────────────────────
-export async function handleAgentPlan(req, res, apiKey) {
+async function handleAgentPlan(req, res, apiKey) {
   const { task } = req.body || {};
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -441,7 +441,7 @@ export async function handleAgentPlan(req, res, apiKey) {
 }
 
 // ── generateTitle ─────────────────────────────────────────────────────────────
-export async function handleTitle(req, res, apiKey) {
+async function handleTitle(req, res, apiKey) {
   const { firstMessage } = req.body || {};
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -456,7 +456,7 @@ export async function handleTitle(req, res, apiKey) {
 }
 
 // ── embedText ─────────────────────────────────────────────────────────────────
-export async function handleEmbed(req, res, apiKey) {
+async function handleEmbed(req, res, apiKey) {
   const { texts, imageBase64, mimeType = 'image/png', outputDimensionality } = req.body || {};
   try {
     const ai = new GoogleGenAI({ apiKey });
@@ -473,7 +473,7 @@ export async function handleEmbed(req, res, apiKey) {
 }
 
 // ── solveMathWithAI ───────────────────────────────────────────────────────────
-export async function handleMath(req, res, apiKey) {
+async function handleMath(req, res, apiKey) {
   const { prompt, fileData, plan = 'free' } = req.body || {};
   const MATH_SYS = `You are a professional math tutor like Symbolab or Wolfram Alpha.\nSolve math problems with COMPLETE step-by-step working.\n1. Show EVERY algebraic step.\n2. For quadratic: compute Δ = b²−4ac, then both roots.\n3. For calculus: name the rule then apply it.\n4. End with "Final Answer:" clearly labelled.\nFormat:\n---METHOD: [Name] ---\nStep 1: …\nFinal Answer: …\n---ENDMETHOD---`;
   const models = plan.includes('pro') ? ['gemini-2.5-flash', 'gemini-2.0-flash'] : plan.includes('basic') ? ['gemini-2.5-flash', 'gemini-2.0-flash'] : ['gemini-2.0-flash'];

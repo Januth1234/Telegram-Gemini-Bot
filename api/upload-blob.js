@@ -33,7 +33,7 @@ async function verifyUser(req) {
 
 async function extractPdfText(filePath) {
   try {
-    const pdfParse = (await import('pdf-parse/lib/pdf-parse.js')).default;
+    const { default: pdfParse } = await import('pdf-parse');
     const buf = readFileSync(filePath);
     const data = await pdfParse(buf);
     return (data.text || '').trim().slice(0, 50000); // 50k char cap

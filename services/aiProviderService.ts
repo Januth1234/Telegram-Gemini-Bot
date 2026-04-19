@@ -25,7 +25,7 @@ export interface IntegrationToken {
 }
 
 const PROVIDERS_KEY = 'orin_ai_providers';
-const INTEGRATIONS_KEY = 'orin_integrations';
+// Integration tokens moved to Firestore backend via /api/auth/*
 
 // Simple obfuscation for localStorage/Firestore (not cryptographic)
 const enc = (s: string) => btoa(unescape(encodeURIComponent(s)));
