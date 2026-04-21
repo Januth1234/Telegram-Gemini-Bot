@@ -13,8 +13,8 @@ async function getRawBody(req) {
 
 function initFirebase() {
   if (admin.apps.length) return admin.app();
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!json) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON not set');
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!json) throw new Error('FIREBASE_SERVICE_ACCOUNT not set');
   const key = typeof json === 'string' ? JSON.parse(json) : json;
   return admin.initializeApp({ credential: admin.credential.cert(key) });
 }

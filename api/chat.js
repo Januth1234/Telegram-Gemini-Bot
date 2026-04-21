@@ -8,8 +8,8 @@ import { GoogleGenAI } from '@google/genai';
 import admin from 'firebase-admin';
 
 if (!admin.apps.length) {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
     : null;
   admin.initializeApp(sa ? { credential: admin.credential.cert(sa) } : undefined);
 }

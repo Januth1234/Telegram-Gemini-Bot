@@ -10,8 +10,8 @@ import admin from 'firebase-admin';
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
 
 if (!admin.apps.length) {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+  const sa = process.env.FIREBASE_SERVICE_ACCOUNT
+    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
     : null;
   admin.initializeApp(sa ? { credential: admin.credential.cert(sa) } : undefined);
 }
@@ -20,7 +20,7 @@ const db = () => admin.firestore();
 export const config = { maxDuration: 30 };
 
 const ENC_KEY = Buffer.from(
-  (process.env.TOKEN_ENCRYPTION_KEY || 'orin_default_enc_key_change_me!!').padEnd(32).slice(0, 32)
+  (process.env.TOKEN_ENCRYPTION_KEY || '7fK9xQ2mZr8LpA4vTn6HsWcYd3JgB1eU').padEnd(32).slice(0, 32)
 );
 
 function encrypt(text) {
