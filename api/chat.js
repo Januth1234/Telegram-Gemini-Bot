@@ -327,11 +327,12 @@ async function handleImageGen(req, res, apiKey) {
     let dataUrl = '';
 
     if (referenceImage?.data) {
+      // Image editing: send original image + prompt, ask for modified image back
       const r = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: [{ parts: [
           { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
-          { text: `Edit or transform this image: ${prompt}. Output only the modified image.` },
+          { text: `Edit or transform this image: ${prompt}. Return only the modified image.` },
         ]}],
         config: { responseModalities: ['IMAGE', 'TEXT'] },
       });
@@ -339,18 +340,22 @@ async function handleImageGen(req, res, apiKey) {
         if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
       }
     } else {
+      // Primary: gemini-2.0-flash-preview-image-generation — works on all API keys
+      // Imagen-3 is skipped: requires Vertex AI billing tier, not standard Gemini API key
       try {
-        const imgRes = await ai.models.generateImages({
-          model: 'imagen-3.0-generate-002',
-          prompt,
-          config: { numberOfImages: 1, aspectRatio, outputMimeType: 'image/png' },
+        const r = await ai.models.generateContent({
+          model: 'gemini-2.0-flash-preview-image-generation',
+          contents: [{ parts: [{ text: prompt }] }],
+          config: { responseModalities: ['IMAGE', 'TEXT'] },
         });
-        const imgData = imgRes?.generatedImages?.[0]?.image?.imageBytes ?? imgRes?.generatedImages?.[0]?.image?.imageData;
-        if (imgData) dataUrl = `data:image/png;base64,${imgData}`;
+        for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+          if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
+        }
       } catch {
+        // Fallback: gemini-2.0-flash standard
         const r = await ai.models.generateContent({
           model: 'gemini-2.0-flash',
-          contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+          contents: [{ parts: [{ text: `Create an image of: ${prompt}` }] }],
           config: { responseModalities: ['IMAGE', 'TEXT'] },
         });
         for (const part of r.candidates?.[0]?.content?.parts ?? []) {

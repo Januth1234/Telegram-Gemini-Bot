@@ -66,18 +66,29 @@ class FirebaseService {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
-    // Electron blocks OAuth popups AND signInWithRedirect fails with sessionStorage partition error.
-    // Fix: set LOCAL persistence first, then always try popup.
-    // In Electron the will-navigate hook opens google.com in system browser automatically.
-    try {
-      await this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-    } catch {}
+    try { await this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch {}
+
+    // iOS Safari blocks popups completely — they open then immediately close, leaving
+    // getRedirectResult hanging forever. Detect mobile and always use redirect flow.
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+    if (isMobile) {
+      // Redirect immediately — onAuthStateChanged fires after Google returns the user.
+      await this.auth.signInWithRedirect(provider);
+      return null;
+    }
+
+    // Desktop: try popup first, fall back to redirect if blocked (e.g. Electron)
     try {
       const result = await this.auth.signInWithPopup(provider);
       return result.user ?? null;
     } catch (err: any) {
       const code = err?.code || '';
-      if (['auth/popup-blocked','auth/popup-closed-by-user','auth/cancelled-popup-request','auth/web-storage-unsupported'].includes(code)) {
+      if ([
+        'auth/popup-blocked','auth/popup-closed-by-user',
+        'auth/cancelled-popup-request','auth/web-storage-unsupported',
+        'auth/operation-not-supported-in-this-environment',
+      ].includes(code)) {
         await this.auth.signInWithRedirect(provider);
         return null;
       }
@@ -88,10 +99,16 @@ class FirebaseService {
   async getRedirectResult(): Promise<{ credential: firebase.auth.UserCredential | null; error: string | null }> {
     if (!this.auth) return { credential: null, error: null };
     try {
-      const credential = await this.auth.getRedirectResult();
+      // Hard 6s timeout — Firebase compat getRedirectResult hangs indefinitely on
+      // iOS Safari when no redirect was pending (the most common case on page load).
+      const timeoutP = new Promise<never>((_, rej) =>
+        setTimeout(() => rej(new Error('no_redirect')), 6000)
+      );
+      const credential = await Promise.race([this.auth.getRedirectResult(), timeoutP]);
       return { credential, error: null };
     } catch (err: any) {
-      const msg = err?.message || err?.code || "Unknown error";
+      if (err?.message === 'no_redirect') return { credential: null, error: null }; // silent — normal load
+      const msg = err?.message || err?.code || 'Unknown error';
       return { credential: null, error: msg };
     }
   }

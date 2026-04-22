@@ -71,7 +71,7 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
 const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor'];
-const AUTH_TIMEOUT_MS = 8000;
+const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
 const RECENT_LOCAL_MS = 7 * 24 * 60 * 60 * 1000;
