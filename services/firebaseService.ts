@@ -50,8 +50,17 @@ class FirebaseService {
         this.db = getFirestore(this.app);
         
         if (this.auth) {
-           this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
-            .catch((error) => console.error("Auth Persistence Error:", error));
+          // iOS Safari: indexedDB (LOCAL) is cleared by ITP between sessions.
+          // Use SESSION on mobile so at least the active session works reliably.
+          const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+          const persistence = isMobile
+            ? firebase.auth.Auth.Persistence.SESSION
+            : firebase.auth.Auth.Persistence.LOCAL;
+          this.auth.setPersistence(persistence).catch(() => {
+            // Final fallback — no persistence (still works for single session)
+            this.auth!.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(() => {});
+          });
         }
 
         try {
@@ -66,14 +75,17 @@ class FirebaseService {
     const provider = new firebase.auth.GoogleAuthProvider();
     provider.addScope('email');
     provider.addScope('profile');
-    try { await this.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch {}
-
-    // iOS Safari blocks popups completely — they open then immediately close, leaving
-    // getRedirectResult hanging forever. Detect mobile and always use redirect flow.
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
     const isMobile = /iPhone|iPad|iPod|Android/i.test(ua);
+
+    // iOS: use SESSION (sessionStorage) — reliable on Safari. LOCAL uses indexedDB which ITP nukes.
+    try {
+      await this.auth.setPersistence(
+        isMobile ? firebase.auth.Auth.Persistence.SESSION : firebase.auth.Auth.Persistence.LOCAL
+      );
+    } catch {}
+
     if (isMobile) {
-      // Redirect immediately — onAuthStateChanged fires after Google returns the user.
       await this.auth.signInWithRedirect(provider);
       return null;
     }

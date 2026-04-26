@@ -72,6 +72,21 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
 const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
+
+/** Clear localStorage keys + SW caches that are irrelevant to signed-out guests.
+ *  Prevents iOS Safari from serving stale auth state from a cached page load. */
+async function clearGuestCaches() {
+  // Remove user-specific localStorage keys (keep lang/theme prefs)
+  const keepKeys = new Set([CacheKey.LANG, CacheKey.THEME, CacheKey.USER_THEME]);
+  Object.keys(localStorage)
+    .filter(k => k.startsWith('orin_') && !keepKeys.has(k as CacheKey))
+    .forEach(k => localStorage.removeItem(k));
+  // Nuke SW caches so iOS doesn't serve a stale index.html with embedded auth state
+  try {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch {}
+}
 const SAVE_DEBOUNCE_MS = 3000;
 // Treat local conversations from the last 7 days as eligible to merge into cloud
 const RECENT_LOCAL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -258,26 +273,38 @@ const App: React.FC = () => {
       setAuthInitialized(true);
     };
 
-    (async () => {
-      const { credential: redirectCred, error: redirectErr } = await firebaseService.getRedirectResult();
-      if (redirectErr) setAuthError(redirectErr);
-      const currentUser = firebaseService.currentUser();
-      if (redirectCred?.user || currentUser) {
-        setAuthError(null);
-        await applyAuthUser(redirectCred?.user ?? currentUser!);
-      }
-      unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
-        setAuthError(null);
-        if (authUser) {
-          await applyAuthUser(authUser);
-        } else {
-          clearTimeout(safetyTimeout);
-          setUser(null);
-          geminiService.logout();
-          setAuthInitialized(true);
+    // Subscribe IMMEDIATELY — do not block on getRedirectResult first.
+    // iOS Safari fires onAuthStateChanged during any async wait before subscription,
+    // causing the user-restored event to be missed → infinite loading / signed out.
+    let authHandled = false;
+    unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
+      clearTimeout(safetyTimeout);
+      setAuthError(null);
+      if (authUser) {
+        authHandled = true;
+        await applyAuthUser(authUser);
+      } else {
+        // On iOS after signInWithRedirect, onAuthStateChanged can fire null briefly
+        // while Firebase is still reading the credential from the redirect result.
+        // Give it 3s before declaring signed-out.
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile && !authHandled) {
+          await new Promise(r => setTimeout(r, 3000));
+          const retryUser = firebaseService.currentUser();
+          if (retryUser) { await applyAuthUser(retryUser); return; }
         }
-      });
-    })();
+        setUser(null);
+        geminiService.logout();
+        // Clear stale guest caches so iOS doesn't serve old auth state from SW cache
+        clearGuestCaches();
+        setAuthInitialized(true);
+      }
+    });
+
+    // getRedirectResult in background — result flows through onAuthStateChanged anyway
+    firebaseService.getRedirectResult().then(({ error }) => {
+      if (error) setAuthError(error);
+    }).catch(() => {});
 
     return () => {
       unsubscribe?.();
