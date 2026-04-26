@@ -27,7 +27,19 @@ const startApp = () => {
 
   if ('serviceWorker' in navigator && isOrinAiOrigin()) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(reg => {
+        // When a new SW activates and sends SW_UPDATED_RELOAD, hard-reload once
+        // so iOS users get the fresh app and auth fix rather than the stale cached copy.
+        navigator.serviceWorker.addEventListener('message', e => {
+          if (e.data?.type === 'SW_UPDATED_RELOAD') {
+            // Only reload if not already reloading (avoid loop)
+            if (!sessionStorage.getItem('sw_reloaded')) {
+              sessionStorage.setItem('sw_reloaded', '1');
+              window.location.reload();
+            }
+          }
+        });
+      }).catch(() => {});
     });
   }
 
