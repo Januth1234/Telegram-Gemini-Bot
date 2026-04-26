@@ -1,12 +1,37 @@
 {
   "rewrites": [
-    { "source": "/api/chat",               "destination": "/api/chat" },
-    { "source": "/api/files",              "destination": "/api/files" },
-    { "source": "/api/auth/google",        "destination": "/api/auth/google" },
-    { "source": "/api/auth/spotify",       "destination": "/api/auth/spotify" },
-    { "source": "/api/task-router/:path*", "destination": "/api/task-router" },
-    { "source": "/api/broker/:path*",      "destination": "/api/broker" },
-    { "source": "/api/executor/:path*",    "destination": "/api/executor" },
+    {
+      "source": "/api/version",
+      "destination": "/api/version"
+    },
+    {
+      "source": "/api/chat",
+      "destination": "/api/chat"
+    },
+    {
+      "source": "/api/files",
+      "destination": "/api/files"
+    },
+    {
+      "source": "/api/auth/google",
+      "destination": "/api/auth/google"
+    },
+    {
+      "source": "/api/auth/spotify",
+      "destination": "/api/auth/spotify"
+    },
+    {
+      "source": "/api/task-router/:path*",
+      "destination": "/api/task-router"
+    },
+    {
+      "source": "/api/broker/:path*",
+      "destination": "/api/broker"
+    },
+    {
+      "source": "/api/executor/:path*",
+      "destination": "/api/executor"
+    },
     {
       "source": "/((?!api/|sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|sw.js|manifest.json|assets|pricing\\.html|privacy\\.html|releases\\.html).*)",
       "destination": "/index.html"
