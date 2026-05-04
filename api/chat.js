@@ -103,6 +103,15 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method === 'GET') {
+    const key = process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    return res.status(200).json({
+      ok: !!key,
+      keyVar: process.env.GEMINI_API_KEY ? 'GEMINI_API_KEY ✓' : process.env.API_KEY ? 'API_KEY ✓' : 'NOT SET ✗',
+      keyHint: key ? key.slice(0,6) + '...' + key.slice(-4) : null,
+      firebase: !!process.env.FIREBASE_SERVICE_ACCOUNT,
+    });
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
