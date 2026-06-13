@@ -1,7 +1,7 @@
 /**
  * POST/GET /api/executor/*
  * Executor Agent HTTP API — adapted from Firebase Functions to Vercel serverless.
- * Handles: pairing, creative planning (Gemini), job queue, broker relay.
+ * Handles: pairing, creative planning (OpenRouter), job queue, broker relay.
  *
  * Routes (all prefixed with /api/executor):
  *   POST /pair              — start pairing
@@ -83,18 +83,29 @@ async function verifyAgentHmac(req, rawBody) {
   return { pairId, pairDoc: data };
 }
 
-async function callGemini(prompt) {
-  const key = process.env.GEMINI_API_KEY || '';
+async function callOpenRouter(prompt) {
+  const key = process.env.OPENROUTER_API_KEY || '';
   if (!key) return null;
   const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${encodeURIComponent(key)}`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, responseMimeType: 'application/json' } }) }
+    "https://openrouter.ai/api/v1/chat/completions",
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+        'HTTP-Referer': 'https://orin-ai.vercel.app',
+        'X-Title': 'Orin AI Executor'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-001',
+        messages: [{ role: 'user', content: prompt }],
+        response_format: { type: 'json_object' }
+      })
+    }
   );
   if (!r.ok) return null;
   const j = await r.json();
-  const text = j.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = j.choices?.[0]?.message?.content;
   if (!text) return null;
   try { return JSON.parse(text); } catch { return null; }
 }
@@ -205,7 +216,7 @@ export default async function handler(req, res) {
 
     if (path === 'ideas' && req.method === 'GET') {
       const topic = String(req.query.topic || 'creativity').slice(0, 200);
-      const parsed = await callGemini(
+      const parsed = await callOpenRouter(
         `Topic: "${topic}". Return JSON: {"ideas": string[]} with exactly 5 short inspiration titles (5-8 words each). No markdown.`);
       if (parsed?.ideas) return ok({ ideas: parsed.ideas.slice(0, 8) });
       return ok({ ideas: [`${topic}: bold opener`, `${topic}: story arc`, `${topic}: data angle`,
@@ -214,7 +225,7 @@ export default async function handler(req, res) {
 
     if (path === 'plan' && req.method === 'POST') {
       const topic = String(req.body?.topic || 'creative work').slice(0, 500);
-      const parsed = await callGemini(
+      const parsed = await callOpenRouter(
         `Creative planning for: ${topic}. Return JSON: {"options":[{"id":number,"title":string,"desc":string}]} with 4 directions. ids 1-4.`);
       if (parsed?.options) return ok({ options: parsed.options });
       return ok({ options: [
