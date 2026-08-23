@@ -1,24 +1,23 @@
 /**
- * POST /api/auth/password — Orin AI first-party accounts.
- * Sign in / register with Name + (Email OR Phone) + password. No SMS OTP:
- * the phone number is a login identifier, not a verified channel.
+ * POST /api/auth/password — Orin AI first-party accounts (the ONLY sign-in method).
  *
- * body: { action: 'register' | 'login' | 'set-password', ... }
- *   register:     { name, identifier, password }
- *   login:        { identifier, password }
- *   set-password: {} — Bearer auth required; lets Google users add a password
+ * body: { action: 'register' | 'login' | 'set-password' | 'reset-verify' | 'reset-confirm', ... }
+ *   register:      { name, email, phone, password, confirmPassword }
+ *                  (legacy {name, identifier, password} still accepted)
+ *   login:         { identifier, password }  — identifier = email OR phone
+ *   set-password:  {} + Bearer auth          — adds a password to an existing account
+ *   reset-verify:  { name, email, phone }    — ALL must match → short-lived reset token
+ *   reset-confirm: { resetToken, password, confirmPassword } → new password + session revocation
  *
- * Returns { customToken } — the client signs in via signInWithCustomToken so
- * every existing Firebase-ID-token-protected endpoint and Firestore rule works
- * unchanged.
+ * Returns {customToken} for register/login — client signs in via signInWithCustomToken
+ * so every existing Firebase-ID-token endpoint/rule works unchanged.
  *
  * Design notes:
- * - Passwords are hashed with scrypt in _lib/passwords.js; hashes + lookup
- *   indexes live in password_credentials/auth_identifiers collections that
- *   clients can never read or write (firestore.rules deny all).
- * - Firebase Auth users get an unusable random password: all password checks
- *   flow through THIS endpoint where rate limiting applies. Firebase's own
- *   Email/Password provider is not used for sign-in.
+ * - Passwords hashed with scrypt (_lib/passwords.js); hashes + identifier lookups live in
+ *   password_credentials / auth_identifiers / password_resets — all denied to clients by rules.
+ * - Auth users get a random unusable Firebase password: ALL checks happen HERE behind rate limits.
+ * - Reset tokens are ≥256-bit random, stored SHA-256-hashed, single-use, 15-minute TTL;
+ *   confirming a reset revokes all existing sessions (revokeRefreshTokens).
  */
 import crypto from 'crypto';
 import { initAdmin, db, TS, requireUser, httpError } from '../_lib/firebase.js';
@@ -33,15 +32,19 @@ const LOGIN_WINDOW_MS = 15 * 60_000;
 const LOGIN_ATTEMPTS_LIMIT = 10;
 const IP_WINDOW_MS = 60 * 60_000;
 const IP_ATTEMPTS_LIMIT = 30;
+const RESET_TOKEN_TTL_MS = 15 * 60_000;
 
 function clientIp(req) {
   return ((req.headers['x-forwarded-for'] || '').split(',')[0]).trim() || 'unknown';
 }
 
+function sha256hex(v) {
+  return crypto.createHash('sha256').update(String(v)).digest('hex');
+}
+
 /** Creates users/{uid} profile doc if missing (mirrors syncUserSession defaults). */
 async function ensureProfile(uid, { name, email, phone }) {
-  const ref = db().collection('users').doc(uid);
-  await ref.set({
+  await db().collection('users').doc(uid).set({
     ...(name ? { name } : {}),
     ...(email ? { email } : {}),
     ...(phone ? { phone } : {}),
@@ -53,6 +56,44 @@ async function issueCustomToken(uid) {
   return initAdmin().auth().createCustomToken(uid);
 }
 
+async function hasPasswordCredential(uid) {
+  return (await db().collection('password_credentials').doc(String(uid)).get()).exists;
+}
+
+/** Throws if either identifier is already claimed by another account. */
+async function assertIdentifiersFree(emailNorm, phoneNorm) {
+  const keys = [];
+  if (emailNorm) keys.push({ key: identifierKey(emailNorm), label: 'email' });
+  if (phoneNorm) keys.push({ key: identifierKey(phoneNorm), label: 'phone number' });
+  const snaps = await Promise.all(keys.map(k => db().collection('auth_identifiers').doc(k.key).get()));
+  for (let i = 0; i < snaps.length; i++) {
+    if (!snaps[i].exists) continue;
+    const claimedUid = snaps[i].data().uid;
+    let googleOnly = false;
+    try {
+      const fbUser = await initAdmin().auth().getUser(claimedUid);
+      googleOnly = !!fbUser.email && !(await hasPasswordCredential(claimedUid));
+    } catch { /* record points at a vanished user */ }
+    if (googleOnly) {
+      throw httpError(409, 'An Orin account with this ' + keys[i].label +
+        ' already exists via Google sign-in. Sign in with Google once, then add a password in Account Settings.');
+    }
+    throw httpError(409, 'An account with this ' + keys[i].label + ' already exists.');
+  }
+}
+
+/** Creates both lookup docs; caller has already verified they're free. */
+async function writeLookups(emailNorm, phoneNorm, uid) {
+  if (emailNorm) {
+    await db().collection('auth_identifiers').doc(identifierKey(emailNorm))
+      .set({ uid, type: 'email', createdAt: TS() });
+  }
+  if (phoneNorm) {
+    await db().collection('auth_identifiers').doc(identifierKey(phoneNorm))
+      .set({ uid, type: 'phone', createdAt: TS() });
+  }
+}
+
 async function handler(req, res) {
   if (req.method !== 'POST') throw httpError(405, 'POST only');
   const { action } = req.body || {};
@@ -62,73 +103,61 @@ async function handler(req, res) {
     if (!(await rateLimit('auth-register:' + clientIp(req), 10, 60 * 60_000)))
       throw httpError(429, 'Too many signup attempts. Try again later.');
 
-    const { name, identifier, password } = req.body || {};
-    const nameErr = namePolicyError(name);
+    const b = req.body || {};
+    // Legacy shape {identifier} maps onto the new explicit fields.
+    const emailRaw = b.email ?? (b.identifier && String(b.identifier).includes('@') ? b.identifier : undefined);
+    const phoneRaw = b.phone ?? (b.identifier && !String(b.identifier).includes('@') ? b.identifier : undefined);
+
+    const nameErr = namePolicyError(b.name);
     if (nameErr) throw httpError(400, nameErr);
-    const norm = normalizeIdentifier(identifier);
-    if (!norm) throw httpError(400, 'Enter a valid email address or phone number.');
-    const pwErr = passwordPolicyError(password);
+
+    const emailNorm = emailRaw ? normalizeIdentifier(emailRaw) : null;
+    if (emailRaw && (!emailNorm || emailNorm.type !== 'email')) throw httpError(400, 'Enter a valid email address.');
+    const phoneNorm = phoneRaw ? normalizeIdentifier(phoneRaw) : null;
+    if (phoneRaw && (!phoneNorm || phoneNorm.type !== 'phone')) throw httpError(400, 'Enter a valid phone number.');
+    if (!emailNorm && !phoneNorm) throw httpError(400, 'Email is required.');
+    if (!phoneNorm) throw httpError(400, 'Phone number is required.');
+
+    const pwErr = passwordPolicyError(b.password);
     if (pwErr) throw httpError(400, pwErr);
+    if (typeof b.confirmPassword === 'string' && b.confirmPassword !== b.password)
+      throw httpError(400, 'Passwords do not match.');
 
-    const key = identifierKey(norm);
-    const lookupRef = db().collection('auth_identifiers').doc(key);
-    const lookupSnap = await lookupRef.get();
-    if (lookupSnap.exists) {
-      // Distinguish "Google account exists" from "full account exists" for better UX
-      const existingUid = lookupSnap.data().uid;
-      let isGoogleOnly = false;
-      try {
-        const fbUser = await initAdmin().auth().getUser(existingUid);
-        isGoogleOnly = !!fbUser.email && !(await hasPasswordCredential(existingUid));
-      } catch { /* user record vanished; fall through to generic message */ }
-      if (isGoogleOnly) {
-        throw httpError(409, 'An Orin account with this email already exists via Google sign-in. Sign in with Google, then add a password in Account Settings.');
-      }
-      throw httpError(409, norm.type === 'email'
-        ? 'An account with this email already exists.'
-        : 'An account with this phone number already exists.');
-    }
+    await assertIdentifiersFree(
+      emailNorm ? { type: 'email', value: emailNorm.value } : null,
+      phoneNorm
+    );
 
-    // Create the Firebase Auth user
+    // Create the Firebase Auth user (random unusable password — logins come through here).
     let fbUser;
     try {
-      if (norm.type === 'email') {
-        fbUser = await initAdmin().auth().createUser({
-          email: norm.value,
-          password: crypto.randomBytes(32).toString('hex'), // unusable — logins go through this endpoint
-          displayName: String(name).trim(),
-          emailVerified: false,
-        });
-      } else {
-        fbUser = await initAdmin().auth().createUser({
-          displayName: String(name).trim(),
-        });
-      }
+      fbUser = await initAdmin().auth().createUser({
+        ...(emailNorm ? { email: emailNorm.value, emailVerified: false } : {}),
+        password: crypto.randomBytes(32).toString('hex'),
+        displayName: String(b.name).trim(),
+      });
     } catch (e) {
-      if (e?.code === 'auth/email-already-exists' || e?.code?.includes('email-already-exists')) {
-        throw httpError(409, 'An Orin account with this email already exists. Sign in with Google, then add a password in Account Settings.');
+      if (String(e?.code || '').includes('email-already-exists')) {
+        throw httpError(409, 'An account with this email already exists.');
       }
       throw e;
     }
 
     try {
       const uid = fbUser.uid;
-      const credRef = db().collection('password_credentials').doc(uid);
-      await credRef.set({
-        hash: hashPassword(password),
-        identifierType: norm.type,
-        email: norm.type === 'email' ? norm.value : null,
-        phone: norm.type === 'phone' ? norm.value : null,
+      await db().collection('password_credentials').doc(uid).set({
+        hash: hashPassword(b.password),
+        identifierType: 'email',
+        email: emailNorm ? emailNorm.value : null,
+        phone: phoneNorm ? phoneNorm.value : null,
         createdAt: TS(),
         updatedAt: TS(),
       });
-      // Two lookup docs when both channels known? We only know one at registration.
-      await lookupRef.set({ uid, type: norm.type, createdAt: TS() });
-
+      await writeLookups(emailNorm, phoneNorm, uid);
       await ensureProfile(uid, {
-        name: String(name).trim(),
-        email: norm.type === 'email' ? norm.value : null,
-        phone: norm.type === 'phone' ? norm.value : null,
+        name: String(b.name).trim(),
+        email: emailNorm ? emailNorm.value : null,
+        phone: phoneNorm ? phoneNorm.value : null,
       });
 
       const customToken = await issueCustomToken(uid);
@@ -136,13 +165,12 @@ async function handler(req, res) {
         customToken,
         user: {
           id: uid,
-          name: String(name).trim(),
-          email: norm.type === 'email' ? norm.value : '',
-          phone: norm.type === 'phone' ? norm.value : '',
+          name: String(b.name).trim(),
+          email: emailNorm ? emailNorm.value : '',
+          phone: phoneNorm ? phoneNorm.value : '',
         },
       });
     } catch (e) {
-      // Roll back the half-created Auth user rather than leave an orphan
       try { await initAdmin().auth().deleteUser(fbUser.uid); } catch {}
       throw e;
     }
@@ -158,12 +186,10 @@ async function handler(req, res) {
     const norm = normalizeIdentifier(identifier);
     if (!norm || typeof password !== 'string') throw httpError(400, 'Email/phone and password are required.');
 
-    const idKey = 'auth-login-id:' + identifierKey(norm);
-    if (!(await rateLimit(idKey, LOGIN_ATTEMPTS_LIMIT, LOGIN_WINDOW_MS)))
+    if (!(await rateLimit('auth-login-id:' + identifierKey(norm), LOGIN_ATTEMPTS_LIMIT, LOGIN_WINDOW_MS)))
       throw httpError(429, 'Too many failed attempts. Try again in 15 minutes.');
 
-    const key = identifierKey(norm);
-    const lookupSnap = await db().collection('auth_identifiers').doc(key).get();
+    const lookupSnap = await db().collection('auth_identifiers').doc(identifierKey(norm)).get();
     if (!lookupSnap.exists) throw httpError(401, 'Invalid credentials');
     const uid = lookupSnap.data().uid;
 
@@ -186,7 +212,7 @@ async function handler(req, res) {
     });
   }
 
-  // ── SET-PASSWORD (authenticated; for Google users adding a password) ─────
+  // ── SET-PASSWORD (authenticated; adds a password to an existing account) ──
   if (action === 'set-password') {
     const decoded = await requireUser(req);
     const uid = decoded.uid;
@@ -195,12 +221,10 @@ async function handler(req, res) {
     if (pwErr) throw httpError(400, pwErr);
 
     const email = decoded.email ? decoded.email.toLowerCase() : null;
-
-    // If their email is claimed by ANOTHER uid's credential, don't steal it.
     if (email) {
       const claimSnap = await db().collection('auth_identifiers').doc('email:' + email).get();
       if (claimSnap.exists && claimSnap.data().uid !== uid) {
-        throw httpError(409, 'This email is already used for another Orin account\'s sign-in.');
+        throw httpError(409, "This email is already used for another Orin account's sign-in.");
       }
     }
 
@@ -220,11 +244,104 @@ async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  throw httpError(400, 'Unknown action. Use register, login, or set-password.');
+  // ── RESET-VERIFY (knowledge check: name + email + phone must ALL match) ───
+  if (action === 'reset-verify') {
+    const ip = clientIp(req);
+    if (!(await rateLimit('reset-ip:' + ip, 5, 15 * 60_000)))
+      throw httpError(429, 'Too many reset attempts. Try again later.');
+
+    const { name, email, phone } = req.body || {};
+    const emailNorm = normalizeIdentifier(email);
+    const phoneNorm = normalizeIdentifier(phone);
+    const nameStr = String(name ?? '').trim();
+    if (!nameStr || !emailNorm || !phoneNorm) throw httpError(400, 'Name, email, and phone number are required.');
+    if (!(await rateLimit('reset-id:' + identifierKey(emailNorm), 5, 60 * 60_000)))
+      throw httpError(429, 'Too many reset attempts for this account. Try again later.');
+
+    const GENERIC = 'The details do not match our records.';
+    const lookupSnap = await db().collection('auth_identifiers').doc(identifierKey(emailNorm)).get();
+    if (!lookupSnap.exists) throw httpError(401, GENERIC);
+    const uid = String(lookupSnap.data().uid);
+
+    const [profileSnap, credSnap] = await Promise.all([
+      db().collection('users').doc(uid).get(),
+      db().collection('password_credentials').doc(uid).get(),
+    ]);
+    const profile = profileSnap.data() || {};
+    const cred = credSnap.exists ? credSnap.data() : {};
+
+    const storedPhone = normPhone(profile.phone || cred.phone || '');
+    const providedPhone = normPhone(phoneNorm.value);
+    const nameOk = safeEqualText(nameStr.toLowerCase(), String(profile.name || '').toLowerCase());
+    const phoneOk = safeEqualText(providedPhone, storedPhone);
+    const emailOk = safeEqualText(emailNorm.value, String(profile.email || cred.email || '').toLowerCase());
+    if (!credSnap.exists || !nameOk || !phoneOk || !emailOk) throw httpError(401, GENERIC);
+
+    // Issue a single-use token; store only its hash.
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    await db().collection('password_resets').doc(sha256hex(resetToken)).set({
+      uid,
+      used: false,
+      createdAt: TS(),
+      expiresAt: new Date(Date.now() + RESET_TOKEN_TTL_MS),
+    });
+    return res.status(200).json({ resetToken, expiresIn: RESET_TOKEN_TTL_MS / 1000 });
+  }
+
+  // ── RESET-CONFIRM (consume token, set new password, kill sessions) ────────
+  if (action === 'reset-confirm') {
+    if (!(await rateLimit('reset-confirm:' + clientIp(req), 10, 60 * 60_000)))
+      throw httpError(429, 'Too many attempts. Try again later.');
+    const { resetToken, password, confirmPassword } = req.body || {};
+    if (!resetToken || typeof resetToken !== 'string' || resetToken.length < 32)
+      throw httpError(400, 'Invalid or expired reset request.');
+    const pwErr = passwordPolicyError(password);
+    if (pwErr) throw httpError(400, pwErr);
+    if (typeof confirmPassword === 'string' && confirmPassword !== password)
+      throw httpError(400, 'Passwords do not match.');
+
+    const ref = db().collection('password_resets').doc(sha256hex(resetToken));
+    let uid = null;
+    await db().runTransaction(async tx => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) throw httpError(410, 'Reset request expired or unknown. Start again.');
+      const d = snap.data();
+      if (d.used) throw httpError(410, 'This reset link was already used. Start again.');
+      if (d.expiresAt?.toMillis?.() < Date.now()) throw httpError(410, 'Reset request expired. Start again.');
+      uid = String(d.uid);
+      tx.update(ref, { used: true, usedAt: TS() });
+    });
+
+    // New hash + invalidate every existing session for this user.
+    await db().collection('password_credentials').doc(uid)
+      .set({ hash: hashPassword(password), updatedAt: TS() }, { merge: true });
+    await initAdmin().auth().revokeRefreshTokens(uid);
+
+    // Consume any other outstanding reset tokens for this uid.
+    const others = await db().collection('password_resets').where('uid', '==', uid).get();
+    const writer = db().batch();
+    others.docs.forEach(doc => { if (doc.id !== sha256hex(resetToken)) writer.delete(doc.ref); });
+    await writer.commit();
+
+    return res.status(200).json({ ok: true });
+  }
+
+  throw httpError(400, 'Unknown action. Use register, login, set-password, reset-verify, or reset-confirm.');
 }
 
-async function hasPasswordCredential(uid) {
-  return (await db().collection('password_credentials').doc(String(uid)).get()).exists;
+function normPhone(v) {
+  return String(v ?? '').replace(/\D/g, '');
+}
+
+/** Length-safe constant-time text compare. */
+function safeEqualText(a, b) {
+  const ba = Buffer.from(String(a ?? ''));
+  const bb = Buffer.from(String(b ?? ''));
+  if (ba.length !== bb.length) {
+    crypto.timingSafeEqual(ba, ba); // flatten timing on length mismatch
+    return false;
+  }
+  return crypto.timingSafeEqual(ba, bb);
 }
 
 export default apiHandler(handler);

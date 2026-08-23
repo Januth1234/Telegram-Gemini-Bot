@@ -39,6 +39,10 @@ service cloud.firestore {
     match /auth_identifiers/{identifier} {
       allow read, write: if false;
     }
+    // Password-reset tokens (stored hashed, single-use, 15-min TTL) — backend only.
+    match /password_resets/{docId} {
+      allow read, write: if false;
+    }
 
     // Server-side rate-limit counters — backend only.
     match /rate_limits/{docId} {

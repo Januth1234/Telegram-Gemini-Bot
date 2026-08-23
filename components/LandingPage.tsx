@@ -59,26 +59,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
   const t = translations[lang];
   const [guestResult, setGuestResult] = useState<string | null>(null);
   const [isGuestLoading, setIsGuestLoading] = useState(false);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const context = useMemo(() => {
     const hour = new Date().getHours();
     return { timeOfDay: hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening' };
   }, []);
 
-  const handleSignIn = async () => {
-    if (isLoggingIn) return;
-    setIsLoggingIn(true);
-    try {
-      const fbUser = await firebaseService.loginWithGoogle();
-      if (fbUser && onSignInWithUser) {
-        await onSignInWithUser(fbUser);
-      }
-    } catch (e) {
-      alert((e as Error)?.message || "Sign-in failed. Try again.");
-    } finally {
-      setIsLoggingIn(false);
-    }
+  // Sign-in lives in the Account view (Orin AI accounts are the only method).
+  const handleSignIn = () => {
+    setShowLoginPrompt(false);
+    window.location.hash = 'account';
   };
 
   const handleGuestSubmit = async () => {
@@ -223,9 +213,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
             {!user && !guestResult && (
                <div className="mt-6 flex flex-col items-center gap-3 opacity-0 animate-reveal" style={{ animationDelay: '450ms', animationFillMode: 'forwards' }}>
                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.guestLimitLabel}</p>
-                 <button onClick={handleSignIn} disabled={isLoggingIn} className="flex items-center gap-3 px-6 py-3 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-md hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300 active:scale-95 disabled:opacity-70">
-                    {isLoggingIn ? <i className="fa-solid fa-circle-notch animate-spin text-slate-500" /> : <img src="https://www.google.com/favicon.ico" className="w-4 h-4" alt="Google" />}
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{isLoggingIn ? t.authenticating : t.signInToUnlock}</span>
+                 <button onClick={handleSignIn} className="flex items-center gap-3 px-6 py-3 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 shadow-md hover:shadow-lg hover:shadow-cyan-500/20 transition-all duration-300 active:scale-95">
+                    <i className="fa-solid fa-fingerprint text-slate-500" />
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t.signInToUnlock}</span>
                  </button>
                </div>
             )}
@@ -349,15 +339,10 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
 
             <button
               onClick={handleSignIn}
-              disabled={isLoggingIn}
-              className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+              className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-95 transition-all"
             >
-              {isLoggingIn ? (
-                <i className="fa-solid fa-circle-notch animate-spin" />
-              ) : (
-                <img src="https://www.google.com/favicon.ico" alt="G" className="w-4 h-4" />
-              )}
-              <span>{isLoggingIn ? 'Connecting...' : "Continue with Google — It's Free"}</span>
+              <i className="fa-solid fa-fingerprint" />
+              <span>Sign in to Orin — It's Free</span>
             </button>
 
             <button

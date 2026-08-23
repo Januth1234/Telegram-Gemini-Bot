@@ -105,23 +105,8 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
      }
   };
 
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setLoginError(null);
-    try {
-      const fbUser = await firebaseService.loginWithGoogle();
-      if (fbUser && onSignInWithUser) {
-        await onSignInWithUser(fbUser);
-      }
-    } catch (err: any) {
-      setLoginError(err?.message || "Sign-in failed. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Desktop app: open the system browser at orinai.org, user approves there,
-  // this window picks up a custom token and signs in — no popups needed.
+  // Desktop app: opens the user's browser at the Orin AI login form (device flow).
+  // The website itself has NO Google sign-in — Orin accounts are the only method.
   const canBrowserLogin = typeof window !== 'undefined' && typeof (window as any).orinDesktop?.browserLogin === 'function';
   const [browserLoginBusy, setBrowserLoginBusy] = useState(false);
   const handleBrowserLogin = async () => {
@@ -202,15 +187,6 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  </button>
                )}
 
-               <button onClick={handleGoogleLogin} disabled={loading} className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-95 transition-all shadow-xl disabled:opacity-50">
-                  {loading ? (
-                    <i className="fa-solid fa-circle-notch animate-spin"></i>
-                  ) : (
-                    <img src="https://www.google.com/favicon.ico" alt="G" className="w-5 h-5" />
-                  )}
-                  <span>{loading ? "Connecting..." : "Continue with Google"}</span>
-               </button>
-
                {loginError && (
                  <div role="alert" className="w-full flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 font-bold">
                    <i className="fa-solid fa-circle-exclamation mt-0.5 shrink-0" />
@@ -218,11 +194,13 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  </div>
                )}
 
-               <div className="w-full flex items-center gap-4" aria-hidden="true">
-                 <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">or use your Orin account</span>
-                 <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
-               </div>
+               {canBrowserLogin && (
+                 <div className="w-full flex items-center gap-4" aria-hidden="true">
+                   <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+                   <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">or sign in here</span>
+                   <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+                 </div>
+               )}
 
                <OrinAuthPanel onSignedIn={onSignInWithUser} />
 

@@ -152,12 +152,29 @@ class FirebaseService {
     return cred.user ?? null;
   }
 
-  /** Register with name + email-or-phone + password. Returns the signed-in Firebase user. */
-  async registerWithPassword(name: string, identifier: string, password: string): Promise<firebase.User | null> {
+  /**
+   * Register with name + email + phone + password (both identifiers become login IDs).
+   * Returns the signed-in Firebase user.
+   */
+  async registerWithPassword(name: string, email: string, phone: string, password: string): Promise<firebase.User | null> {
     if (!this.auth) throw new Error("Authentication module not initialized.");
-    const data = await this.authApi('register', { name, identifier, password });
+    const data = await this.authApi('register', { name, email, phone, password });
     const cred = await this.auth.signInWithCustomToken(data.customToken);
     return cred.user ?? null;
+  }
+
+  /**
+   * Password reset step 1 — verify identity with name + email + phone.
+   * Resolves a short-lived single-use reset token (kept in memory only).
+   */
+  async requestPasswordReset(name: string, email: string, phone: string): Promise<string> {
+    const data = await this.authApi('reset-verify', { name, email, phone });
+    return data.resetToken;
+  }
+
+  /** Password reset step 2 — consume the token and set the new password. */
+  async confirmPasswordReset(resetToken: string, password: string): Promise<void> {
+    await this.authApi('reset-confirm', { resetToken, password });
   }
 
   /** Set or change the Orin AI password on the CURRENTLY signed-in account (Google users included). */
