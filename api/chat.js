@@ -263,7 +263,7 @@ async function handler(req, res) {
     default:              break; // plain chat below
   }
 
-  // ── Plain chat (OpenRouter) ─────────────────────────────────────────────────
+  // ── Plain chat (OpenRouter, optionally via the Orin router) ─────────────────
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
 
@@ -331,7 +331,7 @@ async function handler(req, res) {
   }
 }
 
-// ── Title (OpenRouter, cheap model) ──────────────────────────────────────────
+// ── Title (cheap OpenRouter model) ───────────────────────────────────────────
 async function handleTitle(req, res) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return res.status(200).json({ title: 'New Chat' });
@@ -389,48 +389,28 @@ async function handleEmbed(req, res) {
   }
 }
 
-// ── Image generation (Gemini) ────────────────────────────────────────────────
-async function handleImageGen(req, res, uid) {
-  const { prompt, referenceImage } = req.body || {};
-  if (!prompt && !referenceImage) throw httpError(400, 'prompt required');
-  try {
-    const ai = gemini();
-    let dataUrl = '';
+// ── Image generation — Pollinations.ai (completely FREE, NO API key) ─────────
+// GET https://image.pollinations.ai/prompt/{prompt}?width&height&model=flux&nologo=true
+// returns raw image bytes. Keyless; anonymous tier allows ~1 request / 5 s per IP.
+const ASPECT_DIMS = {
+  '1:1': [1024, 1024], '16:9': [1280, 720], '9:16': [720, 1280],
+  '4:3': [1024, 768],  '3:4': [768, 1024],  '3:2': [1200, 800], '2:3': [800, 1200],
+};
 
-    if (referenceImage?.data) {
-      const r = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: [{ parts: [
-          { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
-          { text: `Edit or transform this image: ${prompt}. Return only the modified image.` },
-        ]}],
-        config: { responseModalities: ['IMAGE', 'TEXT'] },
-      });
-      for (const part of r.candidates?.[0]?.content?.parts ?? []) {
-        if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
-      }
-    } else {
-      const attempts = [
-        ['gemini-2.0-flash-preview-image-generation', prompt],
-        ['gemini-2.0-flash', `Create an image of: ${prompt}`],
-      ];
-      for (const [model, text] of attempts) {
-        try {
-          const r = await ai.models.generateContent({
-            model,
-            contents: [{ parts: [{ text }] }],
-            config: { responseModalities: ['IMAGE', 'TEXT'] },
-          });
-          for (const part of r.candidates?.[0]?.content?.parts ?? []) {
-            if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
-          }
-          if (dataUrl) break;
-        } catch { /* next attempt */ }
-      }
-    }
-    if (!dataUrl) throw httpError(502, 'No image returned. Try a different prompt.');
+async function handleImageGen(req, res, uid) {
+  const { prompt, aspectRatio = '1:1' } = req.body || {};
+  if (!prompt) throw httpError(400, 'prompt required');
+  try {
+    const [width, height] = ASPECT_DIMS[aspectRatio] || ASPECT_DIMS['1:1'];
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`
+      + `?width=${width}&height=${height}&model=flux&nologo=true`
+      + `&seed=${Math.floor(Math.random() * 1e9)}`;
+    const r = await fetch(url);
+    if (!r.ok) throw httpError(502, `Image service returned ${r.status}. Try again in a moment.`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    const mime = r.headers.get('content-type') || 'image/jpeg';
     incrementUsage(uid, 'images');
-    return res.status(200).json({ dataUrl });
+    return res.status(200).json({ dataUrl: `data:${mime};base64,${buf.toString('base64')}` });
   } catch (err) {
     if (err.code) throw err;
     throw httpError(500, 'Image generation failed');
