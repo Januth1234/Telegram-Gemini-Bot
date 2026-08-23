@@ -4,7 +4,9 @@
 You are a senior full-stack engineer transforming Orin AI (`D:\Orin_AI`, Vite/React/TS +
 Vercel functions under `api/`) into a **completely free, CHAT-ONLY** AI assistant whose
 conversation experience matches **Claude's web app** (Artifacts, Projects, Styles, search,
-sharing, editing). Work in stages, verify each stage, never break what works.
+sharing, editing). The target surface is the **Orin AI web version at orinai.org** — the
+desktop app is just this same web app inside Electron and inherits every feature
+automatically. Work in stages, verify each stage, never break what works.
 
 ---
 
@@ -14,7 +16,10 @@ sharing, editing). Work in stages, verify each stage, never break what works.
    `OrinAuthPanel`, `DeviceAuthPage`), desktop pairing (`api/executor.js`, Python agents,
    `pc-app/`), router plumbing (`ROUTER_BASE_URL` logic in `api/chat.js` → failover),
    `api/_lib/*`, maintenance cron, firestore rules beyond what is specified here.
-2. **Everything is FREE**: no plans, no quotas, no pricing UI, no Stripe, no usage counters.
+2. **Everything is FREE — completely. There is NO trial, no guest limits, no message caps,
+   no pricing, no plans, no Stripe anywhere.** Chat opens freely without sign-in; sign-in
+   exists only to enable cloud sync across devices. Remove every limit, counter,
+   upgrade prompt, tier label, and payment code path (§1).
 3. **Chat is the only product surface.** All other consumer pages die (§1 keeps the
    exceptions the desktop app needs).
 4. Verify after every stage: `npm run build`, `npx tsc --noEmit`, app boots, chat works,
@@ -57,8 +62,9 @@ TaskScheduler, BotSimulator(if present), HandwritingCanvas, MathLoadingState(if 
 
 ### Header/nav simplification (`App.tsx`)
 Nav shows only: **Chat** (+ Account avatar + theme/language toggles). LandingPage hero CTA
-→ open chat. Keep guest trial (5 msgs/day localStorage) or open chat freely — choose
-freely-open; sign-in prompt appears on cloud-sync actions only.
+→ open chat immediately (no sign-in wall, no trial counter — completely free). The
+sign-in prompt appears only when the user does something that needs cloud sync
+(saving history across devices, Projects, sharing).
 
 ### KEEP but relocate (desktop app depends on these)
 - `ExecutorControllerPage`: reachable only when `window.orinDesktop` exists (desktop shell)
