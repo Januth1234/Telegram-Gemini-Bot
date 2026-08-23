@@ -2,6 +2,51 @@
 
 All notable changes to Orin AI. Format: date — change (reason).
 
+## 2026-08-23 (pass 3) — Desktop browser login, Orin Router admin instance
+
+### Desktop login via browser (device flow)
+Clicking sign-in inside the desktop app now opens the **system browser** at the Orin login form:
+`api/auth/device.js` implements an OAuth-device-style flow — the app requests a code
+(`POST {action:'start'}`), opens `orinai.org/#device-auth?code=XXXX-XXXX`, the signed-in user taps
+Approve (`action:'approve'`, requires their Firebase session), and the app polls
+(`action:'token'`) until it receives a Firebase custom token. Codes are single-use, expire in
+10 minutes, use an unambiguous alphabet, and polls are rate-limited. New pieces:
+`components/DeviceAuthPage.tsx` (approval UI), route `#device-auth`, Electron `browserLogin`
+IPC + preload bridge, "Sign in with your browser" button in Account Settings (desktop shell only),
+`firebaseService.signInWithCustom`.
+
+### Admin panel + LLM router: standalone repo (github.com/Januth1234/Orin-Router)
+The admin panel IS the router: OmniRoute (diegosouzapw/OmniRoute) deployed as its own instance,
+published to **github.com/Januth1234/Orin-Router**. Changes on top of upstream:
+- `src/lib/auth/orinGate.ts` — 4-factor admin gate: **email + Phone 1 + Phone 2 + password**, all
+  provisioned via env vars (`ADMIN_EMAIL`, `ADMIN_PHONE_1`, `ADMIN_PHONE_2`, `ADMIN_PASSWORD`;
+  phones compared digits-only so any format works). Timing-safe compares; generic errors never
+  reveal which factor failed.
+- **3-strike IP blocking**: 3 wrong attempts from one IP → blocked (403), persisted across restarts.
+- **Kill switch**: `ADMIN_IP_BLOCK=Off` disables blocking AND ignores existing blocks (the owner's
+  recovery path from the hosting env-var dashboard); `On` re-enables. `ADMIN_MAX_ATTEMPTS` tunable.
+- Login route/schema/form wired: extra fields appear only when the gate is configured; when
+  `ADMIN_PASSWORD` is set it overrides OmniRoute's persisted password entirely; otherwise identity
+  factors are checked first and the password still falls back to the stock management password.
+- Usage analytics are built into OmniRoute's dashboard (tokens used, top models per request).
+- `ORIN-DEPLOY.md` in that repo = full hosting runbook (Docker/Node/Fly/Railway, env vars,
+  lockout recovery).
+
+### Website → router integration
+`api/chat.js` and `api/executor.js` now send ALL text traffic through the router instance when
+`ROUTER_BASE_URL` (+ optional `ROUTER_API_KEY`) is set — OpenAI-compatible `/v1/chat/completions`,
+model names pass through so the dashboard shows real per-model usage. If the router is down,
+requests automatically fail over to direct OpenRouter (logged), so chat availability never depends
+on the admin instance. Media/tool modes remain Gemini-direct by design.
+
+### Also
+- Confirmed `/api/desktop-sync` + its contract test (`scripts/test-desktop-sync-contract.mjs`)
+  from the earlier desktop-planning session are present and consistent (GET/PUT blob ≤512 KB,
+  per-user Firestore doc).
+- tsconfig/.gitignore exclude the local orin-router working copy; typecheck OOM fixed by that exclusion.
+- Verified: production build ✓, tsc clean ✓, esbuild syntax pass over every modified router file ✓,
+  gate decision-table tests (case-insensitive email, digit-only phones, On/Off semantics) ✓.
+
 ## 2026-08-23 (pass 2) — Backend unification, broken features restored, deprecations
 
 ### CRITICAL discovery fixed: 9 chat modes were dead in production
