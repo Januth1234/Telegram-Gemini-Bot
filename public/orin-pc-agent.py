@@ -70,7 +70,8 @@ except ImportError:
 # ── Configuration ─────────────────────────────────────────────────────────────
 BASE_URL   = "https://orinai.org/api/executor"
 STATE_FILE = Path.home() / ".orin_agent_state.json"
-POLL_INTERVAL_SEC = 3      # check for new jobs every 3 seconds
+POLL_INTERVAL_SEC = 1      # brief gap only — the server long-polls (wait=20) until a job is due
+LONG_POLL_WAIT = 20       # seconds the server holds /agent/jobs/next open before returning empty
 PING_INTERVAL_SEC = 60     # keepalive ping every 60 seconds
 
 
@@ -84,7 +85,7 @@ def sign_request(secret: str, body: str) -> tuple[str, str]:
 
 
 def agent_post(path: str, pair_id: str, secret: str, data: dict) -> dict:
-    body = json.dumps({**data, "pair_id": pair_id})
+    body = json.dumps({**data, "pair_id": pair_id}, separators=(",", ":"))
     ts, sig = sign_request(secret, body)
     r = requests.post(
         f"{BASE_URL}{path}",
@@ -479,7 +480,7 @@ def main():
 
         # Poll for next job
         try:
-            data = agent_post("/agent/jobs/next", pair_id, secret, {})
+            data = agent_post("/agent/jobs/next", pair_id, secret, {"wait": LONG_POLL_WAIT})
             job  = data.get("job")
             if job:
                 process_job(pair_id, secret, job)

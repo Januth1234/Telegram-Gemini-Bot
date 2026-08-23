@@ -1,25 +1,11 @@
 {
+  "crons": [
+    {
+      "path": "/api/maintenance",
+      "schedule": "0 3 * * *"
+    }
+  ],
   "rewrites": [
-    {
-      "source": "/api/version",
-      "destination": "/api/version"
-    },
-    {
-      "source": "/api/chat",
-      "destination": "/api/chat"
-    },
-    {
-      "source": "/api/files",
-      "destination": "/api/files"
-    },
-    {
-      "source": "/api/auth/google",
-      "destination": "/api/auth/google"
-    },
-    {
-      "source": "/api/auth/spotify",
-      "destination": "/api/auth/spotify"
-    },
     {
       "source": "/api/task-router/:path*",
       "destination": "/api/task-router"

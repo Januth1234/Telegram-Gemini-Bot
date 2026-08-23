@@ -1,10 +1,8 @@
 /**
- * aiProviderService — stores AI provider keys & integration tokens
- * per user in Firestore users/{uid}/settings/providers
- * Providers: gemini, openai, claude, perplexity, openrouter, groq, xai
- * Integrations: spotify, calendar, gmail, drive
+ * aiProviderService — stores AI provider keys per user in localStorage.
+ * Keys deliberately never leave the device (obfuscated at rest, not cryptographic).
+ * Integration tokens (Spotify etc.) live server-side via /api/auth/* instead.
  */
-import { firebaseService } from './firebaseService';
 
 export interface AIProviderKey {
   provider: string;
@@ -25,9 +23,8 @@ export interface IntegrationToken {
 }
 
 const PROVIDERS_KEY = 'orin_ai_providers';
-// Integration tokens moved to Firestore backend via /api/auth/*
 
-// Simple obfuscation for localStorage/Firestore (not cryptographic)
+// Simple obfuscation for localStorage (not cryptographic)
 const enc = (s: string) => btoa(unescape(encodeURIComponent(s)));
 const dec = (s: string) => { try { return decodeURIComponent(escape(atob(s))); } catch { return s; } };
 
@@ -42,13 +39,11 @@ export function saveProviderKey(p: AIProviderKey): void {
   const keys = getProviderKeys().filter(k => !(k.provider === p.provider && k.label === p.label));
   keys.push({ ...p, key: enc(p.key) });
   localStorage.setItem(PROVIDERS_KEY, JSON.stringify(keys));
-  _syncToFirestore();
 }
 
 export function removeProviderKey(provider: string, label: string): void {
   const keys = getProviderKeys().filter(k => !(k.provider === provider && k.label === label));
   localStorage.setItem(PROVIDERS_KEY, JSON.stringify(keys));
-  _syncToFirestore();
 }
 
 export function getDecryptedKey(provider: string, label?: string): string | null {
@@ -69,21 +64,4 @@ export function removeIntegration(_service: string): void { /* no-op */ }
 export function getDecryptedToken(_service: string): { access: string; refresh: string } | null {
   // Tokens now live server-side. Use /api/auth/spotify?action=getToken instead.
   return null;
-}
-
-// ── Sync to Firestore (background) ───────────────────────────────────────────
-
-let _syncTimer: ReturnType<typeof setTimeout> | null = null;
-function _syncToFirestore() {
-  if (_syncTimer) clearTimeout(_syncTimer);
-  _syncTimer = setTimeout(async () => {
-    try {
-      const uid = (window as any).__orinUser?.id;
-      if (!uid) return;
-      await (firebaseService as any).saveUserSettings?.(uid, {
-        aiProviders: getProviderKeys().map(k => ({ ...k, key: '[redacted]' })), // don't store keys in cloud
-        integrations: getIntegrations().map(i => ({ service: i.service, enabled: i.enabled, connectedAt: i.connectedAt })),
-      });
-    } catch {}
-  }, 2000);
 }

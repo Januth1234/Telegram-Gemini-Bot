@@ -16,16 +16,13 @@
     "formidable": "^3.5.4",
     "jstat": "^1.9.6",
     "katex": "^0.16.38",
-    "lucide-react": "^0.577.0",
     "mathjs": "^15.1.1",
-    "mathquill": "^0.10.1-a",
     "nerdamer": "^1.1.13",
-    "plotly.js": "^3.4.0",
     "plotly.js-dist-min": "^3.4.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "stripe": "^17.0.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.4"
   },
   "devDependencies": {
     "@types/node": "^20.19.37",

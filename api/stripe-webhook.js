@@ -1,5 +1,11 @@
+/**
+ * POST /api/stripe-webhook — Stripe subscription lifecycle → Firestore plan sync.
+ * Handles: checkout.session.completed, customer.subscription.updated,
+ * customer.subscription.deleted, invoice.payment_failed.
+ * Raw body + signature verification required (STRIPE_WEBHOOK_SECRET).
+ */
 import Stripe from 'stripe';
-import admin from 'firebase-admin';
+import { initAdmin, db, TS } from './_lib/firebase.js';
 
 async function getRawBody(req) {
   if (typeof req.text === 'function') return Buffer.from(await req.text(), 'utf8');
@@ -11,15 +17,16 @@ async function getRawBody(req) {
   });
 }
 
-function initFirebase() {
-  if (admin.apps.length) return admin.app();
-  const json = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!json) throw new Error('FIREBASE_SERVICE_ACCOUNT not set');
-  const key = typeof json === 'string' ? JSON.parse(json) : json;
-  return admin.initializeApp({ credential: admin.credential.cert(key) });
-}
-
 export const config = { api: { bodyParser: false } };
+
+const PAID_PLANS = new Set(['basic', 'pro', 'basic_yearly', 'pro_yearly']);
+
+async function setPlan(userId, plan) {
+  await db().collection('users').doc(userId).set({
+    plan,
+    lastUpdated: TS(),
+  }, { merge: true });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -45,28 +52,73 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: e.message });
   }
 
-  if (event.type !== 'checkout.session.completed') {
-    return res.status(200).json({ received: true });
-  }
-
-  const session = event.data.object;
-  const userId = session.client_reference_id;
-  const planKey = session.metadata?.planKey;
-  if (!userId || !planKey) {
-    return res.status(200).json({ received: true });
-  }
+  initAdmin();
 
   try {
-    initFirebase();
-    const db = admin.firestore();
-    await db.collection('users').doc(userId).update({
-      plan: planKey.toLowerCase(),
-      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    switch (event.type) {
+      // ── Fulfillment ──────────────────────────────────────────────────────
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const userId = session.client_reference_id;
+        const planKey = session.metadata?.planKey;
+        if (userId && planKey && PAID_PLANS.has(planKey.toLowerCase())) {
+          await setPlan(userId, planKey.toLowerCase());
+        }
+        break;
+      }
+
+      // ── Plan changes (upgrades/downgrades mid-cycle) ─────────────────────
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const userId = sub.metadata?.userId || sub.client_reference_id;
+        const priceId = sub.items?.data?.[0]?.price?.id;
+        if (userId && priceId) {
+          const plan = planFromPriceId(priceId);
+          if (sub.status === 'active' || sub.status === 'trialing') {
+            if (plan) await setPlan(userId, plan);
+          } else {
+            await setPlan(userId, 'free');
+          }
+        }
+        break;
+      }
+
+      // ── Cancellations / end of cycle ─────────────────────────────────────
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        const userId = sub.metadata?.userId || sub.client_reference_id;
+        if (userId) await setPlan(userId, 'free');
+        break;
+      }
+
+      // ── Payment failure → downgrade after final attempt ──────────────────
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object;
+        const userId = invoice.subscription_details?.metadata?.userId
+          || invoice.metadata?.userId
+          || null;
+        if (userId) await setPlan(userId, 'free');
+        break;
+      }
+
+      default:
+        break;
+    }
   } catch (e) {
     console.error('Webhook Firestore update error:', e);
     return res.status(500).json({ error: 'Fulfillment failed' });
   }
 
   return res.status(200).json({ received: true });
+}
+
+// Price IDs mirror PLAN_STRIPE in create-checkout-session.js
+function planFromPriceId(priceId) {
+  const map = {
+    price_1St3JKQguCNBtUJsTT2IIdNv: 'basic',
+    price_1St8ZQQguCNBtUJsIfn3XDEt: 'pro',
+    price_1StOwMQguCNBtUJsvqzrTCoa: 'basic_yearly',
+    price_1StOvpQguCNBtUJs2ei9gxkE: 'pro_yearly',
+  };
+  return map[priceId] || null;
 }

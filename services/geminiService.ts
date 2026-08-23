@@ -509,6 +509,12 @@ export class GeminiService {
     }
   }
 
+  /** Default voice persona for Live sessions when no explicit instruction is provided. */
+  private getVoiceSystemInstruction(tone: string = 'neutral', sessionContext?: string): string {
+    const base = `You are Orin AI, a friendly voice assistant. Reply in the SAME language the user speaks (Sinhala, Tamil, or English). Keep spoken answers short and natural — no markdown, no lists, no emojis.`;
+    return `${base}\nTone: ${tone}.${sessionContext ? `\nContext: ${sessionContext}` : ''}`;
+  }
+
   async connectLive(callbacks: any, config: any) {
     const apiKey = await this.getApiKey();
     const ai = new GoogleGenAI({ apiKey });

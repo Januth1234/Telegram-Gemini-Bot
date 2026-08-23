@@ -5,6 +5,7 @@ import { UserAccount, Language, UserThemeId } from '../types';
 import FilesWorkspace from './FilesWorkspace';
 import AIProviderSettings from './AIProviderSettings';
 import TaskScheduler from './TaskScheduler';
+import OrinAuthPanel from './OrinAuthPanel';
 import { translations } from '../translations';
 
 export type ThemeMode = 'light' | 'dark' | 'auto';
@@ -33,15 +34,66 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
   const pairId = typeof window !== 'undefined' ? localStorage.getItem('orin_exec_pair_id') : null;
   const [loading, setLoading] = useState(false);
   const [usage, setUsage] = useState<{ text: number; images: number; videos: number } | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+  // Profile editing
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [profileMsg, setProfileMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  // Password management
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [pwMsg, setPwMsg] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   useEffect(() => {
      if (user) {
         firebaseService.getUserMemory(user.id).then(m => setMemory(m.slice(0, MEMORY_MAX_LENGTH)));
         firebaseService.getUsage(user.id).then(setUsage);
+        setEditName(user.name || '');
+        setEditPhone(user.phone || '');
      } else {
         setUsage(null);
+        setEditName(''); setEditPhone('');
      }
+     setProfileMsg(null); setPwMsg(null);
   }, [user]);
+
+  const handleSaveProfile = async () => {
+    if (!user) return;
+    if (editName.trim().length < 2) { setProfileMsg({ kind: 'err', text: 'Name must be at least 2 characters.' }); return; }
+    const phoneDigits = editPhone.replace(/[\s()\-.]/g, '');
+    if (phoneDigits && !/^\+?\d{9,15}$/.test(phoneDigits)) {
+      setProfileMsg({ kind: 'err', text: 'Enter a valid phone number (e.g. 0771234567 or +94771234567).' });
+      return;
+    }
+    setLoading(true);
+    try {
+      await firebaseService.updateUserProfile(user.id, { name: editName.trim(), ...(phoneDigits ? { phone: phoneDigits.startsWith('0') ? '+94' + phoneDigits.slice(1) : phoneDigits } : {}) });
+      setProfileMsg({ kind: 'ok', text: 'Profile saved.' });
+    } catch {
+      setProfileMsg({ kind: 'err', text: 'Could not save your profile. Check your connection and retry.' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetPassword = async () => {
+    setPwMsg(null);
+    if (newPw.length < 8 || !/[a-zA-Z]/.test(newPw) || !/\d/.test(newPw)) {
+      setPwMsg({ kind: 'err', text: 'Password needs at least 8 characters with letters and numbers.' });
+      return;
+    }
+    if (newPw !== confirmPw) { setPwMsg({ kind: 'err', text: 'Passwords do not match.' }); return; }
+    setLoading(true);
+    try {
+      await firebaseService.setPassword(newPw);
+      setNewPw(''); setConfirmPw('');
+      setPwMsg({ kind: 'ok', text: 'Password saved. You can now sign in with your email/phone + password.' });
+    } catch (err: any) {
+      setPwMsg({ kind: 'err', text: err?.message || 'Could not set password.' });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveMemory = async () => {
      if (user) {
@@ -55,15 +107,34 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
 
   const handleGoogleLogin = async () => {
     setLoading(true);
+    setLoginError(null);
     try {
       const fbUser = await firebaseService.loginWithGoogle();
       if (fbUser && onSignInWithUser) {
         await onSignInWithUser(fbUser);
       }
     } catch (err: any) {
-      alert(err?.message || "Sign-in failed. Try again.");
+      setLoginError(err?.message || "Sign-in failed. Try again.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Desktop app: open the system browser at orinai.org, user approves there,
+  // this window picks up a custom token and signs in — no popups needed.
+  const canBrowserLogin = typeof window !== 'undefined' && typeof (window as any).orinDesktop?.browserLogin === 'function';
+  const [browserLoginBusy, setBrowserLoginBusy] = useState(false);
+  const handleBrowserLogin = async () => {
+    setLoading(true); setBrowserLoginBusy(true); setLoginError(null);
+    try {
+      const r = await (window as any).orinDesktop.browserLogin();
+      if (!r?.ok) throw new Error(r?.error || 'Browser sign-in failed.');
+      await firebaseService.signInWithCustom(r.customToken);
+      // onAuthStateChanged drives the rest of the sign-in flow
+    } catch (err: any) {
+      setLoginError(err?.message || 'Browser sign-in failed.');
+    } finally {
+      setLoading(false); setBrowserLoginBusy(false);
     }
   };
 
@@ -123,7 +194,15 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                   </div>
                </div>
 
-               <button onClick={handleGoogleLogin} disabled={loading} className="w-full py-5 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-95 transition-all shadow-xl">
+               {canBrowserLogin && (
+                 <button onClick={handleBrowserLogin} disabled={loading}
+                   className="w-full py-4 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:opacity-90 active:scale-[0.99] transition-all shadow-lg shadow-indigo-500/20 disabled:opacity-50">
+                   {browserLoginBusy ? <i className="fa-solid fa-circle-notch animate-spin" /> : <i className="fa-solid fa-browser text-sm" />}
+                   <span>{browserLoginBusy ? 'Waiting for browser approval…' : 'Sign in with your browser'}</span>
+                 </button>
+               )}
+
+               <button onClick={handleGoogleLogin} disabled={loading} className="w-full py-4 rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 font-black text-sm uppercase tracking-widest flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-95 transition-all shadow-xl disabled:opacity-50">
                   {loading ? (
                     <i className="fa-solid fa-circle-notch animate-spin"></i>
                   ) : (
@@ -131,7 +210,22 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                   )}
                   <span>{loading ? "Connecting..." : "Continue with Google"}</span>
                </button>
-               
+
+               {loginError && (
+                 <div role="alert" className="w-full flex items-start gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-600 dark:text-red-400 font-bold">
+                   <i className="fa-solid fa-circle-exclamation mt-0.5 shrink-0" />
+                   <span>{loginError}</span>
+                 </div>
+               )}
+
+               <div className="w-full flex items-center gap-4" aria-hidden="true">
+                 <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">or use your Orin account</span>
+                 <span className="flex-1 h-px bg-slate-200 dark:bg-white/10" />
+               </div>
+
+               <OrinAuthPanel onSignedIn={onSignInWithUser} />
+
                <p className="text-[10px] font-bold text-slate-400">By continuing, you agree to our Terms & Privacy Protocol.</p>
             </div>
           ) : (
@@ -160,9 +254,67 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                  </div>
                  <div>
                     <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase">{user.name}</h3>
-                    <p className="text-sm font-mono text-slate-500">{user.email}</p>
+                    <p className="text-sm font-mono text-slate-500">{user.email || user.phone}</p>
+                    {user.phone && user.email && <p className="text-xs font-mono text-slate-400 mt-0.5">{user.phone}</p>}
                  </div>
                  <div className="px-4 py-1 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">{user.tier}</div>
+              </div>
+
+              {/* Account details — name + phone */}
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.01s' }}>
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
+                    <i className="fa-solid fa-user-pen text-indigo-500/80" />
+                    Account details
+                 </label>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="text" value={editName} maxLength={60}
+                      onChange={e => setEditName(e.target.value)}
+                      placeholder="Display name" aria-label="Display name"
+                      className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="tel" value={editPhone}
+                      onChange={e => setEditPhone(e.target.value)}
+                      placeholder={user.email ? 'Add phone number' : 'Phone number'} aria-label="Phone number"
+                      className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                 </div>
+                 {profileMsg && (
+                   <p role="status" className={`text-xs font-bold px-2 ${profileMsg.kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{profileMsg.text}</p>
+                 )}
+                 <div className="px-2">
+                   <button onClick={handleSaveProfile} disabled={loading}
+                     className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 disabled:opacity-50 transition-colors">
+                     {loading ? 'Saving…' : 'Save details'}
+                   </button>
+                 </div>
+              </div>
+
+              {/* Orin AI password — lets Google users unlock password sign-in */}
+              <div className="space-y-4 animate-reveal" style={{ animationDelay: '0.02s' }}>
+                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-2">
+                    <i className="fa-solid fa-key text-indigo-500/80" />
+                    Orin AI password
+                 </label>
+                 <p className="text-[11px] text-slate-500 dark:text-slate-400 px-2">
+                   Set a password to sign in with your email or phone — including from the desktop app.
+                 </p>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <input type="password" value={newPw} autoComplete="new-password"
+                      onChange={e => setNewPw(e.target.value)}
+                      placeholder="New password (min 8 chars)" aria-label="New password"
+                      className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                    <input type="password" value={confirmPw} autoComplete="new-password"
+                      onChange={e => setConfirmPw(e.target.value)}
+                      placeholder="Confirm password" aria-label="Confirm password"
+                      className="w-full px-4 py-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                 </div>
+                 {pwMsg && (
+                   <p role="status" className={`text-xs font-bold px-2 ${pwMsg.kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{pwMsg.text}</p>
+                 )}
+                 <div className="px-2">
+                   <button onClick={handleSetPassword} disabled={loading || !newPw}
+                     className="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-950 text-[10px] font-black uppercase tracking-widest hover:opacity-90 disabled:opacity-40 transition-opacity">
+                     Save password
+                   </button>
+                 </div>
               </div>
 
               {/* Memory Editor */}

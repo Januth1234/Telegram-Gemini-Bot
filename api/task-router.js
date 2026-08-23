@@ -1,23 +1,22 @@
 /**
- * Task Router — selects execution mode per task type.
  * POST /api/task-router/dispatch
- * Routes: dom/web → browser ext | os/file → PC agent | remote/offline → broker | research → browser AI
+ * Routes a task and, for PC-routed tasks, enqueues a REAL executor job so the
+ * paired desktop agent picks it up (previously this only wrote a log entry and
+ * nothing ever executed the task).
+ *
+ * Routes:
+ *   browser  → handled by the browser extension (page-driven); logged here
+ *   research → handled client-side; logged here
+ *   pc       → executor_jobs queue consumed by the paired Python agent
  */
-import admin from 'firebase-admin';
-if (!admin.apps.length) {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) : null;
-  admin.initializeApp(sa ? { credential: admin.credential.cert(sa) } : undefined);
-}
-const db = () => admin.firestore();
-const TS = () => admin.firestore.FieldValue.serverTimestamp();
+import crypto from 'crypto';
+import { db, TS, requireUser, httpError } from './_lib/firebase.js';
+import { apiHandler } from './_lib/http.js';
 
 // Route classification
 const ROUTES = {
-  // Browser extension (DOM tasks)
   browser: ['click','type','navigate','scroll','screenshot','extract','fill','search_dom'],
-  // PC agent (OS/file tasks)
   pc: ['create_ppt','create_doc','run_command','open_app','type_text','spotify','custom','create_file','screenshot_desktop'],
-  // Research / complex thinking
   research: ['web_research','summarize','compare_ai','deep_search'],
 };
 
@@ -28,49 +27,69 @@ function classify(task) {
   return 'pc'; // default
 }
 
-async function verifyUser(req) {
-  const m = (req.headers.authorization || '').match(/^Bearer\s+(.+)$/i);
-  if (!m) throw Object.assign(new Error('Unauthorized'), { code: 401 });
-  return (await admin.auth().verifyIdToken(m[1])).uid;
-}
+async function handler(req, res) {
+  if (req.method !== 'POST') throw httpError(405, 'POST only');
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).end();
+  const decoded = await requireUser(req);
+  const uid = decoded.uid;
+  const { task, params = {}, deviceId, scheduleTime, recurrence, preferRoute } = req.body || {};
+  if (!task) throw httpError(400, 'task required');
 
-  try {
-    const uid = await verifyUser(req);
-    const { task, params = {}, deviceId, scheduleTime, recurrence, preferRoute } = req.body || {};
-    if (!task) return res.status(400).json({ error: 'task required' });
+  const route = preferRoute || classify(task);
+  const dispatchRef = db().collection('task_dispatch').doc();
 
-    const route = preferRoute || classify(task);
-    const jobId = db().collection('task_dispatch').doc().id;
+  const result = {
+    jobId: dispatchRef.id,
+    route,
+    status: scheduleTime ? 'scheduled' : 'dispatched',
+    message: `Task routed to: ${route}`,
+  };
 
-    // Log the dispatch
-    await db().collection('task_dispatch').doc(jobId).set({
-      jobId, uid, task, params, route, deviceId: deviceId || null,
-      scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
+  // ── PC route → enqueue on the real executor pipeline ────────────────────────
+  let executorJobId = null;
+  if (route === 'pc' && deviceId) {
+    const pairSnap = await db().collection('executor_pairs').doc(String(deviceId)).get();
+    if (!pairSnap.exists) throw httpError(404, 'Unknown device pair');
+    const pair = pairSnap.data();
+    if (pair.userId !== uid) throw httpError(403, 'Forbidden');
+    if (pair.status !== 'paired') throw httpError(409, 'Device is not paired/active');
+
+    executorJobId = crypto.randomBytes(16).toString('hex');
+    await db().collection('executor_jobs').doc(executorJobId).set({
+      userId: uid,
+      pairId: String(deviceId),
+      task,
+      params: params || {},
+      nonce: null,            // server-initiated dispatch; replay window applies at API level
+      timestamp: Math.floor(Date.now() / 1000),
+      notBefore: scheduleTime ? new Date(scheduleTime) : null,  // agent skips until due
       recurrence: recurrence || 'none',
-      status: scheduleTime ? 'scheduled' : 'dispatched',
+      source: 'task-router',
+      status: 'queued',
+      progress: 0,
+      canonical: null,
+      serverSig: null,
       createdAt: TS(),
+      updatedAt: TS(),
     });
-
-    // If scheduled — push to broker
-    if (scheduleTime && deviceId) {
-      await fetch(`${process.env.VERCEL_URL || 'https://orinai.org'}/api/broker/schedule`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: req.headers.authorization },
-        body: JSON.stringify({ deviceId, task, params, scheduleTime, recurrence, route }),
-      }).catch(() => {});
-    }
-
-    return res.status(200).json({ jobId, route, status: scheduleTime ? 'scheduled' : 'dispatched',
-      message: `Task routed to: ${route}` });
-  } catch (e) {
-    if (e.code) return res.status(e.code).json({ error: e.message });
-    console.error('[task-router]', e);
-    return res.status(500).json({ error: 'Internal error' });
+    result.jobId = executorJobId;
+    result.executorJobId = executorJobId;
+    result.status = 'queued';
   }
+
+  // Audit log of the dispatch decision
+  await dispatchRef.set({
+    jobId: dispatchRef.id,
+    executorJobId,
+    uid, task, params, route,
+    deviceId: deviceId || null,
+    scheduleTime: scheduleTime ? new Date(scheduleTime) : null,
+    recurrence: recurrence || 'none',
+    status: scheduleTime ? 'scheduled' : 'dispatched',
+    createdAt: TS(),
+  });
+
+  return res.status(200).json(result);
 }
+
+export default apiHandler(handler);

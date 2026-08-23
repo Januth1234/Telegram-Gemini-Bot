@@ -1,60 +1,22 @@
 /**
  * Spotify OAuth backend — token exchange + refresh
- * POST /api/auth/spotify  body: { action: 'exchange'|'refresh'|'getToken', code?, redirectUri? }
+ * POST /api/auth/spotify  body: { action: 'exchange'|'refresh'|'getToken'|'disconnect', code?, redirectUri? }
  * GET  /api/auth/spotify  → { connected: bool }
  *
- * Required Vercel env vars: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY
+ * Required env vars: SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, TOKEN_ENCRYPTION_KEY (32+ chars)
  */
-import admin from 'firebase-admin';
-import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
-
-if (!admin.apps.length) {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : null;
-  admin.initializeApp(sa ? { credential: admin.credential.cert(sa) } : undefined);
-}
-const db = () => admin.firestore();
+import { db, TS, requireUser } from '../_lib/firebase.js';
+import { apiHandler } from '../_lib/http.js';
+import { encryptToken, decryptToken } from '../_lib/crypto.js';
 
 export const config = { maxDuration: 30 };
-
-const ENC_KEY = Buffer.from(
-  (process.env.TOKEN_ENCRYPTION_KEY || '7fK9xQ2mZr8LpA4vTn6HsWcYd3JgB1eU').padEnd(32).slice(0, 32)
-);
-function encrypt(t) {
-  const iv = randomBytes(12);
-  const c = createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([c.update(t, 'utf8'), c.final()]);
-  return iv.toString('hex') + ':' + c.getAuthTag().toString('hex') + ':' + enc.toString('hex');
-}
-function decrypt(d) {
-  try {
-    const [ivH, tagH, encH] = d.split(':');
-    const dc = createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivH, 'hex'));
-    dc.setAuthTag(Buffer.from(tagH, 'hex'));
-    return Buffer.concat([dc.update(Buffer.from(encH, 'hex')), dc.final()]).toString('utf8');
-  } catch { return null; }
-}
-
-async function verifyUser(req) {
-  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!token) throw new Error('Unauthorized');
-  const d = await admin.auth().verifyIdToken(token);
-  return d.uid;
-}
 
 const CID = process.env.SPOTIFY_CLIENT_ID || '';
 const CSECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 const tokenDoc = (uid) => db().collection('users').doc(uid).collection('integrations').doc('spotify');
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-
-  let uid;
-  try { uid = await verifyUser(req); }
-  catch { return res.status(401).json({ error: 'Unauthorized' }); }
+async function handler(req, res) {
+  const uid = await requireUser(req);
 
   if (req.method === 'GET') {
     const snap = await tokenDoc(uid).get();
@@ -76,10 +38,10 @@ export default async function handler(req, res) {
     const data = await r.json();
     if (!data.access_token) return res.status(400).json({ error: data.error_description || 'Exchange failed' });
     await tokenDoc(uid).set({
-      accessToken:  encrypt(data.access_token),
-      refreshToken: encrypt(data.refresh_token),
+      accessToken:  encryptToken(data.access_token),
+      refreshToken: data.refresh_token ? encryptToken(data.refresh_token) : null,
       expiresAt:    Date.now() + data.expires_in * 1000,
-      connectedAt:  admin.firestore.FieldValue.serverTimestamp(),
+      connectedAt:  TS(),
       enabled:      true,
     });
     return res.status(200).json({ ok: true });
@@ -90,7 +52,7 @@ export default async function handler(req, res) {
     if (!snap.exists || !snap.data().enabled) return res.status(404).json({ error: 'Not connected' });
     const d = snap.data();
     if (d.expiresAt < Date.now() + 60000 && d.refreshToken && CSECRET) {
-      const rt = decrypt(d.refreshToken);
+      const rt = decryptToken(d.refreshToken);
       if (rt) {
         const r = await fetch('https://accounts.spotify.com/api/token', {
           method: 'POST',
@@ -99,13 +61,13 @@ export default async function handler(req, res) {
         });
         const rd = await r.json();
         if (rd.access_token) {
-          await tokenDoc(uid).update({ accessToken: encrypt(rd.access_token), expiresAt: Date.now() + rd.expires_in * 1000 });
+          await tokenDoc(uid).update({ accessToken: encryptToken(rd.access_token), expiresAt: Date.now() + rd.expires_in * 1000 });
           return res.status(200).json({ accessToken: rd.access_token });
         }
       }
     }
-    const at = decrypt(d.accessToken);
-    if (!at) return res.status(400).json({ error: 'Decrypt failed' });
+    const at = decryptToken(d.accessToken);
+    if (!at) return res.status(400).json({ error: 'Decrypt failed — was TOKEN_ENCRYPTION_KEY rotated?' });
     return res.status(200).json({ accessToken: at });
   }
 
@@ -116,3 +78,5 @@ export default async function handler(req, res) {
 
   return res.status(400).json({ error: 'Unknown action' });
 }
+
+export default apiHandler(handler);

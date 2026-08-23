@@ -5,19 +5,30 @@
  */
 'use strict';
 
-const ALLOWED_ORIGINS = [
+const ALLOWED_ORIGINS = new Set([
   'https://orinai.org',
   'https://www.orinai.org',
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:4173',
-];
+]);
+
+// Exact-origin match. Prefix/startsWith checks are bypassable via lookalike
+// domains (e.g. https://orinai.org.evil.com startsWith https://orinai.org).
+function isAllowedOrigin(origin) {
+  if (!origin) return false;
+  try {
+    return ALLOWED_ORIGINS.has(new URL(origin).origin);
+  } catch {
+    return false;
+  }
+}
 
 let agentTabId = null;
 
 // ── External message handler ──────────────────────────────────────────────────
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-  if (!ALLOWED_ORIGINS.some(o => sender.origin?.startsWith(o))) {
+  if (!isAllowedOrigin(sender.origin)) {
     sendResponse({ error: 'Unauthorized: ' + sender.origin }); return true;
   }
   handleCommand(message).then(sendResponse).catch(e => sendResponse({ error: e.message }));

@@ -1,21 +1,95 @@
 /**
- * POST /api/chat
- * Backend OpenRouter proxy. Keeps API key server-side.
- * Injects parsed file content from Firestore into context.
- * Handles: standard chat, file context, grounding, thinking budget.
+ * POST /api/chat — Orin AI inference gateway (multi-provider).
+ *
+ * Provider routing by capability:
+ *   - Plain text (chat / title / memory-update / math)      → OpenRouter
+ *   - Media + tool modes (image / video / tts / embed /
+ *     computer-use / code-exec / url-context / research)    → Google Gemini API
+ *
+ * Auth: Bearer Firebase ID token REQUIRED for every mode.
+ * Quotas are enforced SERVER-SIDE here (daily text per plan, rolling 30-day
+ * media windows) and usage is incremented authoritatively after each success —
+ * the client copy is display-only and cannot be trusted.
+ *
+ * Env: OPENROUTER_API_KEY, GEMINI_API_KEY (API_KEY accepted as legacy alias),
+ *      FIREBASE_SERVICE_ACCOUNT.
  */
-import admin from 'firebase-admin';
+import { db, TS, verifyUser, httpError } from './_lib/firebase.js';
+import { apiHandler } from './_lib/http.js';
+import { FieldValue } from 'firebase-admin/firestore';
+import { GoogleGenAI } from '@google/genai';
 
-if (!admin.apps.length) {
-  const sa = process.env.FIREBASE_SERVICE_ACCOUNT
-    ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-    : null;
-  admin.initializeApp(sa ? { credential: admin.credential.cert(sa) } : undefined);
+export const config = { maxDuration: 120 };
+
+// ── Plan limits (authoritative mirror of the UI copy in firebaseService.ts) ──
+const LIMITS = {
+  free:         { textPerDay: 200,  imagesPer30d: 10,  videosPer30d: 0 },
+  starter:      { textPerDay: 200,  imagesPer30d: 10,  videosPer30d: 0 },
+  basic:        { textPerDay: 500,  imagesPer30d: 30,  videosPer30d: 2 },
+  basic_yearly: { textPerDay: 500,  imagesPer30d: 30,  videosPer30d: 2 },
+  pro:          { textPerDay: 2000, imagesPer30d: null, videosPer30d: null },
+  pro_yearly:   { textPerDay: 2000, imagesPer30d: null, videosPer30d: null },
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const THIRTY_DAYS_MS = 30 * DAY_MS;
+
+/** Reads usage + plan, resets stale windows, returns { plan, limits, usage } or null on failure. */
+async function loadUsage(uid) {
+  try {
+    const ref = db().collection('users').doc(uid);
+    const snap = await ref.get();
+    const data = snap.data() || {};
+    const now = Date.now();
+    const planKeyRaw = (data.plan || 'free').toLowerCase();
+    const planKey = planKeyRaw === 'elite' ? 'pro' : planKeyRaw;
+    const limits = LIMITS[planKey] || LIMITS.free;
+    const usage = { ...(data.usage ?? { text: 0, images: 0, videos: 0 }) };
+    let lastReset = data.lastReset || 0;
+    let mediaWindowStart = usage.mediaWindowStart || lastReset || now;
+
+    const updates = {};
+    if (!lastReset || now - lastReset > DAY_MS) { usage.text = 0; updates.lastReset = now; lastReset = now; }
+    if (!mediaWindowStart || now - mediaWindowStart > THIRTY_DAYS_MS) {
+      usage.images = 0; usage.videos = 0; usage.mediaWindowStart = now; mediaWindowStart = now;
+    }
+    if (Object.keys(updates).length) await ref.set({ ...updates, usage }, { merge: true });
+
+    return { plan: planKey, limits, usage };
+  } catch {
+    return null; // fail open — don't block paying users over a transient read error
+  }
 }
-const db = () => admin.firestore();
 
-export const config = { maxDuration: 60 };
+function quotaError(limit) {
+  return httpError(429, limit === 'text'
+    ? 'Daily message limit reached. Your limit resets tomorrow, or upgrade your plan.'
+    : 'Creation limit reached for this 30-day window. Upgrade your plan for more.');
+}
 
+function enforceLimit(u, kind) {
+  if (!u) return; // couldn't read usage — allow
+  const { limits, usage } = u;
+  if (kind === 'text') {
+    if (limits.textPerDay != null && (usage.text ?? 0) >= limits.textPerDay) throw quotaError('text');
+  } else if (kind === 'images') {
+    if (limits.imagesPer30d == null) return;
+    if ((usage.images ?? 0) >= limits.imagesPer30d) throw quotaError('media');
+  } else if (kind === 'videos') {
+    if (limits.videosPer30d == null) return;
+    if ((usage.videos ?? 0) >= limits.videosPer30d) throw quotaError('media');
+  }
+}
+
+async function incrementUsage(uid, kind) {
+  try {
+    const ref = db().collection('users').doc(uid);
+    const field = kind === 'text' ? 'usage.text' : kind === 'images' ? 'usage.images' : 'usage.videos';
+    await ref.set({ [field]: FieldValue.increment(1), lastUpdated: TS() }, { merge: true });
+  } catch { /* non-blocking */ }
+}
+
+// ── OpenRouter (text) ─────────────────────────────────────────────────────────
 const TONE_MAP = {
   unhinged:     `You are a chaotic, unpredictable AI. Be wild, spontaneous, use slang.`,
   romantic:     `You are a flirtatious, romantic companion. Speak with warmth and affection. Include soft moans like "mmnh~" at suitable moments.`,
@@ -44,7 +118,6 @@ RULES:
 
 function getModels(plan) {
   const p = (plan || 'free').toLowerCase();
-  // Using OpenRouter models
   if (p === 'pro' || p === 'pro_yearly')      return ['google/gemini-2.0-flash-001', 'anthropic/claude-3.5-sonnet'];
   if (p === 'basic' || p === 'basic_yearly')  return ['google/gemini-2.0-flash-001', 'openai/gpt-4o-mini'];
   return ['google/gemini-2.0-flash-001'];
@@ -58,7 +131,6 @@ function getContextLimit(plan) {
 }
 
 async function getUserMemory(uid) {
-  if (!uid) return '';
   try {
     const snap = await db().collection('users').doc(uid).get();
     return snap.data()?.memory || '';
@@ -66,7 +138,7 @@ async function getUserMemory(uid) {
 }
 
 async function getFilesText(uid, fileIds) {
-  if (!uid || !fileIds?.length) return '';
+  if (!fileIds?.length) return '';
   try {
     const parts = [];
     for (const fid of fileIds.slice(0, 5)) {
@@ -81,89 +153,139 @@ async function getFilesText(uid, fileIds) {
   } catch { return ''; }
 }
 
-async function verifyUser(req) {
-  const auth = req.headers.authorization || '';
-  const token = auth.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    return decoded.uid;
-  } catch { return null; }
-}
-
 async function callOpenRouter(apiKey, model, messages, options = {}) {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+  // When ROUTER_BASE_URL is set, all text traffic goes through the Orin AI
+  // router instance (OmniRoute — OpenAI-compatible /v1 endpoint, gives the
+  // admin dashboard token/model analytics + provider fallback). Direct
+  // OpenRouter remains the fallback so chat never hard-breaks if the router
+  // instance is down.
+  const routerBase = (process.env.ROUTER_BASE_URL || '').replace(/\/+$/, '');
+  const url = routerBase
+    ? `${routerBase}/v1/chat/completions`
+    : "https://openrouter.ai/api/v1/chat/completions";
+  const authKey = routerBase
+    ? (process.env.ROUTER_API_KEY || apiKey)
+    : apiKey;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://orin-ai.vercel.app", // Optional, for OpenRouter rankings
-      "X-Title": "Orin AI", // Optional, for OpenRouter rankings
+      "Authorization": `Bearer ${authKey}`,
+      "HTTP-Referer": "https://orinai.org",
+      "X-Title": "Orin AI",
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      ...options
-    })
+    body: JSON.stringify({ model, messages, ...options })
   });
 
   if (!response.ok) {
-    const error = await response.json();
+    if (routerBase) {
+      console.error(`[api/chat] router ${response.status}; failing over to OpenRouter direct`);
+      const direct = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "HTTP-Referer": "https://orinai.org",
+          "X-Title": "Orin AI",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ model, messages, ...options })
+      });
+      if (!direct.ok) {
+        const error = await direct.json().catch(() => ({}));
+        throw new Error(error.error?.message || "OpenRouter API error");
+      }
+      return direct.json();
+    }
+    const error = await response.json().catch(() => ({}));
     throw new Error(error.error?.message || "OpenRouter API error");
   }
 
   return response.json();
 }
 
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method === 'GET') {
-    const key = process.env.OPENROUTER_API_KEY || '';
-    return res.status(200).json({
-      ok: !!key,
-      keyVar: process.env.OPENROUTER_API_KEY ? 'OPENROUTER_API_KEY ✓' : 'NOT SET ✗',
-      keyHint: key ? key.slice(0,6) + '...' + key.slice(-4) : null,
-      firebase: !!process.env.FIREBASE_SERVICE_ACCOUNT,
-    });
-  }
-  if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
+// ── Gemini (media + tool modes) ───────────────────────────────────────────────
+let _gemini = null;
+function gemini() {
+  const key = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!key) throw httpError(500, 'GEMINI_API_KEY not configured');
+  if (!_gemini) _gemini = new GoogleGenAI({ key });
+  return _gemini;
+}
 
+function extractText(response) {
+  let text = '';
+  for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+    if (part.text && !part.thought) text += part.text;
+  }
+  return text.trim();
+}
+
+function extractLinks(response) {
+  const links = [];
+  for (const chunk of response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? []) {
+    if (chunk.web?.uri) links.push({ uri: chunk.web.uri, title: chunk.web.title || chunk.web.uri });
+  }
+  return links;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+async function handler(req, res) {
+  if (req.method === 'GET') {
+    // Minimal health probe — no configuration details exposed.
+    return res.status(200).json({ ok: !!process.env.OPENROUTER_API_KEY });
+  }
+  if (req.method !== 'POST') throw httpError(405, 'POST only');
+
+  const uid = await verifyUser(req);
+  if (!uid) throw httpError(401, 'Sign in to use Orin AI');
+
+  const body = req.body || {};
+  const mode = body.mode || 'chat';
+
+  const usageInfo = await loadUsage(uid);
+
+  // ── Mode routing ────────────────────────────────────────────────────────────
+  switch (mode) {
+    case 'title':         return handleTitle(req, res);
+    case 'memory-update': return handleMemoryUpdate(req, res);
+    case 'embed':         return handleEmbed(req, res);
+    case 'image':         enforceLimit(usageInfo, 'images'); return handleImageGen(req, res, uid);
+    case 'video':         enforceLimit(usageInfo, 'videos'); return handleVideoGen(req, res, uid);
+    case 'tts':           return handleTts(req, res);
+    case 'computer-use':  return handleComputerUse(req, res);
+    case 'agent-plan':    return handleAgentPlan(req, res);
+    case 'code':          return handleCodeExecution(req, res);
+    case 'url':           return handleUrlContext(req, res);
+    case 'research':      return handleDeepResearch(req, res);
+    case 'math':          enforceLimit(usageInfo, 'text'); return handleMath(req, res, usageInfo);
+    case 'math-extract':  return handleMathExtract(req, res);
+    default:              break; // plain chat below
+  }
+
+  // ── Plain chat (OpenRouter) ─────────────────────────────────────────────────
   const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'OPENROUTER_API_KEY not configured' });
+  if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
 
   const {
     prompt,
     history = [],
-    fileData,        // inline attachment: { data: base64, mimeType }
-    fileIds = [],    // library file IDs to inject from Firestore
+    fileData,
+    fileIds = [],
     tone = 'neutral',
-    plan = 'free',
-    useThinking = false,
     descriptive = false,
-    grounding,       // 'search' | 'maps'
     isPrivate = false,
-    uid,             // passed from frontend (verified against auth token)
-  } = req.body || {};
+  } = body;
 
-  if (!prompt && !fileData) return res.status(400).json({ error: 'prompt required' });
+  if (!prompt && !fileData) throw httpError(400, 'prompt required');
 
-  // Verify auth token matches uid
-  const verifiedUid = await verifyUser(req);
-  const safeUid = verifiedUid || null;
+  enforceLimit(usageInfo, 'text');
 
-  // ── mode routing ────────────────────────────────────────────────────────────
-  const mode = req.body?.mode || 'chat';
-
-  // Simplified handlers for OpenRouter
-  if (mode === 'title')       return handleTitle(req, res, apiKey);
-  if (mode === 'memory-update') return handleMemoryUpdate(req, res, apiKey);
+  const effectivePlan = usageInfo?.plan || body.plan || 'free';
 
   try {
-    // Build memory + file context
-    const memory = (!isPrivate && safeUid) ? await getUserMemory(safeUid) : '';
-    const filesText = (fileIds.length > 0 && safeUid) ? await getFilesText(safeUid, fileIds) : '';
+    const memory = (!isPrivate && uid) ? await getUserMemory(uid) : '';
+    const filesText = (fileIds.length > 0 && uid) ? await getFilesText(uid, fileIds) : '';
 
     let systemInstruction = getSystemInstruction(tone, memory);
     systemInstruction += `\n\nEXPLANATION STYLE:\n- Descriptive mode: ${descriptive ? 'ON' : 'OFF'}.`;
@@ -172,20 +294,15 @@ export default async function handler(req, res) {
     }
 
     const messages = [{ role: 'system', content: systemInstruction }];
-    const contextLimit = getContextLimit(plan);
-
-    // Build history
-    for (const msg of (history || []).slice(-contextLimit)) {
+    for (const msg of (history || []).slice(-getContextLimit(effectivePlan))) {
       messages.push({
         role: msg.role === 'user' ? 'user' : 'assistant',
         content: msg.content || ''
       });
     }
 
-    // Current message
     let currentContent = prompt || 'Continue.';
     if (fileData?.data && fileData?.mimeType) {
-      // OpenRouter supports multimodal for some models
       currentContent = [
         { type: 'text', text: currentContent },
         { type: 'image_url', image_url: { url: `data:${fileData.mimeType};base64,${fileData.data}` } }
@@ -193,8 +310,7 @@ export default async function handler(req, res) {
     }
     messages.push({ role: 'user', content: currentContent });
 
-    // Model fallback chain
-    const models = getModels(plan);
+    const models = getModels(effectivePlan);
     let response = null;
     let lastErr = null;
     for (const model of models) {
@@ -206,16 +322,19 @@ export default async function handler(req, res) {
     if (!response) throw lastErr;
 
     const text = response.choices?.[0]?.message?.content || "";
+    incrementUsage(uid, 'text');
     return res.status(200).json({ text: text.trim(), links: [], reasoning_details: [] });
   } catch (err) {
+    if (err.code === 429) throw err;
     console.error('[api/chat] error:', err);
-    const msg = err?.message || String(err);
-    return res.status(500).json({ error: msg, type: 'generic' });
+    throw httpError(500, 'Chat failed. Please try again.');
   }
 }
 
-// ── generateTitle ─────────────────────────────────────────────────────────────
-async function handleTitle(req, res, apiKey) {
+// ── Title (OpenRouter, cheap model) ──────────────────────────────────────────
+async function handleTitle(req, res) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) return res.status(200).json({ title: 'New Chat' });
   const { firstMessage } = req.body || {};
   try {
     const messages = [
@@ -228,8 +347,10 @@ async function handleTitle(req, res, apiKey) {
   } catch { return res.status(200).json({ title: 'New Chat' }); }
 }
 
-// ── Memory update ──────────────────────────────────────────────────────────────
-async function handleMemoryUpdate(req, res, apiKey) {
+// ── Memory update (OpenRouter) ───────────────────────────────────────────────
+async function handleMemoryUpdate(req, res) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
   const { previousMemory, userPrompt, assistantReply } = req.body || {};
   const SYS = `You are a memory manager for a personal AI assistant.
 RULES: Output ONLY the updated memory (3-6 sentences max). Include: name, job, preferences, context.
@@ -243,6 +364,339 @@ IGNORE: greetings, math, one-off questions. REMOVE outdated info. Write in third
     const newMemory = (response.choices?.[0]?.message?.content || '').trim();
     return res.status(200).json({ newMemory });
   } catch (err) {
-    return res.status(500).json({ error: err?.message });
+    throw httpError(500, 'Memory update failed');
   }
 }
+
+// ── Embeddings (Gemini) ──────────────────────────────────────────────────────
+async function handleEmbed(req, res) {
+  const { texts, imageBase64, mimeType = 'image/png', outputDimensionality } = req.body || {};
+  try {
+    const ai = gemini();
+    const config = outputDimensionality != null ? { outputDimensionality } : undefined;
+    if (imageBase64) {
+      const r = await ai.models.embedContent({
+        model: 'gemini-embedding-001',
+        contents: [{ inlineData: { mimeType, data: imageBase64 } }],
+      });
+      return res.status(200).json({ embeddings: [r.embeddings?.[0]?.values ?? []] });
+    }
+    const r = await ai.models.embedContent({ model: 'gemini-embedding-001', contents: texts || [], config });
+    return res.status(200).json({ embeddings: (r.embeddings ?? []).map(e => e.values ?? []) });
+  } catch (err) {
+    // Embeddings power semantic search — degrade gracefully to empty vectors.
+    return res.status(200).json({ embeddings: (texts || []).map(() => []) });
+  }
+}
+
+// ── Image generation (Gemini) ────────────────────────────────────────────────
+async function handleImageGen(req, res, uid) {
+  const { prompt, referenceImage } = req.body || {};
+  if (!prompt && !referenceImage) throw httpError(400, 'prompt required');
+  try {
+    const ai = gemini();
+    let dataUrl = '';
+
+    if (referenceImage?.data) {
+      const r = await ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: [{ parts: [
+          { inlineData: { data: referenceImage.data, mimeType: referenceImage.mimeType } },
+          { text: `Edit or transform this image: ${prompt}. Return only the modified image.` },
+        ]}],
+        config: { responseModalities: ['IMAGE', 'TEXT'] },
+      });
+      for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+        if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
+      }
+    } else {
+      const attempts = [
+        ['gemini-2.0-flash-preview-image-generation', prompt],
+        ['gemini-2.0-flash', `Create an image of: ${prompt}`],
+      ];
+      for (const [model, text] of attempts) {
+        try {
+          const r = await ai.models.generateContent({
+            model,
+            contents: [{ parts: [{ text }] }],
+            config: { responseModalities: ['IMAGE', 'TEXT'] },
+          });
+          for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+            if (part.inlineData?.data) { dataUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`; break; }
+          }
+          if (dataUrl) break;
+        } catch { /* next attempt */ }
+      }
+    }
+    if (!dataUrl) throw httpError(502, 'No image returned. Try a different prompt.');
+    incrementUsage(uid, 'images');
+    return res.status(200).json({ dataUrl });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Image generation failed');
+  }
+}
+
+// ── Video generation (Gemini Veo) ────────────────────────────────────────────
+async function handleVideoGen(req, res, uid) {
+  const { prompt, aspectRatio = '16:9', resolution = '720p', image, lastFrame, video: videoIn } = req.body || {};
+  if (!prompt) throw httpError(400, 'prompt required');
+  try {
+    const ai = gemini();
+    const isExtend = !!videoIn;
+    const model = isExtend || resolution === '1080p' ? 'veo-3.1-generate-preview' : 'veo-3.1-fast-generate-preview';
+    const config = { numberOfVideos: 1, resolution, aspectRatio };
+    if (lastFrame) config.lastFrame = lastFrame;
+    const params = { model, prompt, config };
+    if (image) params.image = image;
+    if (videoIn) params.video = videoIn;
+
+    let operation = await ai.models.generateVideos(params);
+    const startedAt = Date.now();
+    while (!operation.done) {
+      if (Date.now() - startedAt > 300000) throw httpError(504, 'Video generation timed out');
+      await new Promise(r => setTimeout(r, 8000));
+      operation = await ai.operations.getVideosOperation({ operation });
+      if (operation?.error?.message) throw httpError(502, operation.error.message);
+    }
+    const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+    if (!videoUri) throw httpError(502, 'No video generated');
+    const vr = await fetch(`${videoUri}&key=${process.env.GEMINI_API_KEY || process.env.API_KEY}`);
+    const buf = Buffer.from(await vr.arrayBuffer());
+    incrementUsage(uid, 'videos');
+    return res.status(200).json({ videoBase64: buf.toString('base64') });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Video generation failed');
+  }
+}
+
+// ── TTS (Gemini) ─────────────────────────────────────────────────────────────
+async function handleTts(req, res) {
+  const { text, stylePrompt, voiceName = 'Kore', multiSpeaker } = req.body || {};
+  if (!text?.trim()) throw httpError(400, 'No text to speak');
+  try {
+    const ai = gemini();
+    const promptText = stylePrompt?.trim() ? `${stylePrompt.trim()}\n\n${text.trim()}` : text.trim();
+    const speechConfig = multiSpeaker?.length
+      ? { multiSpeakerVoiceConfig: { speakerVoiceConfigs: multiSpeaker.map(({ speaker, voiceName: v }) => ({ speaker, voiceConfig: { prebuiltVoiceConfig: { voiceName: v } } })) } }
+      : { voiceConfig: { prebuiltVoiceConfig: { voiceName } } };
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-preview-tts',
+      contents: [{ role: 'user', parts: [{ text: promptText }] }],
+      config: { responseModalities: ['AUDIO'], speechConfig },
+    });
+    const data = r.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (!data) throw httpError(502, 'No audio generated');
+    return res.status(200).json({ audioBase64: data });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'TTS failed');
+  }
+}
+
+// ── Computer use (Gemini tool) ───────────────────────────────────────────────
+async function handleComputerUse(req, res) {
+  const { prompt, screenshotBase64, mimeType = 'image/png', contents: contentsIn } = req.body || {};
+  try {
+    const ai = gemini();
+    const contents = contentsIn?.length ? contentsIn : [{
+      role: 'user',
+      parts: [
+        ...(screenshotBase64 ? [{ inlineData: { data: screenshotBase64, mimeType } }] : []),
+        { text: prompt || '' },
+      ],
+    }];
+    const r = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents,
+      config: { tools: [{ computerUse: { environment: 'ENVIRONMENT_BROWSER' } }] },
+    });
+    let text = '';
+    const functionCalls = [];
+    for (const part of r.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text) text += part.text;
+      const fc = part.functionCall || part.function_call;
+      if (fc) functionCalls.push({ name: fc.name, args: fc.args || {} });
+    }
+    return res.status(200).json({ text: text.trim(), functionCalls });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Computer use failed');
+  }
+}
+
+// ── Agent plan (OpenRouter JSON) ─────────────────────────────────────────────
+async function handleAgentPlan(req, res) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
+  const { task } = req.body || {};
+  if (!task) throw httpError(400, 'task required');
+  const SYS = `Output only valid JSON. No markdown. No explanation.`;
+  const USER = `You are a browser automation agent. Break this task into concrete, executable steps.
+
+TASK: ${task}
+
+Reply ONLY with valid JSON:
+{"summary":"One sentence summary","steps":[{"action":"navigate","target":"https://url","description":"desc"},{"action":"click","target":"element","description":"desc"},{"action":"type","target":"field","value":"text","description":"desc"},{"action":"screenshot","description":"desc"},{"action":"done","description":"desc"}]}
+
+VALID ACTIONS: navigate, search, type, fill, click, screenshot, copy, wait, done`;
+  try {
+    const response = await callOpenRouter(apiKey, 'google/gemini-2.0-flash-001',
+      [{ role: 'system', content: SYS }, { role: 'user', content: USER }],
+      { response_format: { type: 'json_object' } });
+    const raw = (response.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
+    return res.status(200).json(JSON.parse(raw));
+  } catch (err) {
+    if (err.code) throw err;
+    return res.status(200).json({ steps: [], summary: '' });
+  }
+}
+
+// ── Code execution (Gemini codeExecution tool — Gemini-only capability) ──────
+async function handleCodeExecution(req, res) {
+  const { prompt, history = [] } = req.body || {};
+  if (!prompt) throw httpError(400, 'prompt required');
+  try {
+    const ai = gemini();
+    const contents = (history || []).slice(-10).map(m => ({
+      role: m.role === 'user' ? 'user' : 'model',
+      parts: [{ text: m.content || '' }],
+    }));
+    contents.push({ role: 'user', parts: [{ text: prompt }] });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents,
+      config: {
+        tools: [{ codeExecution: {} }],
+        systemInstruction: 'You are a coding assistant. Use the code execution tool. Show code and output clearly.',
+      },
+    });
+    let text = '', code = '', output = '';
+    for (const part of response.candidates?.[0]?.content?.parts ?? []) {
+      if (part.text) text += part.text;
+      if (part.executableCode?.code) code = part.executableCode.code;
+      if (part.codeExecutionResult?.output) output = part.codeExecutionResult.output;
+    }
+    return res.status(200).json({ text: text.trim(), code, output });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Code execution failed');
+  }
+}
+
+// ── URL context (Gemini urlContext tool) ─────────────────────────────────────
+async function handleUrlContext(req, res) {
+  const { url, question } = req.body || {};
+  if (!url) throw httpError(400, 'url required');
+  try {
+    const ai = gemini();
+    const userPrompt = `Fetch this URL and answer the question based on its content.\nURL: ${url}\nQuestion: ${question || 'Summarise this page'}`;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+      config: {
+        tools: [{ urlContext: {} }],
+        systemInstruction: 'Fetch the URL using url_context and answer thoroughly.',
+      },
+    });
+    const meta = response.candidates?.[0]?.urlContextMetadata;
+    return res.status(200).json({
+      text: extractText(response),
+      urlSource: meta?.urlMetadata?.[0]?.retrievedUrl,
+    });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'URL context failed');
+  }
+}
+
+// ── Deep research (Gemini googleSearch grounding) ────────────────────────────
+async function handleDeepResearch(req, res) {
+  const { prompt } = req.body || {};
+  if (!prompt) throw httpError(400, 'prompt required');
+  try {
+    const ai = gemini();
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{ role: 'user', parts: [{ text: `[DEEP RESEARCH] ${prompt}\n\nConduct thorough research. Use web search extensively. Provide a comprehensive, well-structured report with sources.` }] }],
+      config: {
+        tools: [{ googleSearch: {} }],
+        systemInstruction: 'You are a deep research assistant. Search extensively and produce a detailed, sourced report.',
+      },
+    });
+    return res.status(200).json({ text: extractText(response), links: extractLinks(response) });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Deep research failed');
+  }
+}
+
+// ── Math solve (OpenRouter with strict tutor persona) ────────────────────────
+async function handleMath(req, res, usageInfo) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
+  const { prompt, fileData } = req.body || {};
+  if (!prompt && !fileData) throw httpError(400, 'prompt required');
+  const MATH_SYS = `You are a professional math tutor like Symbolab or Wolfram Alpha.
+Solve math problems with COMPLETE step-by-step working.
+1. Show EVERY algebraic step.
+2. For quadratic: compute Δ = b²−4ac, then both roots.
+3. For calculus: name the rule then apply it.
+4. End with "Final Answer:" clearly labelled.
+Format:
+---METHOD: [Name] ---
+Step 1: …
+Final Answer: …
+---ENDMETHOD---`;
+  try {
+    const content = [];
+    if (fileData?.data && fileData?.mimeType) {
+      content.push({ type: 'image_url', image_url: { url: `data:${fileData.mimeType};base64,${fileData.data}` } });
+    }
+    content.push({ type: 'text', text: prompt });
+    const messages = [
+      { role: 'system', content: MATH_SYS },
+      { role: 'user', content },
+    ];
+    const models = getModels(usageInfo?.plan || 'free');
+    let response = null, lastErr = null;
+    for (const model of models) {
+      try { response = await callOpenRouter(apiKey, model, messages); break; }
+      catch (e) { lastErr = e; }
+    }
+    if (!response) throw lastErr;
+    const text = response.choices?.[0]?.message?.content || '';
+    if (!text) throw httpError(502, 'No solution returned');
+    return res.status(200).json({ text });
+  } catch (err) {
+    if (err.code) throw err;
+    throw httpError(500, 'Math solve failed');
+  }
+}
+
+// ── Math expression extractor (OpenRouter JSON) ──────────────────────────────
+async function handleMathExtract(req, res) {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw httpError(500, 'OPENROUTER_API_KEY not configured');
+  const { text, fileData } = req.body || {};
+  const EXTRACT_PROMPT = `You are a mathematical expression extractor. Return ONLY raw JSON, no markdown.
+{"type":"quadratic|linear|system|calculus|trigonometry|matrix|statistics|unknown","expression":"raw math string","latexExpression":"LaTeX","variable":"x","operation":"solve|simplify|differentiate|integrate|factor|expand","extraValues":{},"confidence":0.9,"unreadable":false}`;
+  const FALLBACK = { type: 'unknown', expression: text || '', latexExpression: '', variable: 'x', operation: 'solve', extraValues: {}, confidence: 0, unreadable: true };
+  try {
+    const content = [];
+    if (fileData?.data && fileData?.mimeType) {
+      content.push({ type: 'image_url', image_url: { url: `data:${fileData.mimeType};base64,${fileData.data}` } });
+    }
+    content.push({ type: 'text', text: `${EXTRACT_PROMPT}\n\nInput: ${text || ''}` });
+    const response = await callOpenRouter(apiKey, 'google/gemini-2.0-flash-001',
+      [{ role: 'system', content: 'Output only valid JSON. No markdown.' }, { role: 'user', content }],
+      { response_format: { type: 'json_object' } });
+    const raw = (response.choices?.[0]?.message?.content || '').replace(/```json|```/g, '').trim();
+    return res.status(200).json(JSON.parse(raw));
+  } catch {
+    return res.status(200).json(FALLBACK);
+  }
+}
+
+export default apiHandler(handler);

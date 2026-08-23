@@ -26,3 +26,4 @@ dist-ssr
 *.sw?
 # Single service worker lives in public/sw.js; ignore any root sw.js to avoid conflict
 /sw.js
+orin-router/

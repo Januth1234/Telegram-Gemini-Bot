@@ -1,9 +1,12 @@
 /**
  * TaskScheduler — create/view/manage scheduled PC tasks.
- * Stores in Firestore via executor API. Polls pair status.
+ * Tasks are stored locally; when due they're dispatched through the task router,
+ * which enqueues REAL executor jobs on the paired PC agent. Dispatched jobs are
+ * polled so their status here reflects what actually happened on the PC.
  */
-import React, { useCallback, useEffect, useState } from 'react';
-import { dispatchTask, scheduleTask, listTasks, cancelTask } from '../services/brokerClient';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { dispatchTask } from '../services/brokerClient';
+import { executorJobStatus } from '../services/executorAgentService';
 
 interface ScheduledTask {
   id: string;
@@ -52,13 +55,49 @@ const TaskScheduler: React.FC<{ pairId: string | null }> = ({ pairId }) => {
       const pending = loadTasks().filter(t => t.status === 'approved' && t.scheduleTime <= now);
       for (const t of pending) {
         try {
-          const res2 = await dispatchTask({ task: t.task, params: t.params, deviceId: pairId || '' }); const job_id = res2.jobId;
+          const res2 = await dispatchTask({ task: t.task, params: t.params, deviceId: pairId || '' });
+          const job_id = res2.jobId;
           updateTask(t.id, { status: 'queued', id: job_id });
+          pollJob(job_id, t.id);
         } catch {}
       }
     }, 30000); // check every 30s
     return () => clearInterval(tick);
   }, [pairId]);
+
+  // Mirror the real executor job status back into the local task list.
+  const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const pollGuards = useRef<Set<ReturnType<typeof setInterval>>>(new Set());
+  const pollJob = useCallback((jobId: string, taskId: string) => {
+    const tick = async () => {
+      try {
+        const s = await executorJobStatus(jobId);
+        if (s.status !== 'queued' && s.status !== 'running') {
+          updateTask(taskId, { status: s.status === 'done' ? 'done' : 'failed' });
+          pollTimers.current.delete(jobId);
+          return;
+        }
+        updateTask(taskId, { status: 'queued' });
+      } catch { /* transient — keep polling */ }
+      if (pollTimers.current.has(jobId)) {
+        pollTimers.current.set(jobId, setTimeout(tick, 5000));
+      }
+    };
+    // Stop after ~30 min so abandoned jobs don't poll forever.
+    const startedAt = Date.now();
+    const guard = setInterval(() => {
+      if (Date.now() - startedAt > 30 * 60_000 || !pollTimers.current.has(jobId)) {
+        clearInterval(guard); pollGuards.current.delete(guard); pollTimers.current.delete(jobId);
+      }
+    }, 60_000);
+    pollGuards.current.add(guard);
+    pollTimers.current.set(jobId, setTimeout(tick, 3000));
+  }, []);
+
+  useEffect(() => {
+    const timers = pollTimers.current; const guards = pollGuards.current;
+    return () => { timers.forEach(t => clearTimeout(t)); guards.forEach(g => clearInterval(g)); };
+  }, []);
 
   const updateTask = (id: string, patch: Partial<ScheduledTask>) => {
     const updated = loadTasks().map(t => t.id === id ? { ...t, ...patch } : t);

@@ -2,7 +2,6 @@
 import { getAnalytics } from "firebase/analytics";
 import firebase from "firebase/compat/app";
 import "firebase/compat/auth";
-import "firebase/compat/functions";
 import { getFirestore, doc, setDoc, getDoc, updateDoc, Firestore, serverTimestamp, collection, query, orderBy, getDocs, where, addDoc, deleteDoc, limit, startAfter, DocumentSnapshot, arrayUnion, arrayRemove, increment } from "firebase/firestore";
 import { Conversation, UserAccount, UserRole, SignupRequest, SiteMetrics, ApiKeyDef, conversationHasUserMessage } from "../types";
 
@@ -33,7 +32,6 @@ class FirebaseService {
   private app: any;
   private analytics: any = null;
   private auth: firebase.auth.Auth | null = null;
-  private functions: firebase.functions.Functions | null = null;
   private db: Firestore | null = null;
 
   constructor() {
@@ -46,7 +44,6 @@ class FirebaseService {
       
       if (typeof window !== 'undefined') {
         this.auth = firebase.auth();
-        this.functions = firebase.functions();
         this.db = getFirestore(this.app);
         
         if (this.auth) {
@@ -129,6 +126,65 @@ class FirebaseService {
     if (this.auth) await this.auth.signOut();
   }
 
+  // ─── Orin AI password accounts ─────────────────────────────────────────────
+
+  /** POST /api/auth/password with the caller's Bearer token (for set-password). */
+  private async authApi(action: string, body: Record<string, unknown>): Promise<any> {
+    const token = await this.getIdToken();
+    const res = await fetch('/api/auth/password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ action, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+
+  /** Sign in with email-or-phone + password. Returns the Firebase user after custom-token exchange. */
+  async loginWithPassword(identifier: string, password: string): Promise<firebase.User | null> {
+    if (!this.auth) throw new Error("Authentication module not initialized.");
+    const data = await this.authApi('login', { identifier, password });
+    const cred = await this.auth.signInWithCustomToken(data.customToken);
+    return cred.user ?? null;
+  }
+
+  /** Register with name + email-or-phone + password. Returns the signed-in Firebase user. */
+  async registerWithPassword(name: string, identifier: string, password: string): Promise<firebase.User | null> {
+    if (!this.auth) throw new Error("Authentication module not initialized.");
+    const data = await this.authApi('register', { name, identifier, password });
+    const cred = await this.auth.signInWithCustomToken(data.customToken);
+    return cred.user ?? null;
+  }
+
+  /** Set or change the Orin AI password on the CURRENTLY signed-in account (Google users included). */
+  async setPassword(password: string): Promise<void> {
+    await this.authApi('set-password', { password });
+  }
+
+  /**
+   * Sign in from a backend-minted custom token — used by the desktop device-flow
+   * (browser approval) so the Electron window picks up the approved session.
+   */
+  async signInWithCustom(customToken: string): Promise<firebase.User | null> {
+    if (!this.auth) throw new Error("Authentication module not initialized.");
+    const cred = await this.auth.signInWithCustomToken(customToken);
+    return cred.user ?? null;
+  }
+
+
+  /** Update display name / phone on the user's own profile doc. */
+  async updateUserProfile(uid: string, data: { name?: string; phone?: string }): Promise<void> {
+    const ref = this.userRef(uid);
+    if (!ref) throw new Error('DB not initialized');
+    await updateDoc(ref, { ...data, lastUpdated: serverTimestamp() });
+  }
+
+
+
   async getIdToken(): Promise<string> {
     try { return await this.auth?.currentUser?.getIdToken() ?? ''; }
     catch { return ''; }
@@ -144,30 +200,37 @@ class FirebaseService {
     return () => {};
   }
 
+  /** POST /api/admin — role-checked admin operations (replaced Firebase Cloud Functions). */
+  private async adminApi(action: string, body: Record<string, unknown>): Promise<any> {
+    const token = await this.getIdToken();
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({ action, ...body }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    return data;
+  }
+
   async submitSignupRequest(email: string, reason: string): Promise<void> {
-    if (!this.functions) return;
-    const createPendingSignup = this.functions.httpsCallable('createPendingSignup');
-    await createPendingSignup({ email, reason });
+    await this.adminApi('create-pending-signup', { email, reason });
   }
 
   async approveUser(uid: string, role: UserRole): Promise<void> {
-    if (!this.functions) return;
-    const approveUserFunc = this.functions.httpsCallable('approveUser');
-    await approveUserFunc({ targetUid: uid, role, approved: true });
+    await this.adminApi('approve-user', { targetUid: uid, role, approved: true });
   }
 
   async generateApiKey(note: string): Promise<string> {
-    if (!this.functions) return "";
-    const genKeyFunc = this.functions.httpsCallable('generateApiKey');
-    const result = await genKeyFunc({ note });
-    return (result.data as any).apiKey;
+    const data = await this.adminApi('generate-api-key', { note });
+    return data.apiKey ?? '';
   }
 
   async processOCR(imageUrl: string, lang: 'en' | 'si'): Promise<any> {
-    if (!this.functions) return null;
-    const ocrFunc = this.functions.httpsCallable('ocrProcess');
-    const result = await ocrFunc({ imageUrl, lang });
-    return result.data;
+    return this.adminApi('ocr-process', { imageUrl, lang });
   }
 
   async getPendingRequests(): Promise<SignupRequest[]> {
@@ -213,7 +276,7 @@ class FirebaseService {
       try {
         const today = new Date().toISOString().split('T')[0];
         await setDoc(doc(this.db, 'login_events', `${uid}_${today}`), {
-          uid, email, loginAt: serverTimestamp(), date: today
+          uid, email: email || null, loginAt: serverTimestamp(), date: today
         }, { merge: true });
       } catch { /* non-blocking */ }
     }
@@ -225,11 +288,11 @@ class FirebaseService {
     if (!snap.exists()) {
       // New users start as visitors
       userData = {
-        email,
-        name: email.split('@')[0],
+        ...(email ? { email } : {}),
+        name: email ? email.split('@')[0] : 'Orin User',
         avatar: photoURL || null,
         plan: 'free',
-        role: 'visitor', 
+        role: 'visitor',
         approved: false,
         subscriptionStatus: 'active',
         createdAt: serverTimestamp(),
@@ -283,8 +346,9 @@ class FirebaseService {
         : 'Free';
     return {
       id: uid,
-      name: userData.name || email.split('@')[0],
-      email: email,
+      name: userData.name || (email ? email.split('@')[0] : 'Orin User'),
+      email: userData.email || email || '',
+      phone: userData.phone || undefined,
       avatar: userData.avatar,
       tier,
       plan: userData.plan || 'free',

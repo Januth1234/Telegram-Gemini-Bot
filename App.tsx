@@ -25,6 +25,7 @@ const ExecutorControllerPage = lazy(() => import('./components/ExecutorControlle
 const AgentWorkspace = lazy(() => import('./components/AgentWorkspace').then(m => ({ default: m.default })));
 const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
 const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
+const DeviceAuthPage = lazy(() => import('./components/DeviceAuthPage').then(m => ({ default: m.default })));
 
 // Lazy-load heavy WebGL/Three.js background shaders so only the active theme's canvas loads
 
@@ -68,10 +69,29 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
   community: 'chat',
+  executor: 'agent',
+  'device-auth': 'chat',
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor', 'device-auth'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
+
+type AuthUserLike = { uid: string; email: string | null; displayName: string | null; photoURL: string | null };
+
+/** Local-only user used when Firestore sync fails — keeps the UI working offline. */
+function makeFallbackUser(authUser: AuthUserLike): UserAccount {
+  return {
+    id: authUser.uid,
+    name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
+    email: authUser.email || 'user@orin.ai',
+    avatar: authUser.photoURL || undefined,
+    tier: 'Free',
+    plan: 'free',
+    role: 'visitor',
+    approved: false,
+    dailyUsage: { text: 0, images: 0, videos: 0 },
+  };
+}
 
 /** Clear localStorage keys + SW caches that are irrelevant to signed-out guests.
  *  Prevents iOS Safari from serving stale auth state from a cached page load. */
@@ -205,6 +225,10 @@ const App: React.FC = () => {
   }, [effectiveDark]);
 
   // --- 1. AUTH INITIALIZATION & SYNC ---
+  // applyUser lives further down (needs mergeHistory); effects run after render,
+  // so we reach it through a ref to keep this subscription early.
+  const applyUserRef = useRef<(authUser: AuthUserLike) => Promise<void>>(async () => {});
+
   useEffect(() => {
     const safetyTimeout = setTimeout(() => {
       if (!authInitialized) {
@@ -215,74 +239,17 @@ const App: React.FC = () => {
       }
     }, AUTH_TIMEOUT_MS);
 
-    let unsubscribe: (() => void) | undefined;
-
-    const applyAuthUser = async (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => {
-      clearTimeout(safetyTimeout);
-      const fallbackUser: UserAccount = {
-        id: authUser.uid,
-        name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
-        email: authUser.email || 'user@orin.ai',
-        avatar: authUser.photoURL || undefined,
-        tier: 'Free',
-        plan: 'free',
-        role: 'visitor',
-        approved: false,
-        dailyUsage: { text: 0, images: 0, videos: 0 },
-      };
-      try {
-        const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
-        geminiService.setSessionUser(syncedUser);
-        setUser(syncedUser);
-        if (syncedUser.theme) {
-          setUserTheme(normalizeUserTheme(syncedUser.theme));
-          cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
-        }
-        setSyncStatus('syncing');
-        const cloudHistory = await firebaseService.getHistory(authUser.uid);
-        if (cloudHistory) {
-          lastCloudRef.current = cloudHistory;
-          mergeHistory(cloudHistory);
-        }
-        setSyncStatus('success');
-        notificationService.setupForUser().catch(() => {});
-      // Listen for SW-triggered plan recheck (catches missed upgrade notifications)
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', async (e) => {
-          if (e.data?.type === 'RECHECK_PLAN' && syncedUser?.id) {
-            try {
-              const refreshed = await firebaseService.syncUserSession(syncedUser.id, syncedUser.email || '', syncedUser.avatar);
-              const lastSeenPlan = localStorage.getItem(`orin_last_plan_${syncedUser.id}`);
-              if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
-                  (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
-                setUpgradePopup({ plan: refreshed.plan });
-              }
-              localStorage.setItem(`orin_last_plan_${syncedUser.id}`, refreshed.plan || 'free');
-              setUser(refreshed);
-              geminiService.setSessionUser(refreshed);
-            } catch { /* non-blocking */ }
-          }
-        });
-      }
-      } catch {
-        // If Firestore is unavailable, fall back to a local-only user
-        // but do NOT attach it to geminiService so usage stays on guest limits.
-        setUser(fallbackUser);
-        setSyncStatus('error');
-      }
-      setAuthInitialized(true);
-    };
-
     // Subscribe IMMEDIATELY — do not block on getRedirectResult first.
     // iOS Safari fires onAuthStateChanged during any async wait before subscription,
     // causing the user-restored event to be missed → infinite loading / signed out.
+    let unsubscribe: (() => void) | undefined;
     let authHandled = false;
     unsubscribe = firebaseService.onAuthStateChanged(async (authUser) => {
       clearTimeout(safetyTimeout);
       setAuthError(null);
       if (authUser) {
         authHandled = true;
-        await applyAuthUser(authUser);
+        await applyUserRef.current(authUser);
       } else {
         // On iOS after signInWithRedirect, onAuthStateChanged can fire null briefly
         // while Firebase is still reading the credential from the redirect result.
@@ -291,7 +258,7 @@ const App: React.FC = () => {
         if (isMobile && !authHandled) {
           await new Promise(r => setTimeout(r, 3000));
           const retryUser = firebaseService.currentUser();
-          if (retryUser) { await applyAuthUser(retryUser); return; }
+          if (retryUser) { await applyUserRef.current(retryUser); return; }
         }
         setUser(null);
         geminiService.logout();
@@ -550,18 +517,9 @@ const App: React.FC = () => {
     };
   }, [user?.id, mergeHistory]);
 
-  const applySignInUser = useCallback(async (authUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null }) => {
-    const fallbackUser: UserAccount = {
-      id: authUser.uid,
-      name: authUser.displayName || authUser.email?.split('@')[0] || 'User',
-      email: authUser.email || 'user@orin.ai',
-      avatar: authUser.photoURL || undefined,
-      tier: 'Free',
-      plan: 'free',
-      role: 'visitor',
-      approved: false,
-      dailyUsage: { text: 0, images: 0, videos: 0 },
-    };
+  /** Single sign-in/restore path — used by onAuthStateChanged AND explicit sign-in callbacks. */
+  const applyUser = useCallback(async (authUser: AuthUserLike) => {
+    const fallbackUser = makeFallbackUser(authUser);
     try {
       const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
       geminiService.setSessionUser(syncedUser);
@@ -569,7 +527,7 @@ const App: React.FC = () => {
       (window as any).__orinUser = syncedUser; // used by internal protocol override
       // Show upgrade greeting if plan changed since last visit
       const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
-      if (lastSeenPlan && lastSeenPlan !== syncedUser.plan && 
+      if (lastSeenPlan && lastSeenPlan !== syncedUser.plan &&
           (syncedUser.plan === 'basic' || syncedUser.plan === 'pro' || syncedUser.plan?.includes('yearly'))) {
         setUpgradePopup({ plan: syncedUser.plan });
       }
@@ -586,31 +544,41 @@ const App: React.FC = () => {
       }
       setSyncStatus('success');
       notificationService.setupForUser().catch(() => {});
-      // Listen for SW-triggered plan recheck (catches missed upgrade notifications)
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.addEventListener('message', async (e) => {
-          if (e.data?.type === 'RECHECK_PLAN' && syncedUser?.id) {
-            try {
-              const refreshed = await firebaseService.syncUserSession(syncedUser.id, syncedUser.email || '', syncedUser.avatar);
-              const lastSeenPlan = localStorage.getItem(`orin_last_plan_${syncedUser.id}`);
-              if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
-                  (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
-                setUpgradePopup({ plan: refreshed.plan });
-              }
-              localStorage.setItem(`orin_last_plan_${syncedUser.id}`, refreshed.plan || 'free');
-              setUser(refreshed);
-              geminiService.setSessionUser(refreshed);
-            } catch { /* non-blocking */ }
-          }
-        });
-      }
     } catch {
-      // Same as initial auth: degrade gracefully but keep Gemini in guest mode.
+      // Firestore unavailable: degrade gracefully to a local-only user but keep
+      // Gemini in guest mode so usage limits stay honest.
       setUser(fallbackUser);
       setSyncStatus('error');
     }
+    setAuthInitialized(true);
     setAuthError(null);
   }, [mergeHistory]);
+
+  useEffect(() => { applyUserRef.current = applyUser; }, [applyUser]);
+
+  // SW-triggered plan recheck (catches missed upgrade notifications).
+  // Registered ONCE per page load — previously every sign-in stacked another listener.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onSwMessage = async (e: MessageEvent) => {
+      if (e.data?.type !== 'RECHECK_PLAN') return;
+      const authUser = firebaseService.currentUser();
+      if (!authUser) return;
+      try {
+        const refreshed = await firebaseService.syncUserSession(authUser.uid, authUser.email || '', authUser.photoURL);
+        const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
+        if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
+            (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
+          setUpgradePopup({ plan: refreshed.plan });
+        }
+        localStorage.setItem(`orin_last_plan_${authUser.uid}`, refreshed.plan || 'free');
+        setUser(refreshed);
+        geminiService.setSessionUser(refreshed);
+      } catch { /* non-blocking */ }
+    };
+    navigator.serviceWorker.addEventListener('message', onSwMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
+  }, []);
 
   const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     if (!user) {
@@ -715,6 +683,7 @@ const App: React.FC = () => {
     );
 
     if (view === 'admin-portal') return <AdminPortal user={user} onClose={() => window.location.hash = 'home'} />;
+    if (view === 'device-auth') return <DeviceAuthPage user={user} onClose={() => window.location.hash = 'home'} />;
     if (view === 'telegram-bot') return <TelegramBotPage onClose={() => window.location.hash = 'home'} lang={lang} />;
 
     switch (view) {
@@ -774,7 +743,7 @@ const App: React.FC = () => {
           <CreationFeed onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onUsePrompt={(prompt) => { setGlobalPrompt(prompt); window.location.hash = 'chat'; }} />
         </Suspense>
       );
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applySignInUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
+      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applyUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
       case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
@@ -791,7 +760,7 @@ const App: React.FC = () => {
           lang={lang}
           user={user}
           onLogin={() => window.location.hash = 'account'}
-          onSignInWithUser={applySignInUser}
+          onSignInWithUser={applyUser}
           thinkingMode={thinkingMode}
           descriptiveMode={descriptiveMode}
           onReasoningModeChange={updateReasoningModes}

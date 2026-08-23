@@ -70,6 +70,7 @@ const ExecutorControllerPage: React.FC<ExecutorControllerPageProps> = ({
   const [pairCode,  setPairCode]  = useState<string | null>(null);
   const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
   const [pairing,   setPairing]   = useState(false);
+  const [autoPairNote, setAutoPairNote] = useState<string | null>(null);
 
   // ── Task dispatch ─────────────────────────────────────────────────────────
   const [taskType,  setTaskType]  = useState<TaskId>('create_ppt');
@@ -88,6 +89,8 @@ const ExecutorControllerPage: React.FC<ExecutorControllerPageProps> = ({
   const pollTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const shell = getAppShellKind();
+  // One-click pairing is possible when running inside the Electron shell.
+  const canAutoPair = shell === 'desktop' && typeof (window as any).orinDesktop?.registerAgent === 'function';
 
   // ── Pair status polling ───────────────────────────────────────────────────
   useEffect(() => {
@@ -106,14 +109,22 @@ const ExecutorControllerPage: React.FC<ExecutorControllerPageProps> = ({
 
   // ── Start pairing ─────────────────────────────────────────────────────────
   const startPair = useCallback(async () => {
-    setPairing(true); setErr(null);
+    setPairing(true); setErr(null); setAutoPairNote(null);
     try {
       const p = await executorPair('pc');
       setPairId(p.pair_id); setPairCode(p.pair_code);
       localStorage.setItem('orin_exec_pair_id', p.pair_id);
+      // Inside the desktop app, hand the code straight to the local agent —
+      // no manual copy-paste needed. The agent completes the handshake itself.
+      const bridge = (window as any).orinDesktop;
+      if (canAutoPair && bridge?.registerAgent) {
+        const r = await bridge.registerAgent(p.pair_id, p.pair_code);
+        if (r?.ok) setAutoPairNote('Pairing this PC automatically — the local agent is connecting…');
+        else setErr(r?.error || 'Could not reach the local Orin agent.');
+      }
     } catch (e: any) { setErr(e?.message || 'Pairing failed'); }
     finally { setPairing(false); }
-  }, []);
+  }, [canAutoPair]);
 
   const unpair = () => {
     setPairId(null); setPairCode(null); setAgentOnline(null);
@@ -250,6 +261,11 @@ const ExecutorControllerPage: React.FC<ExecutorControllerPageProps> = ({
               <i className="fa-solid fa-circle-notch animate-spin" />{busy}
             </div>
           )}
+          {autoPairNote && !agentOnline && (
+            <div className="p-3 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-600 dark:text-indigo-300 font-bold flex items-center gap-2">
+              <i className="fa-solid fa-circle-notch animate-spin" /> {autoPairNote}
+            </div>
+          )}
 
           {/* ── PAIRING CARD ── */}
           {!pairId ? (
@@ -264,19 +280,30 @@ const ExecutorControllerPage: React.FC<ExecutorControllerPageProps> = ({
                 </div>
               </div>
               <ol className="space-y-2 text-xs text-slate-400 leading-relaxed">
-                <li className="flex gap-2"><span className="text-indigo-400 font-black">1.</span> Download &amp; run <code className="text-indigo-300">orin-pc-agent.py</code> on your PC</li>
-                <li className="flex gap-2"><span className="text-indigo-400 font-black">2.</span> Click "Generate code" below</li>
-                <li className="flex gap-2"><span className="text-indigo-400 font-black">3.</span> Enter the 6-char code in the PC agent terminal</li>
-                <li className="flex gap-2"><span className="text-indigo-400 font-black">4.</span> Your PC is paired — send tasks from anywhere</li>
+                {canAutoPair ? (
+                  <>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">1.</span> Click "Pair this PC" below</li>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">2.</span> The built-in agent connects automatically — no terminal needed</li>
+                  </>
+                ) : (
+                  <>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">1.</span> Download &amp; run <code className="text-indigo-300">orin-pc-agent.py</code> on your PC</li>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">2.</span> Click "Generate code" below</li>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">3.</span> Enter the 6-char code in the PC agent terminal</li>
+                    <li className="flex gap-2"><span className="text-indigo-400 font-black">4.</span> Your PC is paired — send tasks from anywhere</li>
+                  </>
+                )}
               </ol>
               <div className="flex gap-2">
-                <a href="/orin-pc-agent.py" download
-                  className="flex-1 py-2.5 rounded-xl bg-white/10 text-white text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-colors flex items-center justify-center gap-1.5">
-                  <i className="fa-solid fa-download text-[10px]" /> Download Agent
-                </a>
+                {!canAutoPair && (
+                  <a href="/orin-pc-agent.py" download
+                    className="flex-1 py-2.5 rounded-xl bg-white/10 text-white text-xs font-black uppercase tracking-widest hover:bg-white/20 transition-colors flex items-center justify-center gap-1.5">
+                    <i className="fa-solid fa-download text-[10px]" /> Download Agent
+                  </a>
+                )}
                 <button onClick={startPair} disabled={pairing}
                   className="flex-1 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest hover:bg-indigo-500 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
-                  {pairing ? <><i className="fa-solid fa-circle-notch animate-spin" /> Pairing…</> : <><i className="fa-solid fa-link" /> Generate Code</>}
+                  {pairing ? <><i className="fa-solid fa-circle-notch animate-spin" /> Pairing…</> : <><i className="fa-solid fa-link" /> {canAutoPair ? 'Pair this PC' : 'Generate Code'}</>}
                 </button>
               </div>
             </div>
