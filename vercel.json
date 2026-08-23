@@ -11,10 +11,6 @@
       "destination": "/api/task-router"
     },
     {
-      "source": "/api/broker/:path*",
-      "destination": "/api/broker"
-    },
-    {
       "source": "/api/executor/:path*",
       "destination": "/api/executor"
     },
