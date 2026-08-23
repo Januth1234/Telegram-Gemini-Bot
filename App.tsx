@@ -250,6 +250,12 @@ const App: React.FC = () => {
       if (authUser) {
         authHandled = true;
         await applyUserRef.current(authUser);
+        // Resume an interrupted desktop-device approval after the sign-in detour.
+        const deviceReturn = sessionStorage.getItem('device-auth-return');
+        if (deviceReturn) {
+          sessionStorage.removeItem('device-auth-return');
+          window.location.hash = deviceReturn;
+        }
       } else {
         // On iOS after signInWithRedirect, onAuthStateChanged can fire null briefly
         // while Firebase is still reading the credential from the redirect result.

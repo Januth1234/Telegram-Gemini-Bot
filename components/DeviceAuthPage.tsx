@@ -28,7 +28,11 @@ const DeviceAuthPage: React.FC<DeviceAuthPageProps> = ({ onClose, user }) => {
   })();
 
   const lookup = useCallback(async () => {
-    if (!user) { setStage('need-signin'); return; }
+    if (!user) {
+      // Remember the approval link so App can resume here right after sign-in.
+      sessionStorage.setItem('device-auth-return', window.location.hash);
+      setStage('need-signin'); return;
+    }
     setStage('reading');
     try {
       const token = await firebaseService.getIdToken();
