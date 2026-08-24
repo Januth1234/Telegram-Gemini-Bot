@@ -169,7 +169,7 @@ def orin_search_widget():
                    </p>
                    <div className="flex flex-wrap justify-center md:justify-start gap-2">
                       <span className="px-3 py-1 bg-cyan-500/10 text-cyan-600 rounded-lg text-[10px] font-black uppercase tracking-widest border border-cyan-500/20">Stable Build</span>
-                      <span className="px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Digital Signature: Verified</span>
+                      <span className="px-3 py-1 bg-slate-100 dark:bg-white/5 text-slate-400 rounded-lg text-[10px] font-black uppercase tracking-widest">Windows 10 / 11 · ~3 MB</span>
                    </div>
                 </div>
 
@@ -181,46 +181,27 @@ def orin_search_widget():
                      <span>Windows 64-bit</span>
                      <i className="fa-solid fa-download"></i>
                    </button>
-                   <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => handleDownload('Windows', 'x32')} className="py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">32-bit (x86)</button>
-                      <button onClick={() => handleDownload('Windows', 'ARM')} className="py-4 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:bg-slate-50 transition-all">Windows ARM</button>
-                   </div>
+                   <a
+                     href={`https://github.com/${APP_CONFIG.githubRepo}/releases`}
+                     target="_blank"
+                     rel="noopener noreferrer"
+                     className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-white/10 text-slate-500 rounded-xl font-bold text-[10px] uppercase tracking-widest hover:border-cyan-500/40 hover:text-cyan-600 transition-all flex items-center justify-center gap-2 no-underline"
+                   >
+                     <i className="fa-brands fa-github"></i> All releases on GitHub
+                   </a>
                 </div>
              </div>
           </div>
         </section>
 
-        {/* Other Platforms Grid */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-20">
-           {/* Android */}
-           <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 hover:border-emerald-500/30 transition-all group">
-              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 mb-8 group-hover:scale-110 transition-transform">
-                 <i className="fa-brands fa-android text-3xl"></i>
-              </div>
-              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">Android Assistant</h4>
-              <p className="text-xs text-slate-400 font-bold mb-8">Direct APK with Voice Mode v5.0-BETA.</p>
-              <button onClick={() => handleDownload('Android', 'APK')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-emerald-500 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Download APK</button>
-           </div>
-
-           {/* iOS */}
-           <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 hover:border-slate-400/30 transition-all group">
-              <div className="w-14 h-14 rounded-2xl bg-slate-200 dark:bg-white/10 flex items-center justify-center text-slate-700 dark:text-slate-300 mb-8 group-hover:scale-110 transition-transform">
-                 <i className="fa-brands fa-apple text-3xl"></i>
-              </div>
-              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">iPhone (iOS)</h4>
-              <p className="text-xs text-slate-400 font-bold mb-8">TestFlight Preview with iCloud Sync.</p>
-              <button onClick={() => handleDownload('iOS', 'Package')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-slate-900 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Get Package</button>
-           </div>
-
-           {/* macOS */}
-           <div className="glass-panel p-8 rounded-[40px] border border-black/5 dark:border-white/5 hover:border-cyan-500/30 transition-all group">
-              <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-cyan-600 mb-8 group-hover:scale-110 transition-transform">
-                 <i className="fa-solid fa-laptop text-3xl"></i>
-              </div>
-              <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">macOS Universal</h4>
-              <p className="text-xs text-slate-400 font-bold mb-8">Optimized for M1, M2 & M3 Silicon.</p>
-              <button onClick={() => handleDownload('macOS', 'DMG')} className="w-full py-4 bg-slate-100 dark:bg-white/5 hover:bg-cyan-600 hover:text-white text-slate-500 dark:text-slate-400 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all">Download DMG</button>
-           </div>
+        {/* Other platforms */}
+        <section className="mb-20">
+          <div className="glass-panel p-6 rounded-[24px] border border-black/5 dark:border-white/5 flex items-center gap-4">
+            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 flex items-center justify-center text-cyan-600 shrink-0"><i className="fa-solid fa-circle-info"></i></div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+              macOS and mobile builds are on the roadmap. Everything Orin offers today lives on the web — free, no install needed.
+            </p>
+          </div>
         </section>
 
         {/* Developer Sandbox */}
