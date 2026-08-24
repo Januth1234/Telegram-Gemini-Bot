@@ -118,7 +118,24 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-black/[0.05] dark:border-white/[0.05] p-3 space-y-1">
+        <div className="border-t border-black/[0.05] dark:border-white/[0.05] p-3 space-y-2">
+          <div className="grid grid-cols-3 gap-1.5">
+            {([
+              { hash: 'voice', icon: 'fa-microphone', label: 'Voice' },
+              { hash: 'translate', icon: 'fa-language', label: 'Translate' },
+              { hash: 'computer', icon: 'fa-desktop', label: 'My PC' },
+            ] as const).map(item => (
+              <button
+                key={item.hash}
+                onClick={() => { window.location.hash = item.hash; onClose(); }}
+                title={item.label}
+                className="flex flex-col items-center gap-1 py-2.5 rounded-xl text-stone-500 dark:text-stone-400 hover:bg-black/[0.04] dark:hover:bg-white/[0.05] hover:text-stone-800 dark:hover:text-white transition-colors"
+              >
+                <i className={`fa-solid ${item.icon} text-sm`} aria-hidden />
+                <span className="text-[8px] font-black uppercase tracking-widest">{item.label}</span>
+              </button>
+            ))}
+          </div>
           {user ? (
             <button onClick={() => { window.location.hash = 'account'; onClose(); }}
               className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors text-left">
