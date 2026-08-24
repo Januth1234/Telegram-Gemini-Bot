@@ -18,7 +18,6 @@ const TermsPage = lazy(() => import('./components/TermsPage').then(m => ({ defau
 const ReleasesPage = lazy(() => import('./components/ReleasesPage').then(m => ({ default: m.default })));
 const LogicFlowPage = lazy(() => import('./components/LogicFlowPage').then(m => ({ default: m.default })));
 const CreatorPage = lazy(() => import('./components/CreatorPage').then(m => ({ default: m.default })));
-const PricingPage = lazy(() => import('./components/PricingPage').then(m => ({ default: m.default })));
 const DownloadsPage = lazy(() => import('./components/DownloadsPage').then(m => ({ default: m.default })));
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m => ({ default: m.default })));
 const ExecutorControllerPage = lazy(() => import('./components/ExecutorControllerPage').then(m => ({ default: m.default })));
@@ -64,7 +63,6 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   releases: 'chat',
   logic: 'chat',
   creator: 'chat',
-  pricing: 'chat',
   downloads: 'chat',
   'admin-portal': 'chat',
   'telegram-bot': 'chat',
@@ -73,7 +71,7 @@ const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
   'device-auth': 'chat',
 };
 const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'pricing', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor', 'device-auth'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor', 'device-auth'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
 
 type AuthUserLike = { uid: string; email: string | null; displayName: string | null; photoURL: string | null };
@@ -327,31 +325,6 @@ const App: React.FC = () => {
     window.addEventListener('hashchange', handleHash);
     return () => window.removeEventListener('hashchange', handleHash);
   }, [user, authInitialized]);
-
-  // Re-verify user plan after Stripe success (webhook has updated Firestore)
-  useEffect(() => {
-    if (view !== 'pricing') return;
-    const hashPart = window.location.hash;
-    const qs = hashPart.split('?')[1] || '';
-    const params = new URLSearchParams(qs);
-    if (params.get('success') !== 'true') return;
-    const authUser = firebaseService.currentUser();
-    if (!authUser) return;
-    (async () => {
-      try {
-        const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
-        geminiService.setSessionUser(syncedUser);
-        setUser(syncedUser);
-        if (syncedUser.theme) {
-          setUserTheme(normalizeUserTheme(syncedUser.theme));
-          cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
-        }
-        window.history.replaceState(null, '', window.location.pathname + '#pricing');
-      } catch {
-        // keep current user state on sync failure
-      }
-    })();
-  }, [view]);
 
   // --- 3. CONVERSATION STATE (only load conversations that have at least one message) ---
   const [conversations, setConversations] = useState<Conversation[]>(() => {
@@ -755,7 +728,6 @@ const App: React.FC = () => {
       case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'logic': return <LogicFlowPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'pricing': return <PricingPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       default: return (
         <LandingPage

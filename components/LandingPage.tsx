@@ -250,7 +250,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ prompt, onPromptChange, onSta
               <NavCard href="#community" title="Creations" icon="fa-fire" lang={lang} delayMs={0} />
               <NavCard href="#downloads" title={t.downloads} icon="fa-download" lang={lang} delayMs={80} />
               <NavCard href="#creator" title={t.creator} icon="fa-user" lang={lang} delayMs={160} />
-              <NavCard href="#pricing" title={t.pricing} icon="fa-tag" lang={lang} delayMs={240} />
               <NavCard href="#logic" title={t.logicFlow} icon="fa-sitemap" lang={lang} delayMs={320} />
               <NavCard href="#releases" title={t.releases} icon="fa-code-branch" lang={lang} delayMs={400} />
               <NavCard href="#terms" title={t.terms} icon="fa-file-contract" lang={lang} delayMs={480} />

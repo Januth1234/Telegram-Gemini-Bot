@@ -15,7 +15,7 @@
       "destination": "/api/executor"
     },
     {
-      "source": "/((?!api/|sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|sw.js|manifest.json|assets|pricing\\.html|privacy\\.html|releases\\.html).*)",
+      "source": "/((?!api/|sitemap.xml|robots.txt|favicon.svg|firebase-messaging-sw.js|sw.js|manifest.json|assets|privacy\\.html|releases\\.html).*)",
       "destination": "/index.html"
     }
   ]

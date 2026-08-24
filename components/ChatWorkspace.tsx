@@ -745,11 +745,8 @@ ${chatText}`;
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
           <div className="flex gap-3">
-          <button type="button" onClick={() => { setShowUpgradeModal(false); window.location.hash = 'pricing'; }} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
-              View plans
-            </button>
-            <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
-              Cancel
+            <button onClick={() => setShowUpgradeModal(false)} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
+              Close
             </button>
           </div>
         </div>

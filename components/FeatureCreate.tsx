@@ -507,12 +507,6 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
   const inputStyle = "w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl text-xs md:text-sm font-semibold focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 outline-none transition-all text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-sm";
 
-  const goToPricing = () => {
-    setShowUpgradeModal(false);
-    window.location.hash = 'pricing';
-    onClose();
-  };
-
   return (
     <>
     {showUpgradeModal && (
@@ -526,11 +520,8 @@ const FeatureCreate: React.FC<{ onClose: () => void }> = ({ onClose }) => {
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">{upgradeModalMessage}</p>
           <div className="flex gap-3">
-            <button type="button" onClick={goToPricing} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-center text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
-              View plans
-            </button>
-            <button onClick={() => setShowUpgradeModal(false)} className="px-4 py-3 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white text-sm font-bold">
-              Cancel
+            <button onClick={() => setShowUpgradeModal(false)} className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 text-white text-sm font-black uppercase tracking-wider hover:bg-indigo-500 transition-colors">
+              Close
             </button>
           </div>
         </div>

@@ -45,8 +45,6 @@ const BrowserAgentWorkspace: React.FC<BrowserAgentWorkspaceProps> = ({ user, onC
   const plan = user?.plan?.toLowerCase() ?? '';
   const isPro = plan === 'pro' || plan === 'pro_yearly';
   const isBasic = plan === 'basic' || plan === 'basic_yearly';
-  const hasUsed = cacheService.get<boolean>(CacheKey.AGENT_USED_ONCE, false);
-  const canUse = isPro || isBasic || !hasUsed;
 
   const [agentMode, setAgentMode] = useState<'deals' | 'task'>('deals');
   const [extStatus, setExtStatus] = useState<'detecting' | 'connected' | 'none'>('detecting');
@@ -357,7 +355,6 @@ Only include deals with real http/https URLs.`,
   const run = () => agentMode === 'deals' ? runDealsMode() : runTaskMode();
 
   if (!user) return <div className="flex flex-col h-full items-center justify-center p-8 text-center"><p className="text-sm font-bold text-slate-500 mb-4">Sign in to use Agent Mode</p><button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-black">Back</button></div>;
-  if (!canUse) return <div className="flex flex-col h-full items-center justify-center p-8 text-center max-w-md mx-auto"><div className="w-16 h-16 rounded-2xl bg-amber-500/20 flex items-center justify-center mb-5"><i className="fa-solid fa-robot text-2xl text-amber-500" /></div><h2 className="text-lg font-black text-slate-900 dark:text-white mb-2">Agent Mode</h2><p className="text-sm text-slate-500 mb-6">Available on Basic and Pro plans.</p><button onClick={() => window.location.hash='pricing'} className="px-6 py-3 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-widest">View Plans</button></div>;
 
   const statusColor = extStatus === 'connected' ? 'bg-emerald-500 shadow-emerald-500/50 shadow-sm' : 'bg-slate-500';
 
