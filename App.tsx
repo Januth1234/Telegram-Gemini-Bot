@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
-import LandingPage from './components/LandingPage';
+import AppSidebar from './components/AppSidebar';
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
@@ -8,26 +8,12 @@ import { cacheService, CacheKey } from './services/cacheService';
 import { translations } from './translations';
 
 // Lazy-load heavy views so initial bundle is smaller (BFF-style: less JS on first paint).
-import { AuroraBg, SilkBg, MidnightBg, TerminalBg, SunsetBg, PaperBg, NeonBg } from './components/backgrounds/CSSBackgrounds';
-const FilesWorkspace = lazy(() => import('./components/FilesWorkspace'));
-const CreationFeed = lazy(() => import('./components/CreationFeed'));
 const ChatWorkspace = lazy(() => import('./components/ChatWorkspace'));
 const AccountSettings = lazy(() => import('./components/AccountSettings').then(m => ({ default: m.default })));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage').then(m => ({ default: m.default })));
 const TermsPage = lazy(() => import('./components/TermsPage').then(m => ({ default: m.default })));
-const ReleasesPage = lazy(() => import('./components/ReleasesPage').then(m => ({ default: m.default })));
-const LogicFlowPage = lazy(() => import('./components/LogicFlowPage').then(m => ({ default: m.default })));
-const CreatorPage = lazy(() => import('./components/CreatorPage').then(m => ({ default: m.default })));
-const DownloadsPage = lazy(() => import('./components/DownloadsPage').then(m => ({ default: m.default })));
-const VoiceAssistant = lazy(() => import('./components/VoiceAssistant').then(m => ({ default: m.default })));
-const ExecutorControllerPage = lazy(() => import('./components/ExecutorControllerPage').then(m => ({ default: m.default })));
-const AgentWorkspace = lazy(() => import('./components/AgentWorkspace').then(m => ({ default: m.default })));
 const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ default: m.default })));
-const TelegramBotPage = lazy(() => import('./components/TelegramBotPage').then(m => ({ default: m.default })));
 const DeviceAuthPage = lazy(() => import('./components/DeviceAuthPage').then(m => ({ default: m.default })));
-
-// Lazy-load heavy WebGL/Three.js background shaders so only the active theme's canvas loads
-
 const PageFallback = () => (
   <div className="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 dark:bg-slate-950">
     <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin" />
@@ -45,33 +31,8 @@ function conversationToSearchText(c: Conversation): string {
   return text.length > 4000 ? text.slice(0, 4000) : text;
 }
 
-const WORKSPACE_TO_VIEW: Record<WorkspaceMode, AppView> = { studio: 'art', vision: 'camera', voice: 'voice', maths: 'math', chat: 'chat', translator: 'translator', agent: 'agent', files: 'chat' };
-// Only workspace views map to workspace modes; static pages shouldn't force-chat.
-const VIEW_TO_MODE: Record<AppView, WorkspaceMode> = {
-  art: 'studio',
-  camera: 'vision',
-  math: 'maths',
-  chat: 'chat',
-  translator: 'translator',
-  voice: 'voice',
-  agent: 'agent',
-  files: 'files',
-  landing: 'chat', // landing CTA opens chat by default
-  account: 'chat',
-  privacy: 'chat',
-  terms: 'chat',
-  releases: 'chat',
-  logic: 'chat',
-  creator: 'chat',
-  downloads: 'chat',
-  'admin-portal': 'chat',
-  'telegram-bot': 'chat',
-  community: 'chat',
-  executor: 'agent',
-  'device-auth': 'chat',
-};
-const WORKSPACE_VIEWS: AppView[] = ['chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'files'];
-const VALID_VIEWS: AppView[] = ['landing', 'chat', 'translator', 'art', 'camera', 'voice', 'math', 'agent', 'account', 'privacy', 'terms', 'releases', 'logic', 'creator', 'downloads', 'admin-portal', 'telegram-bot', 'files', 'community', 'executor', 'device-auth'];
+const FULL_PAGE_VIEWS: AppView[] = ['account', 'privacy', 'terms', 'device-auth', 'admin-portal'];
+const VALID_VIEWS: AppView[] = ['chat', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
 
 type AuthUserLike = { uid: string; email: string | null; displayName: string | null; photoURL: string | null };
@@ -133,15 +94,15 @@ const App: React.FC = () => {
 
   // Global Auth State
   const [user, setUser] = useState<UserAccount | null>(null);
-  const [upgradePopup, setUpgradePopup] = useState<{ plan: string } | null>(null);
   const [authInitialized, setAuthInitialized] = useState(false);
 
   // App State
-  const [view, setView] = useState<AppView>('landing');
+  const [view, setView] = useState<AppView>('chat');
   const [globalPrompt, setGlobalPrompt] = useState('');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Global reasoning style for chat workspace
   const [thinkingMode, setThinkingMode] = useState(false);
@@ -297,19 +258,11 @@ const App: React.FC = () => {
           return;
       }
 
-      if (user && (hash === '' || hash === '/')) {
+      if (user && (hash === '' || hash === '/' || hash === 'home')) {
          window.location.hash = 'chat';
          return;
       }
-      if (hash === 'home') {
-          setView('landing');
-          return;
-      }
       if (VALID_VIEWS.includes(hash as AppView)) {
-          if (WORKSPACE_VIEWS.includes(hash as AppView) && !user && authInitialized) {
-              window.location.hash = ''; 
-              return;
-          }
           setView(hash as AppView);
           if (hash === 'chat') {
             const promptFromUrl = params.get('prompt');
@@ -318,7 +271,7 @@ const App: React.FC = () => {
             }
           }
       } else {
-          setView('landing');
+          setView('chat');
       }
     };
     if (authInitialized) handleHash();
@@ -420,15 +373,12 @@ const App: React.FC = () => {
     setDescriptiveMode(active?.descriptiveMode ?? false);
   }, [activeConversationId, conversations]);
 
-  // When on chat (or workspace) with no active conversation, create one so the first message isn't dropped.
-  // Agent view manages its own state and does not use conversations; skip to avoid zombie "New Chat" entries.
+  // When on chat with no active conversation, create one so the first message isn't dropped.
   useEffect(() => {
-    if (view === 'agent') return;
-    if (view !== 'chat' && !WORKSPACE_VIEWS.includes(view)) return;
+    if (view !== 'chat') return;
     if (activeConversationId != null || bootstrappedConvRef.current) return;
     const newId = Date.now().toString();
-    const mode = VIEW_TO_MODE[view];
-    setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode, modesUsed: [mode], thinkingMode, descriptiveMode }, ...prev]);
+    setConversations(prev => [{ id: newId, title: 'New Chat', messages: [], timestamp: new Date(), mode: 'chat', modesUsed: ['chat'], thinkingMode, descriptiveMode }, ...prev]);
     setActiveConversationId(newId);
     bootstrappedConvRef.current = true;
   }, [view, activeConversationId, thinkingMode, descriptiveMode]);
@@ -503,14 +453,6 @@ const App: React.FC = () => {
       const syncedUser = await firebaseService.syncUserSession(authUser.uid, authUser.email || 'user@orin.ai', authUser.photoURL);
       geminiService.setSessionUser(syncedUser);
       setUser(syncedUser);
-      (window as any).__orinUser = syncedUser; // used by internal protocol override
-      // Show upgrade greeting if plan changed since last visit
-      const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
-      if (lastSeenPlan && lastSeenPlan !== syncedUser.plan &&
-          (syncedUser.plan === 'basic' || syncedUser.plan === 'pro' || syncedUser.plan?.includes('yearly'))) {
-        setUpgradePopup({ plan: syncedUser.plan });
-      }
-      localStorage.setItem(`orin_last_plan_${authUser.uid}`, syncedUser.plan || 'free');
       if (syncedUser.theme) {
         setUserTheme(normalizeUserTheme(syncedUser.theme));
         cacheService.set(CacheKey.USER_THEME, syncedUser.theme);
@@ -545,12 +487,6 @@ const App: React.FC = () => {
       if (!authUser) return;
       try {
         const refreshed = await firebaseService.syncUserSession(authUser.uid, authUser.email || '', authUser.photoURL);
-        const lastSeenPlan = localStorage.getItem(`orin_last_plan_${authUser.uid}`);
-        if (lastSeenPlan && lastSeenPlan !== refreshed.plan &&
-            (refreshed.plan === 'basic' || refreshed.plan === 'pro' || refreshed.plan?.includes('yearly'))) {
-          setUpgradePopup({ plan: refreshed.plan });
-        }
-        localStorage.setItem(`orin_last_plan_${authUser.uid}`, refreshed.plan || 'free');
         setUser(refreshed);
         geminiService.setSessionUser(refreshed);
       } catch { /* non-blocking */ }
@@ -559,23 +495,17 @@ const App: React.FC = () => {
     return () => navigator.serviceWorker.removeEventListener('message', onSwMessage);
   }, []);
 
-  const handleStartWorkspace = (prompt: string, mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
-    if (!user) {
-        setGlobalPrompt(prompt);
-        return; 
-    }
+  const handleStartWorkspace = (prompt: string = '', _mode: WorkspaceMode = 'chat', autoSubmit: boolean = false) => {
     setGlobalPrompt(prompt);
     setShouldAutoSubmit(autoSubmit);
-    if (mode !== 'agent') {
-      const activeConv = conversations.find(c => c.id === activeConversationId);
-      const canReuseActive = activeConv && !conversationHasUserMessage(activeConv) && activeConv.mode === mode;
-      if (!canReuseActive) {
-         const newId = Date.now().toString();
-         setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode, modesUsed: [mode] }, ...prev]);
-         setActiveConversationId(newId);
-      }
+    const activeConv = conversations.find(c => c.id === activeConversationId);
+    const canReuseActive = activeConv && !conversationHasUserMessage(activeConv);
+    if (!canReuseActive) {
+       const newId = Date.now().toString();
+       setConversations(prev => [{ id: newId, title: "New Chat", messages: [], timestamp: new Date(), mode: 'chat', modesUsed: ['chat'] }, ...prev]);
+       setActiveConversationId(newId);
     }
-    window.location.hash = WORKSPACE_TO_VIEW[mode];
+    window.location.hash = 'chat';
   };
 
   const handleDeleteConversation = async (id: string) => {
@@ -631,289 +561,88 @@ const App: React.FC = () => {
     }
   };
 
-  const NavTab = ({ active, icon, label, onClick }: { active: boolean; icon: string; label: string; onClick: () => void }) => (
-    <button
-      onClick={onClick}
-      className={`mode-pill flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest whitespace-nowrap transition-all duration-150 ${
-        active
-          ? 'bg-white dark:bg-slate-800 text-indigo-600 dark:text-indigo-400 shadow-sm ring-1 ring-indigo-500/20 active'
-          : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-white/60 dark:hover:bg-white/5'
-      }`}
-    >
-      <i className={`fa-solid ${icon} text-[11px]`} />
-      <span className="hidden md:inline-block">{label}</span>
-    </button>
-  );
-
   const renderContent = () => {
     if (!authInitialized) return (
-      <div className="flex h-full w-full flex-col items-center justify-center gap-8 bg-slate-50 dark:bg-slate-950">
+      <div className="flex h-full w-full flex-col items-center justify-center gap-6">
          <div className="relative">
-            <div className="w-20 h-20 rounded-full border-2 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-               <div className="w-10 h-10 rounded-full bg-cyan-500 shadow-[0_0_30px_rgba(6,182,212,0.6)] animate-pulse"></div>
-            </div>
+            <div className="w-16 h-16 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin"></div>
+            <img src="/favicon.svg" alt="" className="absolute inset-0 m-auto w-7 h-7" />
          </div>
-         <div className="text-center space-y-2">
-            <h2 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-[0.2em]">Orin AI</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest animate-pulse">Initializing...</p>
-         </div>
+         <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest animate-pulse">Warming up…</p>
       </div>
     );
 
-    if (view === 'admin-portal') return <AdminPortal user={user} onClose={() => window.location.hash = 'home'} />;
-    if (view === 'device-auth') return <DeviceAuthPage user={user} onClose={() => window.location.hash = 'home'} />;
-    if (view === 'telegram-bot') return <TelegramBotPage onClose={() => window.location.hash = 'home'} lang={lang} />;
-
     switch (view) {
-      case 'executor':
-        return <ExecutorControllerPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'agent':
-        return <AgentWorkspace user={user} onClose={() => window.location.hash = 'chat'} lang={lang} initialPrompt={globalPrompt} />;
-      case 'chat': case 'translator': case 'art': case 'camera': case 'math':
-        return (
-          <ChatWorkspace 
-            onClose={() => window.location.hash = 'chat'}
-            initialPrompt={globalPrompt}
-            initialMode={VIEW_TO_MODE[view]}
-            autoSubmit={shouldAutoSubmit}
-            onInputChange={setGlobalPrompt}
-            messages={conversations.find(c => c.id === activeConversationId)?.messages || []}
+      case 'admin-portal':
+        return <AdminPortal user={user} onClose={() => window.location.hash = 'chat'} />;
+      case 'device-auth':
+        return <DeviceAuthPage user={user} onClose={() => window.location.hash = 'chat'} />;
+      case 'account':
+        return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} />;
+      case 'privacy':
+        return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'terms':
+        return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      default:
+        return null;
+    }
+  };
+
+  const activeConv = conversations.find(c => c.id === activeConversationId);
+  const isFullPage = FULL_PAGE_VIEWS.includes(view);
+
+  const renderChat = () => (
+    <div className="flex h-full min-h-0 w-full">
+      <AppSidebar
+        conversations={conversations}
+        activeConvId={activeConversationId}
+        user={user}
+        lang={lang}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onSwitchConv={setActiveConversationId}
+        onNewConv={() => handleStartWorkspace('')}
+        onDeleteConv={handleDeleteConversation}
+      />
+      <main className="flex-1 flex flex-col min-w-0 h-full bg-white dark:bg-[#0d0b09] view-enter">
+        <Suspense fallback={<PageFallback />}>
+          <ChatWorkspace
+            onOpenSidebar={() => setSidebarOpen(true)}
+            messages={activeConv?.messages || []}
             setMessages={(updater) => {
-               if (!activeConversationId) return;
-               const mode = VIEW_TO_MODE[view];
-               setConversations(prev => {
-                  const existing = prev.find(c => c.id === activeConversationId);
-                  const newMessages = typeof updater === 'function' ? updater(existing?.messages || []) : updater;
-                  if (!existing) {
-                      const newConv: Conversation = {
-                          id: activeConversationId, title: "New Chat", messages: newMessages, timestamp: new Date(), mode, modesUsed: [mode], thinkingMode, descriptiveMode
-                      };
-                      return [newConv, ...prev];
-                  }
-                  return prev.map(c => c.id === activeConversationId ? { ...c, messages: newMessages, timestamp: new Date() } : c);
-               });
+              if (!activeConversationId) return;
+              setConversations(prev => prev.map(c => c.id === activeConversationId
+                ? { ...c, messages: typeof updater === 'function' ? updater(c.messages) : updater, timestamp: new Date() }
+                : c));
             }}
             lang={lang}
-            conversations={conversations}
-            onSwitchConv={setActiveConversationId}
-            onNewConv={() => handleStartWorkspace('', 'chat')}
-            onDeleteConv={handleDeleteConversation}
-            activeConvId={activeConversationId || ""}
-            onUpdateTitle={(title, modes) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title, modesUsed: modes ? [...new Set([...(c.modesUsed || []), ...modes])] : c.modesUsed } : c))}
-            onModeSwitch={(m) => {
-              setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, mode: m } : c));
-              window.location.hash = WORKSPACE_TO_VIEW[m];
-            }}
+            activeConvId={activeConversationId || ''}
+            onUpdateTitle={(title) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title } : c))}
             isSyncing={syncStatus === 'syncing'}
             thinkingMode={thinkingMode}
             descriptiveMode={descriptiveMode}
             onReasoningModeChange={updateReasoningModes}
           />
-        );
-      case 'voice': return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} inline={false} />;
-      case 'files': return (
-        <Suspense fallback={null}>
-          <FilesWorkspace onClose={() => window.location.hash = 'chat'} lang={lang} user={user} />
         </Suspense>
-      );
-      case 'community': return (
-        <Suspense fallback={null}>
-          <CreationFeed onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onUsePrompt={(prompt) => { setGlobalPrompt(prompt); window.location.hash = 'chat'; }} />
-        </Suspense>
-      );
-      case 'account': return <AccountSettings onClose={() => window.location.hash = 'chat'} lang={lang} user={user} onClearHistory={handleClearHistory} conversationsCount={conversations.filter(conversationHasUserMessage).length} authError={authError} onDismissAuthError={() => setAuthError(null)} onSignInWithUser={applyUser} userTheme={userTheme} onThemeChange={handleThemeChange} themeMode={theme} onThemeModeChange={(mode) => { setTheme(mode); cacheService.set(CacheKey.THEME, mode); }} />;
-      case 'privacy': return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'terms': return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'releases': return <ReleasesPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'logic': return <LogicFlowPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'creator': return <CreatorPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      case 'downloads': return <DownloadsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
-      default: return (
-        <LandingPage
-          prompt={globalPrompt}
-          onPromptChange={setGlobalPrompt}
-          onStartChat={handleStartWorkspace}
-          onVoiceOpen={() => handleStartWorkspace('', 'voice')}
-          lang={lang}
-          user={user}
-          onLogin={() => window.location.hash = 'account'}
-          onSignInWithUser={applyUser}
-          thinkingMode={thinkingMode}
-          descriptiveMode={descriptiveMode}
-          onReasoningModeChange={updateReasoningModes}
-          userTheme={userTheme}
-          isDark={effectiveDark}
-        />
-      );
-    }
-  };
-
-  // Refined base backgrounds: smooth gradients, cohesive palettes per theme.
-  const themeBgByMode: Record<UserThemeId, { light: string; dark: string }> = {
-    // Classic: warm off-white / deep charcoal (not pure black/white)
-    classic: {
-      light: 'bg-[#f7f7f5]',
-      dark:  'bg-[#1a1a1f]',
-    },
-    // Midnight: soft indigo-tinted
-    midnight: {
-      light: 'bg-gradient-to-br from-[#eef0ff] via-[#f2f0ff] to-[#ece8ff]',
-      dark:  'bg-gradient-to-b from-[#10102a] via-[#13112a] to-[#0e0c22]',
-    },
-    // Aurora: soft teal-green wash
-    aurora: {
-      light: 'bg-gradient-to-br from-[#edfdf8] via-[#f0fdf9] to-[#e8faf5]',
-      dark:  'bg-gradient-to-b from-[#0d1a16] via-[#101f1b] to-[#0c1814]',
-    },
-    // Terminal: deep forest green tinted
-    terminal: {
-      light: 'bg-gradient-to-b from-[#f0faf2] via-[#edf9ef] to-[#f0faf2]',
-      dark:  'bg-[#080f08]',
-    },
-    // Paper: warm parchment / deep mahogany
-    paper: {
-      light: 'bg-gradient-to-br from-[#fdf8f0] via-[#fef6ec] to-[#fdf3e8]',
-      dark:  'bg-gradient-to-br from-[#1a1008] via-[#1f140a] to-[#1a100a]',
-    },
-    // Ocean: pale arctic blue / deep ocean
-    ocean: {
-      light: 'bg-gradient-to-br from-[#eef9ff] via-[#eaf6ff] to-[#e8f4ff]',
-      dark:  'bg-gradient-to-b from-[#080f1c] via-[#0b1528] to-[#091220]',
-    },
-    // Sunset: warm cream / deep ember
-    sunset: {
-      light: 'bg-gradient-to-br from-[#fff8f0] via-[#fff5ec] to-[#fff2e8]',
-      dark:  'bg-gradient-to-b from-[#1a0a00] via-[#200d00] to-[#1c0a00]',
-    },
-    // Neon: pure dark (always)
-    neon: {
-      light: 'bg-[#0a0018]',
-      dark:  'bg-[#06000f]',
-    },
-  };
-  const themeBg = themeBgByMode[userTheme]?.[effectiveDark ? 'dark' : 'light'] ?? themeBgByMode.classic[effectiveDark ? 'dark' : 'light'];
-
-const renderLandingBackground = () => {
-    switch (userTheme) {
-      case 'aurora':   return <AuroraBg dark={effectiveDark} />;
-      case 'midnight': return <MidnightBg dark={effectiveDark} />;
-      case 'terminal': return <TerminalBg dark={effectiveDark} />;
-      case 'ocean':    return <SilkBg color={effectiveDark ? '#0ea5e9' : '#22d3ee'} dark={effectiveDark} />;
-      case 'sunset':   return <SunsetBg dark={effectiveDark} />;
-      case 'paper':    return <PaperBg dark={effectiveDark} />;
-      case 'neon':     return <NeonBg dark={effectiveDark} />;
-      default: return null;
-    }
-  };
-
-  const rootBgClass = themeBg;
+      </main>
+    </div>
+  );
 
   return (
     <div
-      className={`flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} ${rootBgClass} overflow-hidden`}
+      className={`flex flex-col relative ${lang === 'si' ? 'sinhala-text' : lang === 'ta' ? 'tamil-text' : 'font-sans'} bg-stone-50 dark:bg-[#0d0b09] text-stone-900 dark:text-stone-100 overflow-hidden`}
       style={{ minWidth: '100vw', width: '100%', height: 'calc(var(--vh, 1vh) * 100)' }}
     >
-      {view !== 'admin-portal' && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 -z-10 overflow-hidden"
-          style={{ minWidth: '100%', minHeight: '100%' }}
-        >
-          {view === 'landing' ? (
-            renderLandingBackground()
-          ) : (
-            <div className="absolute inset-0 w-full h-full scale-110 opacity-40">
-              {renderLandingBackground()}
-            </div>
-          )}
-        </div>
-      )}
-      {view !== 'admin-portal' && (
-        <header className="h-14 md:h-16 shrink-0 flex items-center justify-between px-4 z-[100] border-b border-black/[0.06] dark:border-white/[0.06] bg-white dark:bg-slate-950 safe-pt relative">
-          <div className="flex items-center gap-2 cursor-pointer group/logo tap-target" onClick={() => window.location.hash = user ? 'home' : ''}>
-            <img src="/favicon.svg" alt="Logo" className="w-8 h-8 rounded-lg shadow-lg transition-transform duration-200 group-hover/logo:scale-105" />
-            <h1 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-white hidden xs:block">{t.appName}</h1>
+      {isFullPage ? (
+        <main className="flex-1 overflow-y-auto custom-scrollbar relative">
+          <div key={view} className="min-h-full view-enter">
+            <Suspense fallback={<PageFallback />}>
+              {renderContent()}
+            </Suspense>
           </div>
-          {user && WORKSPACE_VIEWS.includes(view) && (
-            <div className="flex items-center bg-slate-100 dark:bg-slate-900 p-1 rounded-xl absolute left-1/2 -translate-x-1/2 shadow-sm border border-black/[0.06] dark:border-white/[0.06] z-50 transition-all duration-300 top-[3.75rem] md:top-1/2 md:-translate-y-1/2 w-max max-w-[90vw] overflow-x-auto no-scrollbar">
-              <NavTab active={view === 'chat' || view === 'translator'} icon="fa-message" label={t.reasoning} onClick={() => handleStartWorkspace('', 'chat')} />
-              <NavTab active={view === 'art'} icon="fa-palette" label={t.creative} onClick={() => handleStartWorkspace('', 'studio')} />
-              <NavTab active={view === 'camera'} icon="fa-camera" label={t.vision} onClick={() => handleStartWorkspace('', 'vision')} />
-              <NavTab active={view === 'voice'} icon="fa-microphone" label={t.voice} onClick={() => handleStartWorkspace('', 'voice')} />
-              <NavTab
-                active={view === 'math'}
-                icon="fa-calculator"
-                label={`${t.maths} (Beta)`}
-                onClick={() => handleStartWorkspace('', 'maths')}
-              />
-              <NavTab
-                active={view === 'agent'}
-                icon="fa-robot"
-                label="Agent"
-                onClick={() => handleStartWorkspace(globalPrompt, 'agent')}
-              />
-              <NavTab
-                active={view === 'community'}
-                icon="fa-fire"
-                label="Creations"
-                onClick={() => { window.location.hash = 'community'; }}
-              />
-
-            </div>
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const next: ThemeMode = theme === 'light' ? 'dark' : theme === 'dark' ? 'auto' : 'light';
-                setTheme(next);
-                cacheService.set(CacheKey.THEME, next);
-              }}
-              className="w-9 h-9 flex items-center justify-center text-slate-500"
-              aria-label={theme === 'light' ? 'Light mode' : theme === 'dark' ? 'Dark mode' : 'Auto (by time)'}
-              title={theme === 'light' ? 'Light' : theme === 'dark' ? 'Dark' : 'Auto'}
-            >
-              <i className={`fa-solid ${theme === 'light' ? 'fa-sun' : theme === 'dark' ? 'fa-moon' : 'fa-circle-half-stroke'}`} />
-            </button>
-            <button onClick={() => setLang(l => { const next = l === 'en' ? 'si' : l === 'si' ? 'ta' : 'en'; cacheService.set(CacheKey.LANG, next); return next; })} className="text-[9px] font-black uppercase tracking-widest text-slate-500 px-2 border border-slate-200 dark:border-white/5 rounded-full py-1.5">{lang === 'en' ? 'සිංහල' : lang === 'si' ? 'தமிழ்' : 'English'}</button>
-            {user ? (
-              <button onClick={() => window.location.hash = 'account'} className="w-9 h-9 rounded-full bg-slate-200 dark:bg-white/5 overflow-hidden flex items-center justify-center border-2 border-emerald-500/30 shadow-sm tap-target ring-2 ring-emerald-400/20" title="Signed in">
-                {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" alt="" /> : <span className="font-bold text-xs text-slate-500">{user.name[0]}</span>}
-              </button>
-            ) : (
-              <button onClick={() => window.location.hash = 'account'} className="px-4 py-2 rounded-full bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest tap-target shadow-md hover:bg-indigo-500 transition-colors">Sign In</button>
-            )}
-          </div>
-        </header>
-      )}
-      <main className="flex-1 overflow-hidden relative flex flex-col">
-        <div key={view} className="flex-1 flex flex-col min-h-0 view-enter">
-          <Suspense fallback={<PageFallback />}>
-            {renderContent()}
-          </Suspense>
-        </div>
-      </main>
-
-      {/* Upgrade Greeting Popup */}
-      {upgradePopup && (
-        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setUpgradePopup(null)}>
-          <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl border border-slate-200 dark:border-white/10 animate-scale-in" onClick={e => e.stopPropagation()}>
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto mb-4 shadow-lg">
-              <i className="fa-solid fa-crown text-white text-2xl" />
-            </div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">
-              {upgradePopup.plan?.includes('pro') ? '🎉 Welcome to Pro!' : '🎉 Welcome to Basic!'}
-            </h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-              {upgradePopup.plan?.includes('pro')
-                ? 'You now have unlimited access to all Orin AI features. Enjoy the full experience!'
-                : 'You now have enhanced access to Orin AI. More chats, more generations!'}
-            </p>
-            <button onClick={() => setUpgradePopup(null)} className="w-full py-3 rounded-2xl bg-indigo-600 text-white font-black text-xs uppercase tracking-widest hover:bg-indigo-500 transition-colors">
-              Let's Go!
-            </button>
-          </div>
-        </div>
+        </main>
+      ) : (
+        renderChat()
       )}
     </div>
   );

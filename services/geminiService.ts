@@ -70,13 +70,15 @@ RULES:
 export class GeminiService {
   private currentUser: UserAccount | null = null;
   private lastMemoryUpdateByUser = new Map<string, number>();
+  // Orin AI is completely free — the windows exist for bookkeeping only; the
+  // maxes are set far beyond real usage so guests are never blocked.
   private guestUsage = {
     textCount: 0,
     textResetAt: 0,
     uploadCount: 0,
     uploadResetAt: 0,
-    textMax: 5,
-    uploadMax: 1,
+    textMax: 1000000,
+    uploadMax: 1000000,
   };
 
   constructor() {

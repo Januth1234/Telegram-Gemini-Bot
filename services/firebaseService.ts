@@ -375,13 +375,15 @@ class FirebaseService {
     };
   }
 
+  // Orin AI is completely free — no usage caps client-side (`null` = unlimited
+  // in checkLimit); the API layer keeps its own abuse protection.
   private static readonly USAGE_LIMITS: Record<string, UsagePlanLimits> = {
-    free:         { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 },
-    starter:      { textPerDay: 200,  imagesPer30Days: 10,  videosPer30Days: 0 },
-    basic:        { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
-    basic_yearly: { textPerDay: 500,  imagesPer30Days: 30,  videosPer30Days: 2 },
-    pro:          { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
-    pro_yearly:   { textPerDay: 2000, imagesPer30Days: null, videosPer30Days: null },
+    free:         { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
+    starter:      { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
+    basic:        { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
+    basic_yearly: { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
+    pro:          { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
+    pro_yearly:   { textPerDay: null, imagesPer30Days: null, videosPer30Days: null },
   };
 
   async checkLimit(uid: string, type: 'text' | 'images' | 'videos'): Promise<boolean> {
