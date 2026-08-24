@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useCallback, lazy, Suspense } from 'react';
 import AppSidebar from './components/AppSidebar';
+const LandingPage = lazy(() => import('./components/LandingPage'));
+const DownloadsPage = lazy(() => import('./components/DownloadsPage'));
 import { ChatMessage, Language, AppView, WorkspaceMode, Conversation, UserAccount, conversationHasUserMessage, UserThemeId } from './types';
 import { geminiService } from './services/geminiService';
 import { firebaseService } from './services/firebaseService';
@@ -33,8 +35,8 @@ function conversationToSearchText(c: Conversation): string {
   return text.length > 4000 ? text.slice(0, 4000) : text;
 }
 
-const FULL_PAGE_VIEWS: AppView[] = ['account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate'];
-const VALID_VIEWS: AppView[] = ['chat', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate'];
+const FULL_PAGE_VIEWS: AppView[] = ['landing', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate', 'downloads'];
+const VALID_VIEWS: AppView[] = ['landing', 'chat', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate', 'downloads'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
 
 type AuthUserLike = { uid: string; email: string | null; displayName: string | null; photoURL: string | null };
@@ -99,7 +101,7 @@ const App: React.FC = () => {
   const [authInitialized, setAuthInitialized] = useState(false);
 
   // App State
-  const [view, setView] = useState<AppView>('chat');
+  const [view, setView] = useState<AppView>('landing');
   const [globalPrompt, setGlobalPrompt] = useState('');
   const [shouldAutoSubmit, setShouldAutoSubmit] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
@@ -260,8 +262,8 @@ const App: React.FC = () => {
           return;
       }
 
-      if (user && (hash === '' || hash === '/' || hash === 'home')) {
-         window.location.hash = 'chat';
+      if (hash === '' || hash === '/' || hash === 'home') {
+         setView('landing');
          return;
       }
       if (VALID_VIEWS.includes(hash as AppView)) {
@@ -273,7 +275,7 @@ const App: React.FC = () => {
             }
           }
       } else {
-          setView('chat');
+          setView('landing');
       }
     };
     if (authInitialized) handleHash();
@@ -585,6 +587,10 @@ const App: React.FC = () => {
         return <PrivacyPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'terms':
         return <TermsPage onClose={() => window.location.hash = 'chat'} lang={lang} />;
+      case 'landing':
+        return <LandingPage lang={lang} user={user} onStartChat={(prompt) => handleStartWorkspace(prompt || '')} onLogin={() => window.location.hash = 'account'} />;
+      case 'downloads':
+        return <DownloadsPage onClose={() => window.location.hash = 'landing'} lang={lang} />;
       case 'voice':
         return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'translate':
@@ -623,6 +629,8 @@ const App: React.FC = () => {
             }}
             lang={lang}
             activeConvId={activeConversationId || ''}
+            seedPrompt={globalPrompt}
+            onSeedConsumed={() => setGlobalPrompt('')}
             onUpdateTitle={(title) => setConversations(prev => prev.map(c => c.id === activeConversationId ? { ...c, title } : c))}
             isSyncing={syncStatus === 'syncing'}
             thinkingMode={thinkingMode}

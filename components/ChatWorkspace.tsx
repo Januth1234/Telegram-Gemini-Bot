@@ -31,6 +31,9 @@ interface ChatWorkspaceProps {
   lang: Language;
   activeConvId: string;
   onUpdateTitle: (title: string) => void;
+  /** Prompt handed over from the landing page — fills the composer once. */
+  seedPrompt?: string;
+  onSeedConsumed?: () => void;
   isSyncing?: boolean;
   thinkingMode: boolean;
   descriptiveMode: boolean;
@@ -193,6 +196,7 @@ const ImageMessage: React.FC<{ msg: ChatMessage }> = ({ msg }) => (
 
 const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   onOpenSidebar, messages, setMessages, lang, activeConvId, onUpdateTitle,
+  seedPrompt, onSeedConsumed,
   thinkingMode, descriptiveMode, onReasoningModeChange,
 }) => {
   const [input, setInput] = useState('');
@@ -222,6 +226,16 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
     setPrivateMessages([]);
     setChatError(null);
   }, [activeConvId]);
+
+  // Landing-page handoff: prefill the composer with the seeded prompt once.
+  useEffect(() => {
+    const p = seedPrompt?.trim();
+    if (!p) return;
+    setInput(p);
+    inputRef.current?.focus();
+    onSeedConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seedPrompt]);
 
   const handleSend = useCallback(async (overrideText?: string) => {
     const text = (overrideText !== undefined ? overrideText : input).trim();

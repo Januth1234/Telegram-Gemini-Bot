@@ -76,7 +76,7 @@ export interface HardwareStatus {
   label: string;
 }
 
-export type AppView = 'chat' | 'account' | 'privacy' | 'terms' | 'device-auth' | 'admin-portal' | 'voice' | 'translate';
+export type AppView = 'landing' | 'chat' | 'account' | 'privacy' | 'terms' | 'device-auth' | 'admin-portal' | 'voice' | 'translate' | 'downloads';
 export type WorkspaceMode = 'chat';
 
 // Graphing types for Maths / Graphs workspace

@@ -49,7 +49,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
       >
         {/* Brand */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <button onClick={() => { onNewConv(); onClose(); }} className="flex items-center gap-2.5 group" title="Orin AI">
+          <button onClick={() => { window.location.hash = 'landing'; onClose(); }} className="flex items-center gap-2.5 group" title="Home">
             <img src="/favicon.svg" alt="" className="w-8 h-8 drop-shadow-md transition-transform group-hover:scale-105" />
             <span className="text-sm font-black tracking-tight text-stone-900 dark:text-white">Orin AI</span>
           </button>
