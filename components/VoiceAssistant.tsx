@@ -374,7 +374,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
                          <button 
                            key={t.id}
                            onClick={() => setSelectedTone(t.id)}
-                           className={`p-3 rounded-xl text-xs font-bold text-center transition-all border ${selectedTone === t.id ? 'bg-amber-600 text-white border-amber-600' : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}`}
+                           className={`p-3 rounded-xl text-xs font-bold text-center transition-all border ${selectedTone === t.id ? 'bg-cyan-600 text-white border-cyan-600' : 'bg-transparent border-slate-200 dark:border-white/10 text-slate-500'}`}
                          >
                             {t.label}
                          </button>
@@ -397,7 +397,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
            
            <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 border border-black/5 dark:border-white/5">
                <button onClick={() => { if(!isActive) setMode('assistant'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'assistant' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.assistant}</button>
-               <button onClick={() => { if(!isActive) setMode('translator'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.interpreter}</button>
+               <button onClick={() => { if(!isActive) setMode('translator'); }} className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${mode === 'translator' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600' : 'text-slate-400 opacity-50'}`}>{t.voiceMode.interpreter}</button>
            </div>
         </div>
 
@@ -405,8 +405,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
         <div className="flex-1 w-full flex flex-col items-center min-h-0 overflow-y-auto overflow-x-hidden no-scrollbar py-2">
             <div className="relative flex flex-col items-center justify-center py-4 md:py-6">
                <div className="relative">
-                  <div className={`absolute inset-0 rounded-full blur-xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-amber-500' : 'bg-amber-500'}`}></div>
-                  <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-amber-600' : 'bg-cyan-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
+                  <div className={`absolute inset-0 rounded-full blur-xl transition-opacity duration-700 ${isActive ? 'opacity-25' : 'opacity-0'} ${mode === 'translator' ? 'bg-cyan-500' : 'bg-cyan-500'}`}></div>
+                  <div className={`w-32 h-32 md:w-40 md:h-40 rounded-full relative flex items-center justify-center transition-all duration-500 ${isActive ? (mode === 'translator' ? 'bg-cyan-600' : 'bg-cyan-600') + ' text-white shadow-2xl scale-105' : 'bg-slate-50 dark:bg-white/5 text-slate-300 border border-black/5 dark:border-white/5'}`}>
                     {isActive && <div className={`absolute -inset-4 rounded-full border-2 border-current opacity-10 ${isSpeaking ? 'animate-ping' : ''}`}></div>}
                     <i className={`fa-solid ${mode === 'translator' ? 'fa-language' : (isActive ? 'fa-microphone-lines' : 'fa-microphone')} text-5xl md:text-6xl`}></i>
                     
@@ -436,7 +436,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
                        <select 
                          value={langA.code} 
                          onChange={e => setLangA(LANGUAGES.find(l => l.code === e.target.value) || LANGUAGES[0])}
-                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-sm"
+                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 cursor-pointer shadow-sm"
                        >
                          {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
                        </select>
@@ -447,7 +447,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
                        <select 
                          value={langB.code} 
                          onChange={e => setLangB(LANGUAGES.find(l => l.code === e.target.value) || LANGUAGES[1])}
-                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer shadow-sm"
+                         className="appearance-none bg-slate-100 dark:bg-slate-800 border border-black/5 dark:border-white/5 rounded-xl py-2 pl-3 pr-8 text-xs font-bold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500 cursor-pointer shadow-sm"
                        >
                          {LANGUAGES.map(l => <option key={l.code} value={l.code}>{l.flag} {l.label}</option>)}
                        </select>
@@ -462,9 +462,9 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
                   </h2>
                   {isActive && mode === 'translator' && (
                      <div className="flex justify-center gap-2 mt-2">
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">{langA.label}</span>
+                        <span className="text-[10px] font-bold text-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-0.5 rounded-lg border border-cyan-200 dark:border-cyan-800">{langA.label}</span>
                         <span className="text-[10px] text-slate-400"><i className="fa-solid fa-arrow-right-arrow-left"></i></span>
-                        <span className="text-[10px] font-bold text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-lg border border-amber-200 dark:border-amber-800">{langB.label}</span>
+                        <span className="text-[10px] font-bold text-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 px-2 py-0.5 rounded-lg border border-cyan-200 dark:border-cyan-800">{langB.label}</span>
                      </div>
                   )}
                </div>
@@ -473,7 +473,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ onClose, lang, initialM
             <div className={`w-full flex flex-col gap-4 transition-all duration-500 shrink-0 ${isActive ? 'opacity-100' : 'opacity-0 h-0 pointer-events-none overflow-hidden'}`}>
                 <div className="w-full h-6 flex items-end justify-center gap-1.5 px-8">
                   {Array.from({ length: BAR_COUNT }).map((_, i) => (
-                    <div key={i} ref={(el) => { barsRef.current[i] = el; }} className={`w-2.5 rounded-full transition-all duration-100 ${mode === 'translator' ? 'bg-amber-500' : 'bg-amber-500'}`} style={{ height: '10%' }}></div>
+                    <div key={i} ref={(el) => { barsRef.current[i] = el; }} className={`w-2.5 rounded-full transition-all duration-100 ${mode === 'translator' ? 'bg-cyan-500' : 'bg-cyan-500'}`} style={{ height: '10%' }}></div>
                   ))}
                 </div>
 

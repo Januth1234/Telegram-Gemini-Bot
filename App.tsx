@@ -16,7 +16,6 @@ const AdminPortal = lazy(() => import('./components/AdminPortal').then(m => ({ d
 const DeviceAuthPage = lazy(() => import('./components/DeviceAuthPage').then(m => ({ default: m.default })));
 const VoiceAssistant = lazy(() => import('./components/VoiceAssistant'));
 const LiveTranslate = lazy(() => import('./components/VoiceAssistant'));
-const ComputerRemote = lazy(() => import('./components/ComputerRemote'));
 const PageFallback = () => (
   <div className="flex h-full w-full flex-col items-center justify-center gap-6 bg-slate-50 dark:bg-slate-950">
     <div className="w-10 h-10 rounded-full border-2 border-cyan-500/30 border-t-cyan-500 animate-spin" />
@@ -34,8 +33,8 @@ function conversationToSearchText(c: Conversation): string {
   return text.length > 4000 ? text.slice(0, 4000) : text;
 }
 
-const FULL_PAGE_VIEWS: AppView[] = ['account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate', 'computer'];
-const VALID_VIEWS: AppView[] = ['chat', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate', 'computer'];
+const FULL_PAGE_VIEWS: AppView[] = ['account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate'];
+const VALID_VIEWS: AppView[] = ['chat', 'account', 'privacy', 'terms', 'device-auth', 'admin-portal', 'voice', 'translate'];
 const AUTH_TIMEOUT_MS = 25000; // iOS redirect needs up to 15s
 
 type AuthUserLike = { uid: string; email: string | null; displayName: string | null; photoURL: string | null };
@@ -568,7 +567,7 @@ const App: React.FC = () => {
     if (!authInitialized) return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-6">
          <div className="relative">
-            <div className="w-16 h-16 rounded-full border-2 border-amber-500/20 border-t-amber-500 animate-spin"></div>
+            <div className="w-16 h-16 rounded-full border-2 border-cyan-500/20 border-t-cyan-500 animate-spin"></div>
             <img src="/favicon.svg" alt="" className="absolute inset-0 m-auto w-7 h-7" />
          </div>
          <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest animate-pulse">Warming up…</p>
@@ -590,8 +589,6 @@ const App: React.FC = () => {
         return <VoiceAssistant onClose={() => window.location.hash = 'chat'} lang={lang} />;
       case 'translate':
         return <LiveTranslate onClose={() => window.location.hash = 'chat'} lang={lang} initialMode="translator" />;
-      case 'computer':
-        return <ComputerRemote onClose={() => window.location.hash = 'chat'} />;
       default:
         return null;
     }

@@ -2,6 +2,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { geminiService, AppError } from '../services/geminiService';
 import { ChatMessage, Language, AspectRatio } from '../types';
+import ArtifactPanel, { Artifact } from './ArtifactPanel';
+
+/** Fenced blocks big enough to be worth opening as an artifact (Claude-style). */
+function extractArtifacts(content: string): Artifact[] {
+  const out: Artifact[] = [];
+  const re = /```([^\n`]*)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const info = m[1].trim();
+    const code = m[2];
+    const lines = code.split('\n');
+    if (lines.length < 12 && code.length < 600) continue;
+    // Info string doubles as a filename when it looks like one (e.g. index.html).
+    const looksFile = /\.[a-z0-9]{1,5}$/i.test(info);
+    const firstLine = (lines.find(l => l.trim()) || '').trim();
+    const title = looksFile ? info : `${info || 'text'} snippet`;
+    out.push({ title, language: looksFile ? info.split('.').pop()! : info || 'text', code });
+    void firstLine;
+  }
+  return out;
+}
 
 interface ChatWorkspaceProps {
   onOpenSidebar: () => void;
@@ -48,8 +69,8 @@ function renderInline(text: string, isUser: boolean): React.ReactNode[] {
       <a key={match.index} href={url} target="_blank" rel="noopener noreferrer"
         className={`inline-flex items-center gap-1 px-2.5 py-0.5 mx-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-colors no-underline
           ${isUser
-            ? 'bg-amber-400/20 text-amber-100 hover:bg-amber-400/30 border border-amber-300/30'
-            : 'bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20 hover:bg-amber-500/20'
+            ? 'bg-cyan-300/20 text-cyan-100 hover:bg-cyan-300/30 border border-cyan-300/30'
+            : 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border border-cyan-500/20 hover:bg-cyan-500/20'
           }`}>
         <i className="fa-solid fa-link text-[8px]" />
         {label}
@@ -90,7 +111,7 @@ const MessageContent: React.FC<{ content: string; isUser: boolean }> = ({ conten
     if (/^#{1,3} /.test(line)) {
       const lvl = (line.match(/^#+/) || [''])[0].length;
       const txt = line.replace(/^#+\s*/, '');
-      const cls = lvl === 1 ? 'text-base font-black mt-4 mb-1 text-amber-600 dark:text-amber-400'
+      const cls = lvl === 1 ? 'text-base font-black mt-4 mb-1 text-cyan-600 dark:text-cyan-300'
                 : lvl === 2 ? 'text-sm font-black mt-3 mb-1 text-stone-600 dark:text-stone-300'
                 : 'text-xs font-black mt-2 mb-0.5 uppercase tracking-wider text-stone-500';
       nodes.push(<p key={i} className={cls}>{renderInline(txt, isUser)}</p>);
@@ -109,7 +130,7 @@ const MessageContent: React.FC<{ content: string; isUser: boolean }> = ({ conten
       const txt = line.replace(/^\d+\.\s*/, '');
       nodes.push(
         <div key={i} className="flex gap-2 my-0.5">
-          <span className="shrink-0 font-black text-amber-500 dark:text-amber-500/80 text-xs mt-1 min-w-[1.4rem] text-right tabular-nums">{num}.</span>
+          <span className="shrink-0 font-black text-cyan-500 dark:text-cyan-500/80 text-xs mt-1 min-w-[1.4rem] text-right tabular-nums">{num}.</span>
           <span>{parseLine(txt, isUser, i)}</span>
         </div>
       );
@@ -162,7 +183,7 @@ const ImageMessage: React.FC<{ msg: ChatMessage }> = ({ msg }) => (
       <a
         href={msg.imageUrl}
         download={`orin-image-${msg.id}.jpg`}
-        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/25 text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/25 transition-colors no-underline"
+        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border border-cyan-500/25 text-[10px] font-black uppercase tracking-widest hover:bg-cyan-500/25 transition-colors no-underline"
       >
         <i className="fa-solid fa-download text-[9px]" aria-hidden /> Save
       </a>
@@ -183,6 +204,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
   const [imageMode, setImageMode] = useState(false);
   const [aspect, setAspect] = useState<AspectRatio>('1:1');
   const [chatError, setChatError] = useState<string | null>(null);
+  const [artifact, setArtifact] = useState<Artifact | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -305,7 +327,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           <h2 className="text-xs font-black uppercase tracking-[0.18em] text-stone-800 dark:text-stone-100 truncate">
             {isPrivate ? 'Private chat' : 'Orin AI'}
           </h2>
-          {isPrivate && <i className="fa-solid fa-lock text-[10px] text-amber-500" aria-hidden />}
+          {isPrivate && <i className="fa-solid fa-lock text-[10px] text-cyan-500" aria-hidden />}
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -314,7 +336,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             aria-pressed={thinkingMode}
             className={`px-2.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors ${
               thinkingMode
-                ? 'bg-amber-500 text-stone-950 border-amber-500'
+                ? 'bg-cyan-500 text-stone-950 border-cyan-500'
                 : 'border-stone-300/60 dark:border-white/10 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
             }`}
           >
@@ -326,7 +348,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             aria-pressed={descriptiveMode}
             className={`px-2.5 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border transition-colors ${
               descriptiveMode
-                ? 'bg-amber-500 text-stone-950 border-amber-500'
+                ? 'bg-cyan-500 text-stone-950 border-cyan-500'
                 : 'border-stone-300/60 dark:border-white/10 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
             }`}
           >
@@ -338,7 +360,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
             aria-pressed={isPrivate}
             className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${
               isPrivate
-                ? 'bg-amber-500 text-stone-950 border-amber-500'
+                ? 'bg-cyan-500 text-stone-950 border-cyan-500'
                 : 'border-stone-300/60 dark:border-white/10 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200'
             }`}
           >
@@ -353,14 +375,14 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           {currentMessages.length === 0 ? (
             <div className="min-h-[55vh] flex flex-col items-center justify-center text-center px-4">
               <div className="relative mb-6">
-                <div className="absolute inset-0 bg-amber-500/25 blur-3xl rounded-full scale-150" aria-hidden />
+                <div className="absolute inset-0 bg-cyan-500/25 blur-3xl rounded-full scale-150" aria-hidden />
                 <img src="/favicon.svg" alt="" className="relative w-16 h-16 drop-shadow-xl" />
               </div>
               <h1 className="text-2xl md:text-3xl font-black tracking-tight text-stone-900 dark:text-white">
                 {isPrivate ? 'Private chat' : 'How can I help?'}
               </h1>
               <p className="mt-2 text-sm text-stone-500 dark:text-stone-400 max-w-sm">
-                Ask anything, or switch on <span className="font-bold text-amber-600 dark:text-amber-400">Image</span> below to create pictures.
+                Ask anything, or switch on <span className="font-bold text-cyan-600 dark:text-cyan-300">Image</span> below to create pictures.
               </p>
               {!isPrivate && (
                 <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-md">
@@ -368,7 +390,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                     <button
                       key={s}
                       onClick={() => { setInput(s); inputRef.current?.focus(); }}
-                      className="text-left px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] text-xs font-semibold text-stone-600 dark:text-stone-300 hover:border-amber-500/40 hover:text-stone-900 dark:hover:text-white transition-colors shadow-sm"
+                      className="text-left px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] text-xs font-semibold text-stone-600 dark:text-stone-300 hover:border-cyan-500/40 hover:text-stone-900 dark:hover:text-white transition-colors shadow-sm"
                     >
                       {s}
                     </button>
@@ -388,10 +410,34 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 ) : (
                   <div className={`max-w-[92%] px-4 py-3 md:px-5 md:py-4 rounded-2xl border ${
                     msg.role === 'user'
-                      ? 'bg-gradient-to-br from-amber-500 to-orange-500 text-stone-950 border-transparent rounded-br-md shadow-md shadow-amber-500/10 font-medium'
+                      ? 'bg-gradient-to-br from-cyan-500 to-sky-600 text-white border-transparent rounded-br-md shadow-md shadow-cyan-500/10 font-medium'
                       : 'bg-white dark:bg-stone-900 text-stone-800 dark:text-stone-200 border-black/[0.05] dark:border-white/[0.06] rounded-bl-md shadow-sm'
                   }`}>
                     <MessageContent content={msg.content} isUser={msg.role === 'user'} />
+                    {msg.role === 'assistant' && (() => {
+                      const arts = extractArtifacts(msg.content);
+                      if (arts.length === 0) return null;
+                      return (
+                        <div className="flex flex-wrap gap-2 mt-3 pt-2.5 border-t border-black/[0.06] dark:border-white/[0.08]">
+                          {arts.map((a, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setArtifact(a)}
+                              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-cyan-500/[0.08] hover:bg-cyan-500/[0.16] border border-cyan-500/25 text-cyan-700 dark:text-cyan-300 transition-colors no-underline text-left max-w-full"
+                            >
+                              <i className="fa-solid fa-file-code text-xs shrink-0" aria-hidden />
+                              <span className="min-w-0">
+                                <span className="block text-[11px] font-bold truncate">{a.title}</span>
+                                <span className="block text-[9px] font-black uppercase tracking-widest opacity-70">
+                                  Artifact · {a.code.split('\n').length} lines — click to open
+                                </span>
+                              </span>
+                              <i className="fa-solid fa-chevron-right text-[9px] shrink-0 opacity-60" aria-hidden />
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                     {msg.links && msg.links.length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-3 pt-2 border-t border-black/[0.06] dark:border-white/[0.08]">
                         {msg.links.slice(0, 5).map((link, j) => (
@@ -412,10 +458,10 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
           {isTyping && (
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1.5 bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] rounded-2xl rounded-tl-md px-4 py-3 shadow-sm">
-                <span className="typing-dot w-1.5 h-1.5 bg-amber-500 rounded-full inline-block" />
-                <span className="typing-dot w-1.5 h-1.5 bg-amber-500 rounded-full inline-block" style={{ animationDelay: '150ms' }} />
-                <span className="typing-dot w-1.5 h-1.5 bg-amber-500 rounded-full inline-block" style={{ animationDelay: '300ms' }} />
-                {stepLabel && <span className="ml-2 text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-widest">{stepLabel}</span>}
+                <span className="typing-dot w-1.5 h-1.5 bg-cyan-500 rounded-full inline-block" />
+                <span className="typing-dot w-1.5 h-1.5 bg-cyan-500 rounded-full inline-block" style={{ animationDelay: '150ms' }} />
+                <span className="typing-dot w-1.5 h-1.5 bg-cyan-500 rounded-full inline-block" style={{ animationDelay: '300ms' }} />
+                {stepLabel && <span className="ml-2 text-[10px] font-bold text-cyan-600 dark:text-cyan-300 uppercase tracking-widest">{stepLabel}</span>}
               </div>
             </div>
           )}
@@ -483,7 +529,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 aria-pressed={imageMode}
                 className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border transition-colors ${
                   imageMode
-                    ? 'bg-amber-500 text-stone-950 border-amber-500 shadow-sm shadow-amber-500/30'
+                    ? 'bg-cyan-500 text-stone-950 border-cyan-500 shadow-sm shadow-cyan-500/30'
                     : 'border-stone-300/60 dark:border-white/10 text-stone-500 hover:text-stone-800 dark:hover:text-stone-100'
                 }`}
               >
@@ -510,7 +556,7 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
                 </button>
               ) : (
                 <button onClick={() => void handleSend()} disabled={!input.trim() && !selectedFile}
-                  className="w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-br from-amber-500 to-orange-500 text-stone-950 shadow-md shadow-amber-500/25 hover:brightness-105 active:scale-95 disabled:opacity-30 disabled:shadow-none disabled:active:scale-100 transition-all" aria-label="Send">
+                  className="w-9 h-9 rounded-full flex items-center justify-center bg-gradient-to-br from-cyan-500 to-sky-500 text-stone-950 shadow-md shadow-cyan-500/25 hover:brightness-105 active:scale-95 disabled:opacity-30 disabled:shadow-none disabled:active:scale-100 transition-all" aria-label="Send">
                   <i className="fa-solid fa-arrow-up text-sm" />
                 </button>
               )}
@@ -525,11 +571,13 @@ const ChatWorkspace: React.FC<ChatWorkspaceProps> = ({
       {/* Private-mode ribbon */}
       {isPrivate && (
         <div className="absolute top-16 left-0 right-0 flex justify-center pointer-events-none z-20">
-          <span className="pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-[10px] font-bold uppercase tracking-wider">
+          <span className="pointer-events-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/15 border border-cyan-500/30 text-cyan-800 dark:text-cyan-200 text-[10px] font-bold uppercase tracking-wider">
             <i className="fa-solid fa-lock text-[9px]" aria-hidden /> Nothing here is saved
           </span>
         </div>
       )}
+
+      <ArtifactPanel artifact={artifact} onClose={() => setArtifact(null)} />
     </div>
   );
 };

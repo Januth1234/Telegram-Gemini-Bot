@@ -113,7 +113,12 @@ RULES:
 5. USER MEMORY: ${memory}
 6. REAL-TIME FACTS: Use web search tools for live data. If unavailable, say so clearly.
 7. LINKS: Always include full valid URLs. NEVER use placeholder text like [Link to site].
-8. HONESTY: If unsure of real-time facts, say so and recommend trusted sources.`;
+8. HONESTY: If unsure of real-time facts, say so and recommend trusted sources.
+9. ARTIFACTS: When you write substantial code (a full script, component, page, algorithm) or a
+   standalone document (letter, essay, plan, post), put it in ONE fenced code block by itself —
+   start the fence with the language or filename (e.g. \`\`\`python or \`\`\`index.html). Add a one-line
+   comment at the top naming the file when useful. Keep surrounding chat text short; the artifact
+   block is the deliverable.`;
 }
 
 function getModels(plan) {

@@ -62,7 +62,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
         <div className="px-3 pb-2">
           <button
             onClick={() => { onNewConv(); onClose(); }}
-            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-stone-950 text-[11px] font-black uppercase tracking-widest shadow-md shadow-amber-500/20 hover:brightness-105 active:scale-[0.98] transition-all"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-500 text-stone-950 text-[11px] font-black uppercase tracking-widest shadow-md shadow-cyan-500/20 hover:brightness-105 active:scale-[0.98] transition-all"
           >
             <i className="fa-solid fa-plus text-[10px]" aria-hidden /> New chat
           </button>
@@ -77,7 +77,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="Search chats"
-              className="w-full pl-8 pr-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] text-xs text-stone-800 dark:text-stone-200 placeholder:text-stone-400 outline-none focus:border-amber-500/50 transition-colors"
+              className="w-full pl-8 pr-3 py-2 rounded-xl bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] text-xs text-stone-800 dark:text-stone-200 placeholder:text-stone-400 outline-none focus:border-cyan-500/50 transition-colors"
               aria-label="Search conversations"
             />
           </div>
@@ -93,12 +93,12 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           {visible.map(c => {
             const active = c.id === activeConvId;
             return (
-              <div key={c.id} className={`group relative mb-0.5 rounded-xl transition-colors ${active ? 'bg-amber-500/15 dark:bg-amber-500/10' : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}>
+              <div key={c.id} className={`group relative mb-0.5 rounded-xl transition-colors ${active ? 'bg-cyan-500/15 dark:bg-cyan-500/10' : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.04]'}`}>
                 <button
                   onClick={() => { onSwitchConv(c.id); onClose(); }}
                   className={`w-full text-left pl-3 pr-9 py-2.5 rounded-xl text-xs font-semibold truncate block ${active ? 'text-stone-900 dark:text-white' : 'text-stone-500 dark:text-stone-400'}`}
                 >
-                  {active && <span className="inline-block w-1 h-1 mr-2 rounded-full bg-amber-500 align-middle" aria-hidden />}
+                  {active && <span className="inline-block w-1 h-1 mr-2 rounded-full bg-cyan-500 align-middle" aria-hidden />}
                   {c.title || 'New Chat'}
                 </button>
                 <button
@@ -123,7 +123,6 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
             {([
               { hash: 'voice', icon: 'fa-microphone', label: 'Voice' },
               { hash: 'translate', icon: 'fa-language', label: 'Translate' },
-              { hash: 'computer', icon: 'fa-desktop', label: 'My PC' },
             ] as const).map(item => (
               <button
                 key={item.hash}
@@ -139,7 +138,7 @@ const AppSidebar: React.FC<AppSidebarProps> = ({
           {user ? (
             <button onClick={() => { window.location.hash = 'account'; onClose(); }}
               className="w-full flex items-center gap-2.5 p-2 rounded-xl hover:bg-black/[0.04] dark:hover:bg-white/[0.04] transition-colors text-left">
-              <span className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shrink-0 shadow-sm">
+              <span className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-cyan-500 to-sky-500 flex items-center justify-center shrink-0 shadow-sm">
                 {user.avatar
                   ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
                   : <span className="text-xs font-black text-stone-950">{(user.name?.[0] || 'U').toUpperCase()}</span>}

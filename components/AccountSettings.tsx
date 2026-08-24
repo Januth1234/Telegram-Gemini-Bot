@@ -21,7 +21,7 @@ const MEMORY_MAX_LENGTH = 2000;
 
 type AuthTab = 'login' | 'register' | 'reset';
 
-const inputCls = "w-full px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-amber-500/60 transition-colors";
+const inputCls = "w-full px-4 py-3 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 text-sm text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-cyan-500/60 transition-colors";
 const labelCls = "text-[10px] font-black text-stone-400 uppercase tracking-widest flex items-center gap-2 px-1";
 
 const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, onClearHistory, conversationsCount = 0, authError, onDismissAuthError }) => {
@@ -181,7 +181,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
           {!user ? (
             <div className="w-full max-w-md flex flex-col items-center text-center space-y-6 pt-4">
               <div className="relative">
-                <div className="absolute inset-0 bg-amber-500 blur-[50px] opacity-25 rounded-full" aria-hidden />
+                <div className="absolute inset-0 bg-cyan-500 blur-[50px] opacity-25 rounded-full" aria-hidden />
                 <div className="relative w-20 h-20 bg-white dark:bg-stone-900 rounded-[26px] flex items-center justify-center shadow-xl border border-black/[0.05] dark:border-white/10">
                   <img src="/favicon.svg" alt="" className="w-11 h-11" />
                 </div>
@@ -195,7 +195,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
               <div className="flex w-full p-1 rounded-2xl bg-stone-200/60 dark:bg-stone-900">
                 {(['login', 'register', 'reset'] as const).map(id => (
                   <button key={id} type="button" onClick={() => { setAuthTab(id); setResetToken(null); setAuthMsg(null); }}
-                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${authTab === id ? 'bg-white dark:bg-stone-800 text-amber-600 dark:text-amber-400 shadow-sm' : 'text-stone-400'}`}>
+                    className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${authTab === id ? 'bg-white dark:bg-stone-800 text-cyan-600 dark:text-cyan-300 shadow-sm' : 'text-stone-400'}`}>
                     {id === 'login' ? 'Sign in' : id === 'register' ? 'Create' : 'Reset'}
                   </button>
                 ))}
@@ -220,7 +220,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                   <p role="status" className={`text-xs font-bold px-1 ${authMsg.kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{authMsg.text}</p>
                 )}
                 <button type="submit" disabled={loading}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 text-stone-950 text-[11px] font-black uppercase tracking-widest shadow-md shadow-amber-500/25 hover:brightness-105 active:scale-[0.99] disabled:opacity-50 transition-all">
+                  className="w-full py-3.5 rounded-2xl bg-gradient-to-br from-cyan-500 to-sky-500 text-stone-950 text-[11px] font-black uppercase tracking-widest shadow-md shadow-cyan-500/25 hover:brightness-105 active:scale-[0.99] disabled:opacity-50 transition-all">
                   {loading ? 'Working…'
                     : authTab === 'login' ? 'Sign in'
                     : authTab === 'register' ? 'Create free account'
@@ -249,7 +249,7 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
               {/* Profile card */}
               <div className="p-8 rounded-[32px] bg-white dark:bg-stone-900 border border-black/[0.05] dark:border-white/[0.06] shadow-sm flex flex-col items-center gap-3 text-center">
                 <div className="relative">
-                  <span className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg ring-4 ring-amber-500/15">
+                  <span className="w-24 h-24 rounded-full overflow-hidden bg-gradient-to-br from-cyan-500 to-sky-500 flex items-center justify-center shadow-lg ring-4 ring-cyan-500/15">
                     {user.avatar
                       ? <img src={user.avatar} className="w-full h-full object-cover" alt="" />
                       : <span className="text-3xl font-black text-stone-950">{(user.name?.[0] || 'U').toUpperCase()}</span>}
@@ -259,26 +259,26 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
                 <h3 className="text-xl font-black text-stone-900 dark:text-white">{user.name}</h3>
                 <p className="text-xs font-mono text-stone-500">{user.email || user.phone}</p>
                 {user.phone && user.email && <p className="text-[11px] font-mono text-stone-400">{user.phone}</p>}
-                <span className="px-4 py-1 bg-amber-500/10 text-amber-700 dark:text-amber-400 rounded-full text-[10px] font-black uppercase tracking-widest border border-amber-500/25">Free forever</span>
+                <span className="px-4 py-1 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 rounded-full text-[10px] font-black uppercase tracking-widest border border-cyan-500/25">Free forever</span>
               </div>
 
               {/* Account details */}
               <div className="space-y-3">
-                <label className={labelCls}><i className="fa-solid fa-user-pen text-amber-500" /> Account details</label>
+                <label className={labelCls}><i className="fa-solid fa-user-pen text-cyan-500" /> Account details</label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input type="text" value={editName} maxLength={60} onChange={e => setEditName(e.target.value)} placeholder="Display name" aria-label="Display name" className={inputCls} />
                   <input type="tel" value={editPhone} onChange={e => setEditPhone(e.target.value)} placeholder={user.email ? 'Add phone number' : 'Phone number'} aria-label="Phone number" className={inputCls} />
                 </div>
                 {profileMsg && <p role="status" className={`text-xs font-bold px-1 ${profileMsg.kind === 'ok' ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>{profileMsg.text}</p>}
                 <button onClick={handleSaveProfile} disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 text-stone-950 text-[10px] font-black uppercase tracking-widest hover:brightness-105 disabled:opacity-50 transition-all shadow-sm">
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-br from-cyan-500 to-sky-500 text-stone-950 text-[10px] font-black uppercase tracking-widest hover:brightness-105 disabled:opacity-50 transition-all shadow-sm">
                   {loading ? 'Saving…' : 'Save details'}
                 </button>
               </div>
 
               {/* Set password */}
               <div className="space-y-3">
-                <label className={labelCls}><i className="fa-solid fa-key text-amber-500" /> Password</label>
+                <label className={labelCls}><i className="fa-solid fa-key text-cyan-500" /> Password</label>
                 <p className="text-[11px] text-stone-500 dark:text-stone-400 px-1">Set a password to sign in with your email or phone — including from the desktop app.</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <input type="password" value={newPw} autoComplete="new-password" onChange={e => setNewPw(e.target.value)} placeholder="New password (min 8 chars)" aria-label="New password" className={inputCls} />
@@ -294,14 +294,14 @@ const AccountSettings: React.FC<AccountSettingsProps> = ({ onClose, lang, user, 
               {/* Memory */}
               <div className="space-y-3">
                 <div className="flex justify-between items-center px-1">
-                  <label className={labelCls}><i className="fa-solid fa-memory text-amber-500" /> Memory</label>
+                  <label className={labelCls}><i className="fa-solid fa-memory text-cyan-500" /> Memory</label>
                   <div className="flex items-center gap-3">
-                    <span className={`text-[10px] font-mono ${memory.length > MEMORY_MAX_LENGTH ? 'text-amber-600' : 'text-stone-400'}`} aria-live="polite">{memory.length} / {MEMORY_MAX_LENGTH}</span>
-                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline">{loading ? 'Saving…' : 'Save'}</button>
+                    <span className={`text-[10px] font-mono ${memory.length > MEMORY_MAX_LENGTH ? 'text-cyan-600' : 'text-stone-400'}`} aria-live="polite">{memory.length} / {MEMORY_MAX_LENGTH}</span>
+                    <button onClick={handleSaveMemory} disabled={loading} className="text-[10px] font-bold text-cyan-600 dark:text-cyan-300 hover:underline">{loading ? 'Saving…' : 'Save'}</button>
                   </div>
                 </div>
                 <textarea value={memory} onChange={e => setMemory(e.target.value)} maxLength={MEMORY_MAX_LENGTH} rows={5}
-                  className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-2xl p-4 text-sm resize-none outline-none focus:border-amber-500/60 transition-colors custom-scrollbar"
+                  className="w-full bg-white dark:bg-stone-900 border border-stone-200 dark:border-white/10 rounded-2xl p-4 text-sm resize-none outline-none focus:border-cyan-500/60 transition-colors custom-scrollbar"
                   placeholder="Tell Orin what to remember about you — it is added to every conversation…" />
               </div>
 
